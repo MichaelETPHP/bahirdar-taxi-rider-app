@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '../config/api';
 
 async function request(method, path, body, token) {
+  const url = `${API_BASE_URL}${path}`;
   const headers = {
     'Content-Type': 'application/json',
     // Keep-Alive helps with connection reuse
@@ -11,8 +12,10 @@ async function request(method, path, body, token) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
+  console.log(`[Trip] ${method} ${url}`);
+
   try {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await fetch(url, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -21,6 +24,7 @@ async function request(method, path, body, token) {
     });
 
     clearTimeout(timeoutId);
+    console.log(`[Trip] ${method} ${url} → ${res.status}`);
     const text = await res.text();
     let data = {};
 
@@ -42,6 +46,7 @@ async function request(method, path, body, token) {
     return data;
   } catch (err) {
     clearTimeout(timeoutId);
+    console.error(`[Trip] ${method} ${url} ERROR:`, err.message || err.code || err);
 
     if (err.name === 'AbortError') {
       throw {

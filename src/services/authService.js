@@ -1,25 +1,30 @@
 import { API_BASE_URL } from '../config/api';
 
 async function request(method, path, body, accessToken) {
+  const url = `${API_BASE_URL}${path}`;
   const headers = { 'Content-Type': 'application/json' };
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
+  console.log(`[Auth] ${method} ${url}`);
+
   try {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const res = await fetch(url, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
+    console.log(`[Auth] ${method} ${url} → ${res.status}`);
     const data = await res.json();
     if (!res.ok) throw { status: res.status, message: data?.error?.message || data?.message || 'Request failed', code: data?.error?.code };
     return data;
   } catch (err) {
     clearTimeout(timeoutId);
+    console.error(`[Auth] ${method} ${url} ERROR:`, err.message || err);
     throw err;
   }
 }

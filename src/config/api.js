@@ -5,7 +5,9 @@ export const API_BASE_URL = env.apiUrl;
 export const SOCKET_URL = env.socketUrl ||
   (env.apiUrl ? env.apiUrl.replace('/api/v1', '') : '');
 
+console.log('[API] Configured Base URL:', API_BASE_URL);
+console.log('[API] Configured Socket URL:', SOCKET_URL);
+
 if (__DEV__) {
-  console.log('[API] Base URL:', API_BASE_URL);
-  console.log('[API] Socket URL:', SOCKET_URL);
+  console.log('[API] Development mode - Full env object:', { API_BASE_URL, SOCKET_URL, GOOGLE_MAPS_KEY: !!GOOGLE_MAPS_KEY });
 }
