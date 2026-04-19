@@ -2,6 +2,7 @@
 // All EXPO_PUBLIC_* vars are available here via process.env.
 export default {
   expo: {
+    owner: "zmichaeleth",
     name: 'Bahirdar',
     slug: 'BahirdarRide',
     version: '1.0.0',
