@@ -60,11 +60,11 @@ export async function searchPlaces(input, userLocation) {
  * @returns {Promise<object|null>} { id, name, address, lat, lng }
  */
 export async function getPlaceDetails(placeId, fallback = {}) {
-  if (!GOOGLE_PLACES_KEY || !placeId) return null;
+  if (!GOOGLE_MAPS_KEY || !placeId) return null;
 
   const params = new URLSearchParams({
     place_id: placeId,
-    key: GOOGLE_PLACES_KEY,
+    key: GOOGLE_MAPS_KEY,
     fields: 'geometry,formatted_address,name',
   });
 

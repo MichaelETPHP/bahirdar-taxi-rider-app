@@ -63,7 +63,6 @@ export default {
         process.env.EXPO_PUBLIC_API_BASE_URL,
       socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL,
       googleMapsKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
-      gebetaMapsKey: process.env.EXPO_PUBLIC_GEBETA_MAPS_API_KEY,
       eas: {
         projectId: "2fe9c462-da5d-437a-91bb-b56a4c48e258"
       }
