@@ -18,7 +18,7 @@ import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
 import { mockLocations } from '../../data/mockLocations';
 import useLocationStore from '../../store/locationStore';
-import { searchPlaces, getPlaceDetails } from '../../services/gebetaMaps';
+import { searchPlaces, getPlaceDetails } from '../../services/googlePlaces';
 
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -72,9 +72,15 @@ export default function SearchScreen({ navigation, route }) {
             l.name.toLowerCase().includes(query.toLowerCase()) ||
             l.address.toLowerCase().includes(query.toLowerCase())
         );
+
         // Google Places search
-        const apiResults = await searchPlaces(query.trim());
-        
+        let apiResults = [];
+        try {
+          apiResults = await searchPlaces(query.trim());
+        } catch (err) {
+          console.warn('[SearchScreen] Google Places error:', err);
+        }
+
         // Merge: API results first, then local matches not already included
         const apiIds = new Set(apiResults.map((p) => p.id));
         const merged = [
@@ -82,7 +88,8 @@ export default function SearchScreen({ navigation, route }) {
           ...localMatches.filter((l) => !apiIds.has(l.id)),
         ];
         setResults(merged.length > 0 ? merged : localMatches);
-      } catch {
+      } catch (err) {
+        console.error('[SearchScreen] Search error:', err);
         const localMatches = BAHIRDAR_POPULAR.filter(
           (l) =>
             l.name.toLowerCase().includes(query.toLowerCase()) ||

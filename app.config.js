@@ -26,7 +26,6 @@ export default {
         backgroundColor: '#00674F',
       },
       package: 'com.bahirdar.ride',
-      usesCleartextTraffic: true,
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
