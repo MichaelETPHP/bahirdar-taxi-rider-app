@@ -3,7 +3,7 @@
 export default {
   expo: {
     owner: "michaelexpo12",
-    name: 'Bahirdar',
+    name: 'Bahiran Ride',
     slug: 'BahirdarRide',
     version: '1.0.0',
     orientation: 'portrait',
@@ -52,7 +52,7 @@ export default {
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission:
-            'Allow Bahirdar to use your location.',
+            'Allow Bahiran Ride to use your location.',
         },
       ],
       '@react-native-community/datetimepicker',
