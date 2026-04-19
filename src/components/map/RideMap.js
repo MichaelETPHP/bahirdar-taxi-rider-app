@@ -1,15 +1,11 @@
 import React from 'react';
-import { Platform, StyleSheet } from 'react-native';
-import MapView, { UrlTile } from 'react-native-maps';
-import { gebetaTileUrl } from '../../services/gebetaMaps';
+import { StyleSheet } from 'react-native';
+import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 
-/** iOS: Apple Maps satellite + labels. Android: Gebeta raster tiles over mapType none. */
-const useIosSatelliteBase = Platform.OS === 'ios';
-
-// Addis Ababa city center — OSRM + Gebeta data covers Addis only
-const ADDIS_ABABA = {
-  latitude:      9.0192,
-  longitude:     38.7525,
+// Bahir Dar city center
+const BAHIR_DAR = {
+  latitude:      11.5936,
+  longitude:     37.3906,
   latitudeDelta: 0.04,
   longitudeDelta: 0.04,
 };
@@ -27,8 +23,9 @@ export default function RideMap({
   return (
     <MapView
       ref={mapRef}
+      provider={PROVIDER_GOOGLE}
       style={[styles.map, style]}
-      initialRegion={initialRegion || ADDIS_ABABA}
+      initialRegion={initialRegion || BAHIR_DAR}
       showsUserLocation={false}
       showsMyLocationButton={false}
       showsCompass={false}
@@ -43,17 +40,8 @@ export default function RideMap({
       onPress={onPress}
       onRegionChange={onRegionChange}
       onRegionChangeComplete={onRegionChangeComplete}
-      mapType={useIosSatelliteBase ? 'hybrid' : 'none'}
+      mapType="standard"
     >
-      {!useIosSatelliteBase && (
-        <UrlTile
-          urlTemplate={gebetaTileUrl()}
-          maximumZ={19}
-          flipY={false}
-          zIndex={1}
-          shouldReplaceMapContent
-        />
-      )}
       {children}
     </MapView>
   );

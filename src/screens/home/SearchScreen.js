@@ -18,33 +18,20 @@ import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
 import { mockLocations } from '../../data/mockLocations';
 import useLocationStore from '../../store/locationStore';
-import { searchPlaces } from '../../services/gebetaMaps';
-import { GEBETA_KEY } from '../../config/api';
+import { searchPlaces, getPlaceDetails } from '../../services/gebetaMaps';
 
 const SEARCH_DEBOUNCE_MS = 350;
 
-// Popular Addis Ababa landmarks always shown before user types
-const ADDIS_POPULAR = [
-  { id: 'p1', name: 'Bole International Airport', address: 'Bole, Addis Ababa', lat: 8.9779, lng: 38.7993 },
-  { id: 'p2', name: 'Meskel Square',               address: 'Meskel Square, Addis Ababa', lat: 9.0108, lng: 38.7612 },
-  { id: 'p3', name: 'Edna Mall',                   address: 'Bole Road, Addis Ababa', lat: 9.0056, lng: 38.7782 },
-  { id: 'p4', name: 'Mercato Market',               address: 'Merkato, Addis Ababa', lat: 9.0264, lng: 38.7369 },
-  { id: 'p5', name: 'Addis Ababa University',       address: 'Sidist Kilo, Addis Ababa', lat: 9.0381, lng: 38.7632 },
-  { id: 'p6', name: 'Sheraton Addis',               address: 'Taitu Street, Addis Ababa', lat: 9.0175, lng: 38.7677 },
-  { id: 'p7', name: 'Black Lion Hospital',          address: 'Lideta, Addis Ababa', lat: 9.0339, lng: 38.7601 },
-  { id: 'p8', name: 'National Museum Ethiopia',     address: 'King George VI St, Addis Ababa', lat: 9.0308, lng: 38.7614 },
-  { id: 'p9', name: 'Piassa',                       address: 'Piazza, Addis Ababa', lat: 9.0355, lng: 38.7530 },
-  { id: 'p10', name: 'Bole Medhanealem',            address: 'Bole, Addis Ababa', lat: 9.0021, lng: 38.7872 },
-  { id: 'p11', name: 'Mexico Square',               address: 'Mexico, Addis Ababa', lat: 9.0192, lng: 38.7463 },
-  { id: 'p12', name: 'Sar Bet',                     address: 'Sar Bet, Addis Ababa', lat: 9.0080, lng: 38.7700 },
-  { id: 'p13', name: '4 Kilo',                      address: 'Sidist Kilo, Addis Ababa', lat: 9.0350, lng: 38.7630 },
-  { id: 'p14', name: 'Kazanchis',                   address: 'Kazanchis, Addis Ababa', lat: 9.0125, lng: 38.7630 },
-  { id: 'p15', name: 'Megenagna',                   address: 'Megenagna, Addis Ababa', lat: 9.0273, lng: 38.8015 },
-  { id: 'p16', name: 'CMC',                         address: 'CMC, Addis Ababa', lat: 9.0450, lng: 38.8094 },
-  { id: 'p17', name: 'Gerji',                       address: 'Gerji, Addis Ababa', lat: 9.0028, lng: 38.8100 },
-  { id: 'p18', name: 'Summit',                      address: 'Summit, Addis Ababa', lat: 8.9898, lng: 38.8050 },
-  { id: 'p19', name: 'Gotera',                      address: 'Gotera, Addis Ababa', lat: 9.0037, lng: 38.7648 },
-  { id: 'p20', name: 'Lebu',                        address: 'Lebu, Addis Ababa', lat: 8.9691, lng: 38.7301 },
+// Popular Bahir Dar landmarks always shown before user types
+const BAHIRDAR_POPULAR = [
+  { id: 'p1', name: 'Bahir Dar Airport',     address: 'Ginbot 20, Bahir Dar', lat: 11.6033, lng: 37.3167 },
+  { id: 'p2', name: 'Lake Tana Pier',        address: 'Shore Rd, Bahir Dar', lat: 11.5994, lng: 37.3892 },
+  { id: 'p3', name: 'Bahir Dar University',  address: 'Peda Campus, Bahir Dar', lat: 11.5833, lng: 37.3833 },
+  { id: 'p4', name: 'Blue Nile Falls',        address: 'Tis Abay, Bahir Dar', lat: 11.4851, lng: 37.5879 },
+  { id: 'p5', name: 'Felege Hiwot Hospital', address: 'Hospital Rd, Bahir Dar', lat: 11.5912, lng: 37.3915 },
+  { id: 'p6', name: 'Ghion Hotel',           address: 'Shore Rd, Bahir Dar', lat: 11.6012, lng: 37.3876 },
+  { id: 'p7', name: 'St. George Church',     address: 'Piazza, Bahir Dar', lat: 11.6054, lng: 37.3850 },
+  { id: 'p8', name: 'Abay River Bridge',     address: 'Main Highway, Bahir Dar', lat: 11.5975, lng: 37.4082 },
 ];
 
 const CATEGORY_ICONS = {
@@ -79,17 +66,15 @@ export default function SearchScreen({ navigation, route }) {
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        // Local Addis list — always fast, always available
-        const localMatches = ADDIS_POPULAR.filter(
+        // Local Bahir Dar list — always fast, always available
+        const localMatches = BAHIRDAR_POPULAR.filter(
           (l) =>
             l.name.toLowerCase().includes(query.toLowerCase()) ||
             l.address.toLowerCase().includes(query.toLowerCase())
         );
-        // Gebeta Maps API search (if key available)
-        let apiResults = [];
-        if (GEBETA_KEY) {
-          apiResults = await searchPlaces(query.trim());
-        }
+        // Google Places search
+        const apiResults = await searchPlaces(query.trim());
+        
         // Merge: API results first, then local matches not already included
         const apiIds = new Set(apiResults.map((p) => p.id));
         const merged = [
@@ -98,7 +83,7 @@ export default function SearchScreen({ navigation, route }) {
         ];
         setResults(merged.length > 0 ? merged : localMatches);
       } catch {
-        const localMatches = ADDIS_POPULAR.filter(
+        const localMatches = BAHIRDAR_POPULAR.filter(
           (l) =>
             l.name.toLowerCase().includes(query.toLowerCase()) ||
             l.address.toLowerCase().includes(query.toLowerCase())
@@ -112,15 +97,32 @@ export default function SearchScreen({ navigation, route }) {
   }, [query]);
 
   const handleSelect = useCallback(async (item) => {
-    if (item.lat == null || item.lng == null) return;
+    let finalItem = item;
+    
+    // If coordinates are missing (common for Google Places autocomplete results), fetch them
+    if (finalItem.lat == null || finalItem.lng == null) {
+      if (!finalItem.placeId) return;
+      setSelecting(true);
+      try {
+        const details = await getPlaceDetails(finalItem.placeId);
+        if (!details) return;
+        finalItem = details;
+      } catch (err) {
+        console.warn('Place details error:', err);
+        return;
+      } finally {
+        setLoading(false); // Clear search loading if any
+      }
+    }
+
     setSelecting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      addToRecentDestination(item);
+      addToRecentDestination(finalItem);
       if (searchMode === 'stop' && stopIndex >= 0) {
-        setStop(stopIndex, item);
+        setStop(stopIndex, finalItem);
       } else {
-        setDestination(item);
+        setDestination(finalItem);
       }
       navigation.goBack();
     } finally {
@@ -168,7 +170,7 @@ export default function SearchScreen({ navigation, route }) {
   if (recentDestinations.length > 0) {
     sections.push({ key: 'recent', title: 'Recent', data: recentDestinations.slice(0, 4) });
   }
-  sections.push({ key: 'popular', title: 'Popular in Addis Ababa', data: ADDIS_POPULAR });
+  sections.push({ key: 'popular', title: 'Popular in Bahir Dar', data: BAHIRDAR_POPULAR });
 
   const isSearching = query.trim().length > 0;
 
@@ -187,7 +189,7 @@ export default function SearchScreen({ navigation, route }) {
           <TextInput
             ref={inputRef}
             style={styles.input}
-            placeholder="Search in Addis Ababa…"
+            placeholder="Search in Bahir Dar…"
             placeholderTextColor={colors.textSecondary}
             value={query}
             onChangeText={setQuery}
@@ -230,7 +232,7 @@ export default function SearchScreen({ navigation, route }) {
               <View style={styles.noResults}>
                 <FontAwesome5 name="search" size={32} color={colors.border} />
                 <Text style={styles.noResultsText}>No results for "{query}"</Text>
-                <Text style={styles.noResultsSub}>Try a neighbourhood, landmark or street in Addis Ababa</Text>
+                <Text style={styles.noResultsSub}>Try a neighbourhood, landmark or street in Bahir Dar</Text>
               </View>
             ) : null
           }

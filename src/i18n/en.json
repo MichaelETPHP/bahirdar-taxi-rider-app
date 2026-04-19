@@ -39,9 +39,9 @@
     "routeDistance": "Route"
   },
   "search": {
-    "placeholder": "Search destination in Addis Ababa",
+    "placeholder": "Search destination in Bahir Dar",
     "recent": "Recent",
-    "popular": "Popular in Addis Ababa",
+    "popular": "Popular in Bahir Dar",
     "typeToSearch": "Type to search for a destination",
     "noResults": "No results found",
     "loading": "Getting location...",
@@ -135,7 +135,7 @@
       },
       "promo": {
         "title": "Weekend offer",
-        "body": "Get 15% off your next 3 rides in Addis Ababa. Valid through Sunday.",
+        "body": "Get 15% off your next 3 rides in Bahir Dar. Valid through Sunday.",
         "time": "Fri, 9:00 AM"
       }
     }
@@ -174,7 +174,7 @@
     "title": "Terms & Conditions",
     "intro": "Welcome to Bahirdar. By using our ride-hailing app, you agree to the following terms.",
     "serviceTitle": "Our Service",
-    "serviceContent": "Bahirdar provides ride-hailing services in Addis Ababa. We connect you with verified drivers for safe, affordable trips around the city.",
+    "serviceContent": "Bahirdar provides ride-hailing services in Bahir Dar. We connect you with verified drivers for safe, affordable trips around the city.",
     "userTitle": "Your Responsibilities",
     "userContent": "You must provide accurate pickup and destination details. You are responsible for your conduct during the trip. Payment is due upon completion of each ride.",
     "privacyTitle": "Privacy & Data",

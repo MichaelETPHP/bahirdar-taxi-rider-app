@@ -1,29 +1,29 @@
-import { GOOGLE_PLACES_KEY } from '../config/api';
+import { GOOGLE_MAPS_KEY } from '../config/api';
 
-// Addis Ababa city center — all searches biased here
-const ADDIS_CENTER = '9.0192,38.7525';
-const ADDIS_RADIUS = 25000; // 25km — tight Addis Ababa city boundary
+// Bahir Dar city center — all searches biased here
+const BAHIRDAR_CENTER = '11.5936,37.3906';
+const BAHIRDAR_RADIUS = 30000; // 30km — Bahir Dar region boundary
 
 /**
  * Fetch place predictions from Google Places Autocomplete API.
- * Uses location bias around Addis Ababa for relevant results.
+ * Uses location bias around Bahir Dar for relevant results.
  * @param {string} input - Search query
- * @param {object} [userLocation] - ignored, bias is always Addis Ababa city
- * @returns {Promise<Array>} Array of { id, name, address, lat, lng }
+ * @param {object} [userLocation] - ignored, bias is always Bahir Dar city
+ * @returns {Promise<Array>} Array of { id, name, address, placeId }
  */
 export async function searchPlaces(input, userLocation) {
   if (!input || input.trim().length < 2) return [];
-  if (!GOOGLE_PLACES_KEY) {
-    console.warn('Google Places API key not configured');
+  if (!GOOGLE_MAPS_KEY) {
+    console.warn('Google Maps API key not configured');
     return [];
   }
 
-  // Always bias to Addis Ababa city — ignore user GPS for bias so results stay within the city
-  const locationBias = `circle:${ADDIS_RADIUS}@${ADDIS_CENTER}`;
+  // Always bias to Bahir Dar city
+  const locationBias = `circle:${BAHIRDAR_RADIUS}@${BAHIRDAR_CENTER}`;
 
   const params = new URLSearchParams({
     input: input.trim(),
-    key: GOOGLE_PLACES_KEY,
+    key: GOOGLE_MAPS_KEY,
     components: 'country:et',
     locationbias: locationBias,
     language: 'en',

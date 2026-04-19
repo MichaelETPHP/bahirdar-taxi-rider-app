@@ -17,6 +17,9 @@ export default {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.bahirdar.ride',
+      config: {
+        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      },
     },
     android: {
       adaptiveIcon: {
@@ -24,6 +27,11 @@ export default {
       },
       package: 'com.bahirdar.ride',
       usesCleartextTraffic: true,
+      config: {
+        googleMaps: {
+          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+        },
+      },
     },
     androidStatusBar: {
       barStyle: 'light-content',
@@ -54,6 +62,7 @@ export default {
       apiUrl: process.env.EXPO_PUBLIC_API_URL ||
         process.env.EXPO_PUBLIC_API_BASE_URL,
       socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL,
+      googleMapsKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       gebetaMapsKey: process.env.EXPO_PUBLIC_GEBETA_MAPS_API_KEY,
       eas: {
         projectId: "2fe9c462-da5d-437a-91bb-b56a4c48e258"
