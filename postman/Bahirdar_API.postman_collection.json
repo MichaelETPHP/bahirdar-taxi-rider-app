@@ -1,0 +1,1371 @@
+{
+  "info": {
+    "name": "BahirdarRide API — Complete v2",
+    "description": "Complete API collection covering Auth, Driver Onboarding, Location Tracking, Matching Engine, Trip Lifecycle, Vehicle Categories, and Admin.\n\n## Quick Start\n1. Set baseUrl = http://localhost:3000/api/v1\n2. OTP bypass in dev: use 1234\n3. Tokens auto-saved — run Login first in each section\n4. Run folders top-to-bottom for correct flow\n\n## Auto-captured variables\n- riderToken, driverToken, adminToken\n- tripId (from POST /trips)\n- driverId, categoryId\n\n## Matching Engine Flow\nPOST /trips → status:searching → matching worker picks job → driver gets trip:offer socket → driver accepts → rider gets trip:matched socket\n\n## Socket Events (not testable via Postman — use wscat or mobile app)\n  trip:offer, trip:matched, trip:no_drivers\n  trip:driver_arrived, trip:started, trip:completed",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Complete API collection covering Auth, Driver Onboarding, Location Tracking, Matching Engine, Trip Lifecycle, Vehicle Categories, and Admin.\n\n## Security Headers\n- X-Idempotency-Key: <uuid> — on POST /trips to prevent duplicate requests\n\n## Rate Limits\n- POST /trips: 3 per rider per 10 minutes → 429\n- POST /drivers/me/location: 1 per 2 seconds → 429\n\n## Security Error Codes\n- TOKEN_EXPIRED: 401 — token expired or session revoked after logout\n- CANNOT_CANCEL_IN_PROGRESS: 409 — rider cannot cancel an active trip\n- PAYMENT_ALREADY_EXISTS: 409 — trip already has a payment record\n- OUTSIDE_SERVICE_AREA: 422 — pickup outside Bahir Dar boundary\n- ACTIVE_TRIP_EXISTS: 409 — rider already has an active trip\n- DRIVER_ALREADY_ON_TRIP: 409 — driver has an active trip\n- GPS spoofing: >200 km/h jump → flag; 3 flags → driver suspended silently\n- Decline cooldown: 5 consecutive declines → 10-min cooldown key in Redis"
+  },
+  "variable": [
+    { "key": "baseUrl",      "value": "http://localhost:3000/api/v1", "type": "string" },
+    { "key": "riderToken",   "value": "", "type": "string" },
+    { "key": "driverToken",  "value": "", "type": "string" },
+    { "key": "adminToken",   "value": "", "type": "string" },
+    { "key": "tripId",       "value": "", "type": "string" },
+    { "key": "driverId",     "value": "", "type": "string" },
+    { "key": "categoryId",   "value": "", "type": "string" },
+    { "key": "selectedCategory", "value": "economy", "type": "string" },
+    { "key": "estimatedFare",    "value": "", "type": "string" },
+    { "key": "riderPhone",   "value": "+251911234567", "type": "string" },
+    { "key": "driverPhone",  "value": "+251922345678", "type": "string" },
+    { "key": "adminEmail",   "value": "superadmin@bahirdarride.com", "type": "string" },
+    { "key": "adminPass",    "value": "YourPassword123!", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🏥 1. Health & Redis",
+      "description": "Server health and Redis connection tests. Run these first to confirm infrastructure is up.",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health",
+            "description": "Returns server status, DB connection, Redis connection."
+          }
+        },
+        {
+          "name": "Redis — Ping",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/redis-test/ping",
+            "description": "Confirms Redis is connected and responding. Expect: PONG"
+          }
+        },
+        {
+          "name": "Redis — All Online Drivers",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/redis-test/all-online-drivers",
+            "description": "Lists all driver IDs currently in Redis GEO set (driver:online). These are drivers sending location updates."
+          }
+        },
+        {
+          "name": "Redis — Nearby Drivers (Bahir Dar center)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/redis-test/nearby?lat=9.0054&lng=38.7917&radius_km=10",
+              "query": [
+                { "key": "lat",       "value": "9.0054", "description": "Addis Ababa latitude" },
+                { "key": "lng",       "value": "38.7917", "description": "Addis Ababa longitude" },
+                { "key": "radius_km", "value": "10",      "description": "Search radius in km" }
+              ]
+            },
+            "description": "Finds all online drivers within radius using Redis GEOSEARCH."
+          }
+        },
+        {
+          "name": "Redis — Driver Location by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/redis-test/driver-location/{{driverId}}",
+            "description": "Get full Redis hash data for a specific driver. Replace driverId variable."
+          }
+        },
+        {
+          "name": "Redis — Write/Read Test",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/redis-test/read-write",
+            "description": "Writes a test key then reads it back. Confirms Redis read/write is working."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🚴 2. Auth — Rider",
+      "description": "Rider registration and login flow. OTP bypass: use 1234 in development.",
+      "item": [
+        {
+          "name": "Step 1 — Check Phone Exists",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/auth/check-phone?phone={{riderPhone}}&role=rider",
+              "query": [
+                { "key": "phone", "value": "{{riderPhone}}", "description": "E.164 format: +251911234567" },
+                { "key": "role",  "value": "rider" }
+              ]
+            },
+            "description": "Check if phone is registered before sending OTP. Returns: { exists, role, account_status, can_login }"
+          }
+        },
+        {
+          "name": "Step 2 — Send OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/rider/otp/send",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{riderPhone}}\"\n}"
+            },
+            "description": "Send OTP to rider phone. In dev mode: use 1234 to bypass."
+          }
+        },
+        {
+          "name": "Step 3 — Register Rider",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.data && r.data.tokens) {",
+                "  pm.collectionVariables.set('riderToken', r.data.tokens.accessToken);",
+                "  console.log('✅ riderToken saved');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/rider/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{riderPhone}}\",\n  \"name\": \"Almaz Tadesse\",\n  \"otp\": \"1234\"\n}"
+            },
+            "description": "Register new rider. Returns JWT access + refresh tokens. Token auto-saved to riderToken."
+          }
+        },
+        {
+          "name": "Login Rider (returning user)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.data && r.data.tokens) {",
+                "  pm.collectionVariables.set('riderToken', r.data.tokens.accessToken);",
+                "  console.log('✅ riderToken saved');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{riderPhone}}\",\n  \"otp\": \"1234\",\n  \"role\": \"rider\"\n}"
+            },
+            "description": "Login existing rider. Token auto-saved to riderToken."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}"
+            },
+            "description": "Get new access token using refresh token. Refresh tokens last 30 days."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🚗 3. Auth — Driver Onboarding Wizard",
+      "description": "7-step driver registration flow. Run steps in order. Driver starts with phone+name only, then completes profile.",
+      "item": [
+        {
+          "name": "Step 1 — Check Phone (Driver)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/auth/check-phone?phone={{driverPhone}}&role=driver",
+              "query": [
+                { "key": "phone", "value": "{{driverPhone}}" },
+                { "key": "role",  "value": "driver" }
+              ]
+            },
+            "description": "Check if driver phone is already registered."
+          }
+        },
+        {
+          "name": "Step 2 — Send OTP (Driver)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/driver/otp/send",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driverPhone}}\"\n}"
+            },
+            "description": "Send OTP to driver phone. In dev mode: use 1234 to bypass."
+          }
+        },
+        {
+          "name": "Step 3 — Register Driver (Phone + Name only)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.data && r.data.tokens) {",
+                "  pm.collectionVariables.set('driverToken', r.data.tokens.accessToken);",
+                "  console.log('✅ driverToken saved');",
+                "}",
+                "if (r.data && r.data.user && r.data.user.driverProfileId) {",
+                "  pm.collectionVariables.set('driverId', r.data.user.driverProfileId);",
+                "  console.log('✅ driverId saved:', r.data.user.driverProfileId);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/driver/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driverPhone}}\",\n  \"name\": \"Shewa Alemu\",\n  \"otp\": \"1234\"\n}"
+            },
+            "description": "Creates user + empty driver_profiles row. Returns token. Full profile collected in next steps."
+          }
+        },
+        {
+          "name": "Step 4 — Submit License Info",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/drivers/me/license",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"license_number\": \"ETH-DL-123456\",\n  \"license_expiry\": \"2028-12-31\",\n  \"national_id_number\": \"ETH-ID-789012\"\n}"
+            },
+            "description": "Submit driver license and national ID details."
+          }
+        },
+        {
+          "name": "Step 5 — Submit Vehicle Info",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/drivers/me/vehicle",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"make\": \"Toyota\",\n  \"model\": \"Corolla\",\n  \"year\": 2020,\n  \"plate_number\": \"3-09876 AA\",\n  \"color\": \"White\",\n  \"category\": \"economy\",\n  \"seats\": 4,\n  \"has_ac\": true,\n  \"insurance_expiry\": \"2028-12-31\"\n}"
+            },
+            "description": "Submit vehicle details. category must be one of the DB enum values: economy | comfort | business"
+          }
+        },
+        {
+          "name": "Step 6a — Upload License Front",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/me/documents",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "doc_type", "value": "drivers_license_front", "type": "text", "description": "Must match enum exactly" },
+                { "key": "file",     "type": "file", "src": "", "description": "JPG, PNG, PDF, DOCX — max 20MB" }
+              ]
+            },
+            "description": "Upload front of driver license. Field name must be 'file'."
+          }
+        },
+        {
+          "name": "Step 6b — Upload License Back",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/me/documents",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "doc_type", "value": "drivers_license_back", "type": "text" },
+                { "key": "file",     "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Step 6c — Upload National ID",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/me/documents",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "doc_type", "value": "national_id", "type": "text" },
+                { "key": "file",     "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Step 6d — Upload Vehicle Registration",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/me/documents",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "doc_type", "value": "vehicle_registration", "type": "text" },
+                { "key": "file",     "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Step 6e — Upload Insurance",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/me/documents",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "doc_type", "value": "insurance", "type": "text" },
+                { "key": "file",     "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Step 7 — Upload Profile Photo",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/me/avatar",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "", "description": "Any field name works: file, avatar, image, photo. Max 5MB." }
+              ]
+            },
+            "description": "Upload driver profile photo.\n- Endpoint: POST /drivers/me/avatar (also works: /drivers/me/profile-image)\n- Field name: any (file, avatar, image, photo — all accepted)\n- Max size: 5MB\n- Stored in Supabase Storage under driver_profiles/{phone}-{name}/"
+          }
+        },
+        {
+          "name": "Get My Driver Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/me",
+            "description": "Returns full driver profile including account_status (pending|approved|rejected)."
+          }
+        },
+        {
+          "name": "Login Driver (returning)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.data && r.data.tokens) {",
+                "  pm.collectionVariables.set('driverToken', r.data.tokens.accessToken);",
+                "  console.log('✅ driverToken saved');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"{{driverPhone}}\",\n  \"otp\": \"1234\",\n  \"role\": \"driver\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📍 4. Driver — Location Tracking (Redis)",
+      "description": "Driver sends location to Redis every 3 seconds. Redis stores in GEOADD set + Hash with 30s TTL. If driver stops sending, they auto-expire from Redis.",
+      "item": [
+        {
+          "name": "Send My Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/drivers/me/location",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 9.0054,\n  \"lng\": 38.7917,\n  \"heading\": 45,\n  \"speed_kmh\": 28,\n  \"platform\": \"android\",\n  \"app_version\": \"1.0.0\",\n  \"device_id\": \"TEST-DEVICE-001\"\n}"
+            },
+            "description": "Driver app calls this every 3 seconds. Stores in Redis GEOADD (driver:online) and Hash (driver:loc:{userId}) with 30s TTL. Also fire-and-forget updates PostgreSQL current_location."
+          }
+        },
+        {
+          "name": "Get My Location (from Redis)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/me/location",
+            "description": "Returns driver's own current location from Redis. Returns null if TTL expired (offline)."
+          }
+        },
+        {
+          "name": "Go Offline (remove from Redis)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/me/location",
+            "description": "Removes driver from Redis GEO set and deletes Hash key. Driver disappears from nearby search immediately."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🗺️ 5. Geo & Fare Estimation",
+      "description": "Route calculation via OSRM + fare estimation per vehicle category. Call fare-estimate BEFORE booking to show the rider price options for each vehicle type.",
+      "item": [
+        {
+          "name": "GET Route (OSRM — distance + duration)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/geo/route?from_lat=9.0054&from_lng=38.7917&to_lat=9.0300&to_lng=38.7469",
+              "host": ["{{baseUrl}}"],
+              "path": ["geo", "route"],
+              "query": [
+                { "key": "from_lat", "value": "9.0054", "description": "Pickup latitude (Bahir Dar)" },
+                { "key": "from_lng", "value": "38.7917", "description": "Pickup longitude" },
+                { "key": "to_lat",   "value": "9.0300", "description": "Dropoff latitude" },
+                { "key": "to_lng",   "value": "38.7469", "description": "Dropoff longitude" }
+              ]
+            },
+            "description": "Returns real driving distance_km, duration_min and polyline from OSRM. Falls back to Haversine if OSRM is not running."
+          }
+        },
+        {
+          "name": "GET Fare Estimate (all vehicle categories)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/geo/fare-estimate?from_lat=9.0054&from_lng=38.7917&to_lat=9.0300&to_lng=38.7469",
+              "host": ["{{baseUrl}}"],
+              "path": ["geo", "fare-estimate"],
+              "query": [
+                { "key": "from_lat", "value": "9.0054", "description": "Pickup latitude" },
+                { "key": "from_lng", "value": "38.7917", "description": "Pickup longitude" },
+                { "key": "to_lat",   "value": "9.0300", "description": "Dropoff latitude" },
+                { "key": "to_lng",   "value": "38.7469", "description": "Dropoff longitude" }
+              ]
+            },
+            "description": "⭐ MAIN ENDPOINT for rider price screen.\n\nReturns:\n- distance_km + duration_min (from OSRM)\n- surge_multiplier (from geo zones)\n- estimates[] — one entry per active vehicle category with:\n  - vehicle_category: 'economy' | 'comfort' | 'business'\n  - estimated_fare_etb (final price to show rider)\n  - cancellation_fee_etb\n  - surge_multiplier\n\nFormula: (base_fare + distance_km × per_km + duration_min × per_min) × surge, min min_fare\n\nPass vehicle_category from the estimate the rider selects into POST /trips."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "if (r.data && r.data.estimates && r.data.estimates.length > 0) {",
+                  "  pm.collectionVariables.set('selectedCategory', r.data.estimates[0].vehicle_category);",
+                  "  pm.collectionVariables.set('estimatedFare', r.data.estimates[0].estimated_fare_etb);",
+                  "  console.log('Fare estimates loaded. Top category:', r.data.estimates[0].vehicle_category, '=', r.data.estimates[0].estimated_fare_etb, 'ETB');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Surge Multiplier",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/geo/surge?lat=9.0054&lng=38.7917",
+              "host": ["{{baseUrl}}"],
+              "path": ["geo", "surge"],
+              "query": [
+                { "key": "lat", "value": "9.0054" },
+                { "key": "lng", "value": "38.7917" }
+              ]
+            },
+            "description": "Returns surge_multiplier for a pickup point. 1.0 = normal, >1.0 = surge pricing active."
+          }
+        },
+        {
+          "name": "POST Reverse Geocode (lat/lng → address)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{riderToken}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/geo/reverse-geocode",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 9.0054,\n  \"lng\": 38.7917\n}"
+            },
+            "description": "Converts coordinates to a human-readable address. Use when rider pins a location on the map."
+          }
+        },
+        {
+          "name": "GET Nearby Drivers (rider view)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/geo/nearby-drivers?lat=9.0054&lng=38.7917&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["geo", "nearby-drivers"],
+              "query": [
+                { "key": "lat",   "value": "9.0054" },
+                { "key": "lng",   "value": "38.7917" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Shows nearby available drivers on the map before rider books. Uses PostGIS ST_DWithin."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🧠 6. Matching Engine — Full Flow Test",
+      "description": "Tests the complete matching flow end-to-end.\n\nPREREQUISITES:\n1. Driver must be online (sent location to Redis via POST /drivers/me/location)\n2. Driver account_status must be 'active' (approved by admin)\n3. Driver vehicle category must match rider's selected category\n4. Rider must be logged in (riderToken set)\n\nFLOW:\n1. POST /trips → status: searching → startMatching() fires\n2. Redis GEORADIUS finds drivers within 5km (expands to 15km if none)\n3. Drivers ranked by score: proximity 50% + rating 30% + acceptance 20%\n4. Driver gets socket event: trip:offer (room: driver:{userId})\n5. Driver calls POST /drivers/trips/accept\n6. Trip status → matched, rider gets socket event: trip:status\n7. Trip progresses: driver_arrived → in_progress → completed\n\nNOTE: Socket room is driver:{users.id} NOT driver:{driver_profiles.id}",
+      "item": [
+        {
+          "name": "▶ STEP 1 — Rider Requests Trip",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.data && r.data.id) {",
+                "  pm.collectionVariables.set('tripId', r.data.id);",
+                "  console.log('✅ tripId saved:', r.data.id);",
+                "  console.log('Status:', r.data.status);",
+                "  console.log('Fare:', r.data.estimated_fare_etb, 'ETB');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+            ],
+            "url": "{{baseUrl}}/trips",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_lat\": 9.0054,\n  \"pickup_lng\": 38.7917,\n  \"pickup_address\": \"Bole, Addis Ababa\",\n  \"dropoff_lat\": 9.0300,\n  \"dropoff_lng\": 38.7469,\n  \"dropoff_address\": \"Piassa, Addis Ababa\",\n  \"vehicle_category\": \"economy\",\n  \"payment_method\": \"cash\"\n}"
+            },
+            "description": "Creates trip in DB (status: searching) and pushes job to Redis queue:matching. Matching worker picks it up immediately. tripId auto-saved."
+          }
+        },
+        {
+          "name": "▶ STEP 2 — Check Trip Status (Poll while searching)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": "{{baseUrl}}/trips/{{tripId}}",
+            "description": "Poll this every 5 seconds as fallback if socket event is missed.\nStatus flow: searching → matched → driver_arrived → in_progress → completed"
+          }
+        },
+        {
+          "name": "▶ STEP 3 — Driver Accepts Offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/drivers/trips/accept",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trip_id\": \"{{tripId}}\"\n}"
+            },
+            "description": "Driver accepts the trip offer. Updates trip status to matched, assigns driver, marks driver busy in Redis."
+          }
+        },
+        {
+          "name": "▶ STEP 3b — Driver Accepts Offer (legacy body param)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/drivers/trips/accept",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trip_id\": \"{{tripId}}\"\n}"
+            },
+            "description": "Same as STEP 3 but uses legacy POST body format. Kept for backwards compatibility."
+          }
+        },
+        {
+          "name": "▶ STEP 3c — Driver Declines Offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/driver/trips/{{tripId}}/decline",
+            "description": "Driver explicitly declines the offer (or auto-triggered after 15s timeout by the matching worker). Sets trip_driver_offers.status = 'declined'. Matching worker's DB poll detects this immediately and moves to the next ranked driver (e.g. Kebede). No body required."
+          }
+        },
+        {
+          "name": "▶ STEP 4 — Rider Tracks Driver (every 3s)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": "{{baseUrl}}/users/drivers/{{driverId}}/location",
+            "description": "Get driver's live location from Redis. Call every 3s to animate driver pin on map. Returns: { is_online, lat, lng, heading, speed_kmh }"
+          }
+        },
+        {
+          "name": "▶ STEP 5 — Driver Marks Arrived",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/arrived",
+            "description": "Driver taps 'I Arrived'. Updates trips.status = 'driver_arrived'. Emits trip:driver_arrived to rider's socket room (user:{riderId}). Sends FCM push to rider: 'Your driver has arrived!'. Response includes trip + rider { id, name, phone } for driver's Waiting screen."
+          }
+        },
+        {
+          "name": "▶ STEP 6 — Driver Starts Trip",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/start",
+            "description": "Driver taps START TRIP (rider in car). Updates trips SET status='in_progress', started_at=NOW(). Emits trip:started to trip room (both rider + driver) with: { trip_id, started_at, dropoff_address, distance_km, estimated_fare_etb }. HTTP response includes same fields for clients that miss the socket event."
+          }
+        },
+        {
+          "name": "▶ STEP 7 — Driver Completes Trip",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/complete",
+            "description": "Driver taps COMPLETE TRIP. Does 6 things atomically: (1) OSRM actual road distance pickup→dropoff, (2) recalculate final fare (base+distance+time), (3) UPDATE trips status='completed' + final fare + actual_distance_km + actual_duration_min, (4) INSERT payments (status=pending), (5) UPSERT driver_earnings daily row (gross/platform_cut/net), (6) UPDATE driver_profiles status='online' + Redis driver:meta={status:online}. Emits trip:completed to rider: { finalFare, distance, fare_breakdown }. Driver receives trip:complete_confirmed with driver_payout_etb."
+          }
+        },
+        {
+          "name": "▶ STEP 8 — Rider Rates Driver",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/ratings",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Very smooth ride, driver was polite!\"\n}"
+            },
+            "description": "Rider submits rating after trip completed. Updates driver avg rating in driver_profiles."
+          }
+        },
+        {
+          "name": "— ALT: Driver Rejects Offer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{driverToken}}" }
+            ],
+            "url": "{{baseUrl}}/drivers/trips/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"trip_id\": \"{{tripId}}\",\n  \"reason\": \"Too far from pickup\"\n}"
+            },
+            "description": "Driver declines the offer. Updates trip_driver_offers status to declined. Matching worker detects this and tries the next ranked driver automatically."
+          }
+        },
+        {
+          "name": "— ALT: Rider Cancels Trip",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/cancel",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Changed my mind\"\n}"
+            },
+            "description": "Rider cancels trip. Status becomes cancelled_by_rider. Cancellation fee may apply after driver is matched."
+          }
+        },
+        {
+          "name": "— Check Nearby Drivers Before Booking",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/users/drivers/nearby?lat=9.0054&lng=38.7917&radius_km=5",
+              "query": [
+                { "key": "lat",       "value": "9.0054" },
+                { "key": "lng",       "value": "38.7917" },
+                { "key": "radius_km", "value": "5" }
+              ]
+            },
+            "description": "Shows driver dots on map before rider books. Returns drivers from Redis within radius."
+          }
+        },
+        {
+          "name": "— Get Active Trip (Driver)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driverToken}}" }],
+            "url": "{{baseUrl}}/drivers/trips/active",
+            "description": "Returns driver's current active trip (status: matched, driver_arrived, or in_progress). Returns null if no active trip."
+          }
+        },
+        {
+          "name": "— My Trip History (Rider)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": "{{baseUrl}}/trips",
+            "description": "Returns rider's full trip history ordered by created_at DESC."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏷️ 6. Vehicle Categories — Public",
+      "description": "Public endpoints used by rider and driver apps. No authentication required.",
+      "item": [
+        {
+          "name": "Get Active Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/vehicle-categories",
+            "description": "Returns only active (is_active=true) categories sorted by display_order. Used by:\n- Rider app: 'Choose ride type' screen\n- Driver app: 'Select your vehicle category' during registration\n\nNo auth required."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👑 7. Admin — Login",
+      "description": "Admin login uses email + password (not OTP). Super admin is seeded via: npm run seed:super-admin",
+      "item": [
+        {
+          "name": "Super Admin Login",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.data && r.data.tokens) {",
+                "  pm.collectionVariables.set('adminToken', r.data.tokens.accessToken);",
+                "  console.log('✅ adminToken saved');",
+                "  console.log('Role:', r.data.user && r.data.user.adminRole);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/admin/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPass}}\"\n}"
+            },
+            "description": "Admin login with email + password. Returns JWT with adminRole claim. Token auto-saved to adminToken."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👑 8. Admin — Vehicle Categories",
+      "description": "Manage ride categories. Write operations require super_admin role. Read allowed for all admin roles.\n\nAdmin sets up categories FIRST before drivers can register or riders can book.",
+      "item": [
+        {
+          "name": "List All Categories (includes inactive)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/vehicle-categories",
+            "description": "Returns all categories including inactive ones. Includes full pricing and metadata."
+          }
+        },
+        {
+          "name": "Get Single Category",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/vehicle-categories/{{categoryId}}",
+            "description": "Full details for one category."
+          }
+        },
+        {
+          "name": "Create Category (super_admin)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.data && r.data.id) {",
+                "  pm.collectionVariables.set('categoryId', r.data.id);",
+                "  console.log('✅ categoryId saved:', r.data.id);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/vehicle-categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bajaj\",\n  \"name_am\": \"ባጃጅ\",\n  \"description\": \"Three-wheel bajaj for short trips\",\n  \"description_am\": \"ለአጭር ጉዞ ሶስት bága bajaj\",\n  \"icon\": \"tuk-tuk\",\n  \"capacity\": 3,\n  \"base_fare\": 12.00,\n  \"per_km_rate\": 4.00,\n  \"per_minute_rate\": 0.25,\n  \"minimum_fare\": 20.00,\n  \"is_active\": true,\n  \"display_order\": 5\n}"
+            },
+            "description": "Create new vehicle category. name must be unique. categoryId auto-saved."
+          }
+        },
+        {
+          "name": "Update Category (super_admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/vehicle-categories/{{categoryId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"base_fare\": 15.00,\n  \"per_km_rate\": 4.50,\n  \"minimum_fare\": 22.00,\n  \"description\": \"Updated description\"\n}"
+            },
+            "description": "Partial update — only send fields you want to change."
+          }
+        },
+        {
+          "name": "Toggle Active / Inactive (super_admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/vehicle-categories/{{categoryId}}/toggle",
+            "description": "Flips is_active automatically. No body needed. Active → Inactive → Active. Inactive categories are hidden from rider + driver apps."
+          }
+        },
+        {
+          "name": "Reorder Categories (super_admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/vehicle-categories/reorder",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    { \"id\": \"PASTE_UUID_1\", \"display_order\": 1 },\n    { \"id\": \"PASTE_UUID_2\", \"display_order\": 2 },\n    { \"id\": \"PASTE_UUID_3\", \"display_order\": 3 },\n    { \"id\": \"PASTE_UUID_4\", \"display_order\": 4 }\n  ]\n}"
+            },
+            "description": "Set display order for all categories at once. Send ALL items with their new display_order values."
+          }
+        },
+        {
+          "name": "Delete Category (super_admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/vehicle-categories/{{categoryId}}",
+            "description": "Deletes category permanently. Returns 409 CONFLICT if active drivers are registered under this category. Use Toggle to disable instead."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👑 9. Admin — Driver Management",
+      "description": "Review, approve, reject, and manage drivers. Approval unlocks driver to go online and receive trips.",
+      "item": [
+        {
+          "name": "List All Drivers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/admin/drivers?page=1&limit=20",
+              "query": [
+                { "key": "page",   "value": "1" },
+                { "key": "limit",  "value": "20" },
+                { "key": "status", "value": "", "disabled": true, "description": "pending|approved|rejected|suspended" },
+                { "key": "search", "value": "", "disabled": true, "description": "Search by name or phone" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Pending Drivers",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/drivers/pending",
+            "description": "Returns drivers waiting for approval with their submitted documents."
+          }
+        },
+        {
+          "name": "Get Driver Detail",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const r = pm.response.json();",
+                "if (r.data && r.data.id) {",
+                "  pm.collectionVariables.set('driverId', r.data.id);",
+                "  console.log('✅ driverId saved:', r.data.id);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/drivers/{{driverId}}",
+            "description": "Full driver profile: personal info, vehicle, license, documents, stats."
+          }
+        },
+        {
+          "name": "Get Driver Documents",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/drivers/{{driverId}}/documents",
+            "description": "Returns all uploaded documents for a driver with file URLs and review status."
+          }
+        },
+        {
+          "name": "Approve Driver ✅",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/drivers/{{driverId}}/approve",
+            "description": "Sets account_status = approved. Driver can now go online and receive trips."
+          }
+        },
+        {
+          "name": "Reject Driver ❌",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/drivers/{{driverId}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Documents are blurry. Please resubmit clear photos of your license.\"\n}"
+            },
+            "description": "Sets account_status = rejected. Reason is stored and can be shown to driver in app."
+          }
+        },
+        {
+          "name": "Suspend Driver 🔴",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/drivers/{{driverId}}/suspend",
+            "description": "Suspends an approved driver. Driver cannot go online or receive trips while suspended."
+          }
+        },
+        {
+          "name": "Update Document Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/drivers/{{driverId}}/documents/PASTE_DOC_UUID",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"note\": \"Document verified and looks good.\"\n}"
+            },
+            "description": "Review individual documents. status: approved | rejected. Admin can approve documents one by one."
+          }
+        },
+        {
+          "name": "Delete Driver (super_admin only)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/drivers/{{driverId}}",
+            "description": "Permanently deletes driver and all associated data. Only super_admin can do this."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👑 10. Admin — User Management",
+      "description": "Manage all platform users (riders, drivers, admins).",
+      "item": [
+        {
+          "name": "List All Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users?page=1&limit=20",
+              "query": [
+                { "key": "page",   "value": "1" },
+                { "key": "limit",  "value": "20" },
+                { "key": "role",   "value": "rider", "disabled": true, "description": "rider|driver|admin|support|finance|operations|super_admin" },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/users/PASTE_USER_UUID"
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/users/PASTE_USER_UUID",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Updated Name\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Suspend User",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/users/PASTE_USER_UUID/suspend"
+          }
+        },
+        {
+          "name": "Restore User",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/users/PASTE_USER_UUID/restore"
+          }
+        },
+        {
+          "name": "Create Admin User (super_admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"operations@bahirdarride.com\",\n  \"password\": \"SecurePass123!\",\n  \"name\": \"Operations Manager\",\n  \"adminRole\": \"operations\"\n}"
+            },
+            "description": "Create admin panel user. adminRole: admin | finance | operations | support | super_admin"
+          }
+        },
+        {
+          "name": "Delete User (super_admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/users/PASTE_USER_UUID"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👑 11. Admin — Trips",
+      "description": "View and manage all trips on the platform.",
+      "item": [
+        {
+          "name": "List All Trips",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/admin/trips?page=1&limit=20",
+              "query": [
+                { "key": "page",   "value": "1" },
+                { "key": "limit",  "value": "20" },
+                { "key": "status", "value": "", "disabled": true, "description": "searching|matched|in_progress|completed|cancelled_by_rider|no_drivers_found" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Trip Detail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/trips/{{tripId}}",
+            "description": "Full trip details including rider info, driver info, vehicle, all offer attempts."
+          }
+        },
+        {
+          "name": "Force Cancel Trip",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/trips/{{tripId}}/force-cancel",
+            "description": "Admin force-cancels a stuck trip. Sets status to cancelled_by_system."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👑 12. Admin — Dashboard & Config",
+      "description": "Platform stats and system configuration.",
+      "item": [
+        {
+          "name": "Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/dashboard",
+            "description": "Returns: total trips today, active drivers, total riders, revenue today, pending drivers."
+          }
+        },
+        {
+          "name": "Get System Config (super_admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/config",
+            "description": "All system config key-value pairs (surge multiplier, max offer attempts, etc.)"
+          }
+        },
+        {
+          "name": "Update Config Key (super_admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/config/surge_multiplier",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": \"1.5\"\n}"
+            },
+            "description": "Update any system config value. Replace 'surge_multiplier' with the key name."
+          }
+        },
+        {
+          "name": "Audit Logs (super_admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/audit",
+            "description": "Admin action audit trail: who did what and when."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👑 13. Admin — Payments",
+      "description": "Payment management for finance team.",
+      "item": [
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/admin/payments?page=1&limit=20",
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Payments Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/payments/summary",
+            "description": "Revenue totals, platform commission, refunds."
+          }
+        },
+        {
+          "name": "Refund Payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/payments/PASTE_PAYMENT_UUID/refund",
+            "description": "Process refund for a specific payment."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👑 14. Admin — Broadcasts",
+      "description": "Send push notifications to all riders, all drivers, or specific users.",
+      "item": [
+        {
+          "name": "Create Broadcast",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/admin/broadcasts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"App Update Available\",\n  \"message\": \"Please update to the latest version for new features and bug fixes.\",\n  \"target\": \"all\"\n}"
+            },
+            "description": "target: all | riders | drivers"
+          }
+        },
+        {
+          "name": "List Broadcasts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/admin/broadcasts"
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👤 15. Rider — Profile",
+      "description": "Rider profile management.",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": "{{baseUrl}}/users/me"
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+            ],
+            "url": "{{baseUrl}}/users/me",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Almaz Tadesse\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Upload Avatar",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": "{{baseUrl}}/users/me/avatar",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "", "description": "Max 5MB" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Saved Places",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{riderToken}}" }],
+            "url": "{{baseUrl}}/users/me/saved-places"
+          }
+        },
+        {
+          "name": "Add Saved Place",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+            ],
+            "url": "{{baseUrl}}/users/me/saved-places",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Home\",\n  \"address\": \"Kebele 12, Bahir Dar\",\n  \"lat\": 9.0054,\n  \"lng\": 38.7917\n}"
+            }
+          }
+        },
+        {
+          "name": "Register Device (Push Notifications)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{riderToken}}" }
+            ],
+            "url": "{{baseUrl}}/users/me/devices",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"FCM_PUSH_TOKEN_HERE\",\n  \"platform\": \"android\"\n}"
+            },
+            "description": "Register FCM token for push notifications. platform: android | ios"
+          }
+        }
+      ]
+    }
+
+  ]
+}

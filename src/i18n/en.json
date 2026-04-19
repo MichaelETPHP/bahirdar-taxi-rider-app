@@ -1,0 +1,196 @@
+{
+  "auth": {
+    "welcome": "Welcome to Bahirdar",
+    "welcomeSub": "Enter your phone number to get started",
+    "phoneLabel": "Phone Number",
+    "phonePlaceholder": "09 XX XXX XXX",
+    "phonePrefixError": "Phone must start with 09 or 07",
+    "sendOTP": "Sign in",
+    "terms": "By continuing you agree to our Terms & Privacy Policy",
+    "verifyTitle": "Verify your number",
+    "verifySubtitle": "We sent a 4-digit code to",
+    "resendIn": "Resend in",
+    "resendNow": "Resend code",
+    "didntReceive": "Didn't receive code?",
+    "wrongCode": "Incorrect code. Try again.",
+    "nameTitle": "What's your name?",
+    "nameSub": "This is how your driver will greet you",
+    "namePlaceholder": "Full name",
+    "letsGo": "Let's go",
+    "skipForNow": "Skip for now"
+  },
+  "home": {
+    "greeting": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "greetingEvening": "Good evening",
+    "whereTo": "Where to ? / ወዴት መሄድ ይፈልጋሉ ?",
+    "yourLocation": "Your current location",
+    "stopLabel": "Stop {{n}}",
+    "addStop": "Add stop",
+    "findCar": "Find car",
+    "findDrivers": "Find nearby drivers",
+    "economy": "Economy",
+    "comfort": "Comfort",
+    "business": "Business",
+    "selectRide": "Select {{ride}}",
+    "swipeUpToViewMore": "Swipe up to view more",
+    "recentTrips": "Recent trips",
+    "currentLocation": "Current location",
+    "routeDistance": "Route"
+  },
+  "search": {
+    "placeholder": "Search destination in Addis Ababa",
+    "recent": "Recent",
+    "popular": "Popular in Addis Ababa",
+    "typeToSearch": "Type to search for a destination",
+    "noResults": "No results found",
+    "loading": "Getting location...",
+    "googleHint": "Search with Google Maps"
+  },
+  "ride": {
+    "confirmTitle": "Your ride summary",
+    "searching": "Finding your driver...",
+    "matching": "Matching",
+    "searchingSub": "This usually takes under 30 seconds",
+    "cancelRequest": "Cancel request",
+    "driverOnWay": "Driver on the way!",
+    "arriving": "Arriving in",
+    "arrivingIn": "Arriving in {{min}} min",
+    "arrived": "Arrived",
+    "tripActive": "Heading to",
+    "etaLabel": "ETA",
+    "cancel": "Cancel ride",
+    "shareTrip": "Share trip",
+    "shareLiveTrip": "Share live trip",
+    "share": "Share",
+    "location": "Location",
+    "cannotOpenMaps": "Could not open maps",
+    "sos": "SOS",
+    "cash": "Cash",
+    "change": "Change",
+    "destination": "Destination",
+    "price": "Price",
+    "estimatedPrice": "Estimated price",
+    "driverInfo": "Your driver",
+    "driverName": "Driver",
+    "carType": "Car",
+    "plateNumber": "Plate",
+    "phone": "Phone",
+    "distance": "Distance",
+    "duration": "Duration",
+    "confirmRide": "Confirm Ride",
+    "confirmDriver": "Confirm",
+    "payment": "Payment",
+    "km": "km",
+    "min": "min",
+    "remaining": "remaining",
+    "cancelOrder": "Cancel order",
+    "cancelOrderTitle": "Cancel order?",
+    "confirmCancel": "Yes, cancel",
+    "whyCancel": "Why are you canceling?",
+    "cancelReasonPlaceholder": "Enter your reason (optional)..."
+  },
+  "complete": {
+    "title": "You've reached your destination!",
+    "rateTitle": "How was your ride?",
+    "tipTitle": "Support your driver",
+    "tipSub": "Add a tip to show appreciation",
+    "comment": "Leave a comment...",
+    "complete": "Complete & Pay",
+    "done": "Done",
+    "driverCard": "Your driver",
+    "tripSummary": "Trip summary"
+  },
+  "drawer": {
+    "profile": "Profile",
+    "history": "History",
+    "notification": "Notifications",
+    "support": "Support",
+    "language": "Language",
+    "logout": "Log out"
+  },
+  "notification": {
+    "empty": "No notifications yet",
+    "pushBadge": "Push",
+    "samples": {
+      "driverMatched": {
+        "title": "Driver matched",
+        "body": "Alemayehu is on the way to pick you up. ETA about 4 minutes.",
+        "time": "2 min ago"
+      },
+      "driverArrived": {
+        "title": "Your driver has arrived",
+        "body": "Plate 3-AA-12345 is waiting at your pickup point.",
+        "time": "Yesterday, 6:42 PM"
+      },
+      "tripStarted": {
+        "title": "Trip started",
+        "body": "Enjoy your ride to Tana Lake. You can share trip status from the trip screen.",
+        "time": "Yesterday, 6:45 PM"
+      },
+      "tripComplete": {
+        "title": "Trip completed",
+        "body": "Thanks for riding with Bahirdar. Rate your trip and add a tip if you like.",
+        "time": "Mon, 8:12 AM"
+      },
+      "promo": {
+        "title": "Weekend offer",
+        "body": "Get 15% off your next 3 rides in Addis Ababa. Valid through Sunday.",
+        "time": "Fri, 9:00 AM"
+      }
+    }
+  },
+  "profile": {
+    "title": "My Profile",
+    "name": "Full Name",
+    "phone": "Phone Number",
+    "save": "Save Changes",
+    "language": "Language",
+    "notification": "Notification",
+    "emergencyContact": "Emergency contact",
+    "savedPlace": "Saved place",
+    "rateApp": "Rate Bahirdar Taxi",
+    "privacyPolicy": "Privacy Policy",
+    "termsCondition": "Terms & Condition",
+    "logout": "Log out",
+    "logoutConfirm": "Are you sure you want to log out?",
+    "deleteAccount": "Delete account",
+    "deleteReasonAsk": "Please tell us why you want to delete your account (optional but helps us improve).",
+    "deleteReasonPlaceholder": "Enter your reason...",
+    "deleteReasonRequired": "Please provide a reason before deleting your account."
+  },
+  "history": {
+    "title": "Ride History",
+    "noRides": "No rides yet",
+    "noRidesSub": "Your completed rides will appear here"
+  },
+  "support": {
+    "title": "Support",
+    "faq": "FAQ",
+    "contact": "Contact Us",
+    "reportIssue": "Report an Issue"
+  },
+  "termsModal": {
+    "title": "Terms & Conditions",
+    "intro": "Welcome to Bahirdar. By using our ride-hailing app, you agree to the following terms.",
+    "serviceTitle": "Our Service",
+    "serviceContent": "Bahirdar provides ride-hailing services in Addis Ababa. We connect you with verified drivers for safe, affordable trips around the city.",
+    "userTitle": "Your Responsibilities",
+    "userContent": "You must provide accurate pickup and destination details. You are responsible for your conduct during the trip. Payment is due upon completion of each ride.",
+    "privacyTitle": "Privacy & Data",
+    "privacyContent": "We collect your phone number and trip data to provide our service. We do not share your personal information with third parties without your consent.",
+    "contactTitle": "Contact Us",
+    "contactContent": "For questions about these terms, reach us through the Support section in the app menu."
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "back": "Back",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "comingSoon": "Coming soon",
+    "ok": "OK"
+  }
+}

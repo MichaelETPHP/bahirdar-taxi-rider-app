@@ -1,0 +1,196 @@
+{
+  "auth": {
+    "welcome": "ወደ ባህርዳር እንኳን ደህና መጡ",
+    "welcomeSub": "ለመጀመር ስልክ ቁጥርዎን ያስገቡ",
+    "phoneLabel": "ስልክ ቁጥር",
+    "phonePlaceholder": "09 XX XXX XXX",
+    "phonePrefixError": "ስልክ ቁጥር በ 09 ወይም 07 መጀመር አለበት",
+    "sendOTP": "ግባ",
+    "terms": "በመቀጠል የአጠቃቀም ውሎቻችንን ይስማማሉ",
+    "verifyTitle": "ቁጥርዎን ያረጋግጡ",
+    "verifySubtitle": "4-አሃዝ ኮድ ተልኳል ወደ",
+    "resendIn": "እንደገና ላክ በ",
+    "resendNow": "ኮድ እንደገና ላክ",
+    "didntReceive": "ኮድ አልደረሰዎትም?",
+    "wrongCode": "ኮዱ ትክክለኛ አይደለም። እንደገና ሞክሩ።",
+    "nameTitle": "ስምዎ ምንድን ነው?",
+    "nameSub": "ሹፌሩ በዚህ ስም ያቀርብዎታል",
+    "namePlaceholder": "ሙሉ ስም",
+    "letsGo": "እንሂድ",
+    "skipForNow": "አሁን ዝለሉ"
+  },
+  "home": {
+    "greeting": "እንደምን አደሩ",
+    "greetingAfternoon": "እንደምን ዋሉ",
+    "greetingEvening": "እንደምን አመሹ",
+    "whereTo": "ወዴት መሄድ ይፈልጋሉ ? / Where to ?",
+    "yourLocation": "የአሁን ቦታዎ",
+    "stopLabel": "ቋሚ {{n}}",
+    "addStop": "ቋሚ ጨምር",
+    "findCar": "መኪና ፈልግ",
+    "findDrivers": "አቅራቢያ ሹፌሮችን ፈልግ",
+    "economy": "ቆጣቢ",
+    "comfort": "ምቾት",
+    "business": "ቢዝነስ",
+    "selectRide": "{{ride}} ይምረጡ",
+    "swipeUpToViewMore": "ተጨማሪ ለማየት ወደ ላይ ጎትት",
+    "recentTrips": "የቅርብ ጊዜ ጉዞዎች",
+    "currentLocation": "የአሁን ቦታ",
+    "routeDistance": "መንገድ"
+  },
+  "search": {
+    "placeholder": "በባህር ዳር ውስጥ መዳረሻ ፈልጉ",
+    "recent": "የቅርብ ጊዜ",
+    "popular": "ታዋቂ ቦታዎች",
+    "typeToSearch": "መዳረሻ ለመፈለግ ይጻፉ",
+    "noResults": "ውጤት አልተገኘም",
+    "loading": "እውነተኛ ቦታ ተገኝቷል...",
+    "googleHint": "በGoogle ካርታ ይፈልጉ"
+  },
+  "ride": {
+    "confirmTitle": "የጉዞ ማጠቃለያ",
+    "searching": "ሹፌር እየፈለጉ...",
+    "matching": "እየያያዝ ነው",
+    "searchingSub": "ይህ ብዙ ጊዜ ከ30 ሰከንድ ያነሰ ነው",
+    "cancelRequest": "ጥያቄ ሰርዝ",
+    "driverOnWay": "ሹፌር እየመጣ ነው!",
+    "arriving": "ሲደርስ",
+    "arrivingIn": "በ{{min}} ደቂቃ ይደርሳል",
+    "arrived": "ደርሷል",
+    "tripActive": "ወደ",
+    "etaLabel": "የሚደርስበት ጊዜ",
+    "cancel": "ጉዞ ሰርዝ",
+    "shareTrip": "ጉዞ አጋራ",
+    "shareLiveTrip": "ቀጥታ ጉዞ አጋራ",
+    "share": "አጋራ",
+    "location": "አካባቢ",
+    "cannotOpenMaps": "ካርታ መክፈት አልተቻለም",
+    "sos": "ድጋፍ",
+    "cash": "ጥሬ ገንዘብ",
+    "change": "ቀይር",
+    "destination": "መዳረሻ",
+    "price": "ዋጋ",
+    "estimatedPrice": "የሚጠበቅ ዋጋ",
+    "driverInfo": "ሹፌርዎ",
+    "driverName": "ሹፌር",
+    "carType": "መኪና",
+    "plateNumber": "ቁጥር",
+    "phone": "ስልክ",
+    "distance": "ርቀት",
+    "duration": "ጊዜ",
+    "confirmDriver": "ያረጋግጡ",
+    "confirmRide": "ጉዞ ያረጋግጡ",
+    "payment": "ክፍያ",
+    "km": "ኪሎ ሜትር",
+    "min": "ደቂቃ",
+    "remaining": "ቀርቷል",
+    "cancelOrder": "ትዕዛዝ ሰርዝ",
+    "cancelOrderTitle": "ትዕዛዝ ሰርዝ?",
+    "confirmCancel": "አዎ፣ ሰርዝ",
+    "whyCancel": "ለምን እያስወገዱ ነው?",
+    "cancelReasonPlaceholder": "ምክንያትዎን ያስገቡ (አማራጭ)..."
+  },
+  "complete": {
+    "title": "መዳረሻዎ ደረሱ!",
+    "rateTitle": "ጉዞዎ እንዴት ነበር?",
+    "tipTitle": "ሹፌሩን ይደግፉ",
+    "tipSub": "አድናቆትዎን ለማሳየት ጠቃሚ ነገር ያክሉ",
+    "comment": "አስተያየት ይስጡ...",
+    "complete": "ጨርስ እና ከፍል",
+    "done": "ጨርስ",
+    "driverCard": "ሹፌርዎ",
+    "tripSummary": "የጉዞ ማጠቃለያ"
+  },
+  "drawer": {
+    "profile": "የኔ መገለጫ",
+    "history": "ታሪክ",
+    "notification": "ማሳወቂያዎች",
+    "support": "ድጋፍ",
+    "language": "ቋንቋ",
+    "logout": "ውጣ"
+  },
+  "notification": {
+    "empty": "ማሳወቂያ የለም",
+    "pushBadge": "መልዕክት",
+    "samples": {
+      "driverMatched": {
+        "title": "አሽከርካሪ ተገኝቷል",
+        "body": "አለማየሁ ለመቀበል በመንገድ ላይ ነው። በግምት 4 ደቂቃ ውስጥ ይደርሳል።",
+        "time": "ከ2 ደቂቃ በፊት"
+      },
+      "driverArrived": {
+        "title": "አሽከርካሪዎ ደርሷል",
+        "body": "ፕሌት 3-AA-12345 በመውሰጃ ቦታዎ ይጠብቃል።",
+        "time": "ትላንትና፣ 6:42 ምሽት"
+      },
+      "tripStarted": {
+        "title": "ጉዞ ተጀመረ",
+        "body": "ወደ ጣና ሐይቅ በመንገድዎ ይደሰቱ። የጉዞ ሁኔታ ከጉዞ ስክሪን ማጋራት ይችላሉ።",
+        "time": "ትላንትና፣ 6:45 ምሽት"
+      },
+      "tripComplete": {
+        "title": "ጉዞ ተጠናቋል",
+        "body": "ከባህር ዳር ጋር ስለተጓዙ እናመሰግናለን። ጉዞዎን ደረጃ ይስጡ እና ከፈለጉ ጠቃሚ ገንዘብ ይጨምሩ።",
+        "time": "ሰኞ፣ 8:12 ጠዋት"
+      },
+      "promo": {
+        "title": "የሳምንት መጨረሻ ቅናሽ",
+        "body": "በባህር ዳር በቀጣዩ 3 ጉዞዎችዎ ላይ 15% ቅናሽ ያግኙ። እስከ እሁድ ድረስ ይሰራል።",
+        "time": "አርብ፣ 9:00 ጠዋት"
+      }
+    }
+  },
+  "profile": {
+    "title": "የኔ መገለጫ",
+    "name": "ሙሉ ስም",
+    "phone": "ስልክ ቁጥር",
+    "save": "ለውጦች ያስቀምጡ",
+    "language": "ቋንቋ",
+    "notification": "ማሳወቂያ",
+    "emergencyContact": "የአደጋ አድራሻ",
+    "savedPlace": "የተቀመጡ ቦታዎች",
+    "rateApp": "ባህር ዳር ታክሲ ደረጃ ይስጡ",
+    "privacyPolicy": "የግላዊነት መመሪያ",
+    "termsCondition": "ውሎች እና ሁኔታዎች",
+    "logout": "ውጣ",
+    "logoutConfirm": "እርግጠኛ ነዎት መውጣት ይፈልጋሉ?",
+    "deleteAccount": "መለያ ሰርዝ",
+    "deleteReasonAsk": "መለያዎን ለማጥፋት ለምን እንደሚፈልጉ ይንገሩን።",
+    "deleteReasonPlaceholder": "ምክንያትዎን ያስገቡ...",
+    "deleteReasonRequired": "መለያዎን ከመሰረዝ በፊት ምክንያት ያስገቡ።"
+  },
+  "history": {
+    "title": "የጉዞ ታሪክ",
+    "noRides": "ጉዞ የለም",
+    "noRidesSub": "የተጠናቀቁ ጉዞዎችዎ እዚህ ይታያሉ"
+  },
+  "support": {
+    "title": "ድጋፍ",
+    "faq": "ተደጋጋሚ ጥያቄዎች",
+    "contact": "አግኙን",
+    "reportIssue": "ችግር ሪፖርት ያድርጉ"
+  },
+  "termsModal": {
+    "title": "ውሎች እና ሁኔታዎች",
+    "intro": "ወደ ባህር ዳር እንኳን ደህና መጡ። የጉዞ መጠየቂያ መተግበሪያችንን በመጠቀም ከታች ያሉትን ውሎች ይቀበላሉ።",
+    "serviceTitle": "የእኛ አገልግሎት",
+    "serviceContent": "ባህር ዳር በባህር ዳር ውስጥ የጉዞ መጠየቂያ አገልግሎት ይሰጣል። አረጋግጠናቸው ያለው ሹፌሮችን በተጋለጠ እና ብቃት ያለው ጉዞ ለማድረግ እናገናኝዎታለን።",
+    "userTitle": "የእርስዎ ኃላፊነቶች",
+    "userContent": "ትክክለኛ የመውሰጃ እና የመዳረሻ ዝርዝሮችን መስጠት አለብዎት። በጉዞ ጊዜ የእርስዎ መግቢያ ኃላፊነትዎ ነው። ክፍያ ከያንድ ጉዞ ከመጨረሻ በኋላ ይከፈላል።",
+    "privacyTitle": "ግላዊነት እና መረጃ",
+    "privacyContent": "አገልግሎታችንን ለመስጠት ስልክ ቁጥርዎን እና የጉዞ መረጃዎን እንሰብስባለን። የግላዊነት መረጃዎን ያለ ፍቃድዎ ከሶስተኛ ወገኖች ጋር አናጋራም።",
+    "contactTitle": "አግኙን",
+    "contactContent": "ስለነዚህ ውሎች ጥያቄዎች ካሉዎት፣ በመተግበሪያ ምናሌው ውስጥ ካለው ድጋፍ ክፍል ይድረሱን።"
+  },
+  "common": {
+    "loading": "እየጫነ ነው...",
+    "error": "ችግር ተፈጠረ",
+    "retry": "እንደገና ሞክር",
+    "back": "ተመለስ",
+    "cancel": "ሰርዝ",
+    "confirm": "አረጋግጥ",
+    "close": "ዝጋ",
+    "comingSoon": "በቅርቡ ይመጣል",
+    "ok": "እሺ"
+  }
+}

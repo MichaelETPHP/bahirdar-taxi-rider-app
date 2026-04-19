@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Bahirdar",
+    "slug": "BahirdarRide",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#00674F"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bahirdar.ride"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#00674F"
+      },
+      "package": "com.bahirdar.ride"
+    },
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#00674F",
+      "translucent": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#00674F",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Bahirdar to use your location."
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}

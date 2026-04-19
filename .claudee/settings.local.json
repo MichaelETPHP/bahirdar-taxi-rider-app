@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ipconfig)",
+      "Bash(find c:SVELT_APPCityBird-Bahirdarbahirdar-api -name *.sql -o -name *migration* -o -name *schema*)",
+      "Bash(find c:SVELT_APPCityBird-Bahirdarbahirdar-api -path */migrations* -name *.js -not -path */node_modules/*)",
+      "Bash(npx expo:*)",
+      "Bash(node -e \"const p=require\\(''./package.json''\\); console.log\\(''socket.io-client:'', p.dependencies[''socket.io-client''] || ''NOT INSTALLED''\\); console.log\\(''expo-av:'', p.dependencies[''expo-av''] || ''NOT INSTALLED''\\)\")",
+      "Bash(npm install:*)",
+      "Bash(node -e \":*)",
+      "Bash(find c:SVELT_APPCityBird-Bahirdarbahirdar-api -name trip*.js)",
+      "Bash(xargs cat:*)"
+    ]
+  },
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
+    "ANTHROPIC_AUTH_TOKEN": "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",
+    "ANTHROPIC_API_KEY": "",
+    "ANTHROPIC_MODEL": "qwen/qwen3.6-plus:free"
+  }
+}
