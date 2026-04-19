@@ -63,14 +63,14 @@ export default function PhoneEntryScreen({ navigation }) {
   const { t, i18n } = useTranslation();
 
   // Add inside your component — first line
-  useEffect(() => {
-    Alert.alert(
-      'Debug Info',
-      `API: ${process.env.EXPO_PUBLIC_API_URL}\n` +
-      `Socket: ${process.env.EXPO_PUBLIC_SOCKET_URL}\n` +
-      `ClearText: check android config`
-    );
-  }, []);
+  // useEffect(() => {
+  //   Alert.alert(
+  //     'Debug Info',
+  //     `API: ${process.env.EXPO_PUBLIC_API_URL}\n` +
+  //     `Socket: ${process.env.EXPO_PUBLIC_SOCKET_URL}\n` +
+  //     `ClearText: check android config`
+  //   );
+  // }, []);
 
   const insets = useSafeAreaInsets();
   const handleLanguageToggle = () => {
@@ -332,8 +332,8 @@ export default function PhoneEntryScreen({ navigation }) {
                       </View>
                     )}
 
-                    {/* Temporary Test API Button */}
-                    <TouchableOpacity
+                    {/* Temporary Test API Button — COMMENTED OUT FOR PRODUCTION */}
+                    {/* <TouchableOpacity
                       onPress={handleTestAPI}
                       disabled={testApiLoading}
                       style={[
@@ -356,7 +356,7 @@ export default function PhoneEntryScreen({ navigation }) {
                       <Text style={styles.testApiBtnText}>
                         {testApiLoading ? 'Testing...' : testApiSuccess === true ? '✓ Connected' : testApiSuccess === false ? '✗ Failed' : 'Test API Connection'}
                       </Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                   </View>
                 </View>
               </View>
