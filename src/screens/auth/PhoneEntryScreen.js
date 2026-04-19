@@ -61,6 +61,17 @@ function toLocalEthiopianDigits(raw) {
 
 export default function PhoneEntryScreen({ navigation }) {
   const { t, i18n } = useTranslation();
+
+  // Add inside your component — first line
+  useEffect(() => {
+    Alert.alert(
+      'Debug Info',
+      `API: ${process.env.EXPO_PUBLIC_API_URL}\n` +
+      `Socket: ${process.env.EXPO_PUBLIC_SOCKET_URL}\n` +
+      `ClearText: check android config`
+    );
+  }, []);
+
   const insets = useSafeAreaInsets();
   const handleLanguageToggle = () => {
     changeLanguage(i18n.language === 'en' ? 'am' : 'en');
@@ -133,6 +144,16 @@ export default function PhoneEntryScreen({ navigation }) {
       prevValid.current = false;
     }
   }, [isValid]);
+
+  const handleTestAPI = async () => {
+    try {
+      const res = await fetch('http://taxiapi.zmichael.click/health');
+      const data = await res.json();
+      Alert.alert('SUCCESS', JSON.stringify(data));
+    } catch (err) {
+      Alert.alert('FAILED', `${err.message}\n${err.toString()}`);
+    }
+  };
 
   const handleCheckPress = async () => {
     if (!isValid || loading) return;
@@ -294,15 +315,7 @@ export default function PhoneEntryScreen({ navigation }) {
 
                     {/* Temporary Test API Button */}
                     <TouchableOpacity
-                      onPress={async () => {
-                        try {
-                          const res = await fetch('http://taxiapi.zmichael.click/health');
-                          const data = await res.json();
-                          Alert.alert('SUCCESS', JSON.stringify(data));
-                        } catch (err) {
-                          Alert.alert('FAILED', err.message);
-                        }
-                      }}
+                      onPress={handleTestAPI}
                       style={styles.testApiBtn}
                       activeOpacity={0.7}
                     >
@@ -581,7 +594,7 @@ const styles = StyleSheet.create({
   },
   testApiBtn: {
     marginTop: 15,
-    backgroundColor: '#ff4444',
+    backgroundColor: colors.primary,
     paddingVertical: 10,
     paddingHorizontal: 15,
     borderRadius: 8,
