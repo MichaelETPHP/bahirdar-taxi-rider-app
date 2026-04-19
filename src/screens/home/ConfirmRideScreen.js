@@ -92,13 +92,34 @@ export default function ConfirmRideScreen({ navigation }) {
   );
 
   const handleRecenter = useCallback(() => {
-    if (mapRef.current) {
+    if (mapRef.current && userCoords && destination) {
+      // Calculate region that fits both pickup and destination
+      const minLat = Math.min(userCoords.latitude, destination.lat);
+      const maxLat = Math.max(userCoords.latitude, destination.lat);
+      const minLng = Math.min(userCoords.longitude, destination.lng);
+      const maxLng = Math.max(userCoords.longitude, destination.lng);
+
+      const centerLat = (minLat + maxLat) / 2;
+      const centerLng = (minLng + maxLng) / 2;
+      const latDelta = (maxLat - minLat) * 1.3;
+      const lngDelta = (maxLng - minLng) * 1.3;
+
       mapRef.current.animateToRegion(
-        { latitude: displayCoords.latitude, longitude: displayCoords.longitude, latitudeDelta: 0.004, longitudeDelta: 0.004 },
+        {
+          latitude: centerLat,
+          longitude: centerLng,
+          latitudeDelta: Math.max(latDelta, 0.05),
+          longitudeDelta: Math.max(lngDelta, 0.05)
+        },
+        500
+      );
+    } else if (mapRef.current) {
+      mapRef.current.animateToRegion(
+        { latitude: displayCoords.latitude, longitude: displayCoords.longitude, latitudeDelta: 0.04, longitudeDelta: 0.04 },
         500
       );
     }
-  }, [displayCoords.latitude, displayCoords.longitude]);
+  }, [userCoords, destination, displayCoords]);
 
   const handleConfirm = async () => {
     if (!destination || !selectedCategory) return;

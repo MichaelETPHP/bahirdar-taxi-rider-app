@@ -126,7 +126,7 @@ export default function App() {
 
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: 'Bahirdar Ride',
+            title: 'Bahiran Ride',
             body: 'Your driver is nearby. Open the app for live updates.',
             data: { route: 'Notification' },
             ...(Platform.OS === 'android' && {

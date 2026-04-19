@@ -69,7 +69,7 @@ export default function SplashScreen({ navigation }) {
           </Animated.View>
 
         <Animated.View style={[styles.textBlock, { opacity: textOpacity }]}>
-          <Text style={styles.appName}>Welcome to Bahirdar</Text>
+          <Text style={styles.appName}>Welcome to Bahiran Ride</Text>
           <Text style={styles.taglineAmharic}>ወደ መዳረሻዎ በፍጥነት</Text>
           <Text style={styles.taglineEn}>Fast rides in Addis Ababa</Text>
         </Animated.View>

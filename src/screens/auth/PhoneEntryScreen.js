@@ -189,8 +189,8 @@ export default function PhoneEntryScreen({ navigation }) {
       navigation.navigate('OTP', { isNewUser: true });
     } catch (err) {
       if (err.code === 'ACCOUNT_SUSPENDED') {
-        setInlineError('Your account has been suspended. Please contact support.');
-      } else if (err.status === 409) {
+        setInlineError('Your account is suspended.\nPlease contact support.');
+      } else if (err.status === 409 || err.message?.includes('already registered')) {
         // Existing user — send OTP then skip ProfileSetup
         try {
           await sendOtp(intlPhone);
@@ -198,13 +198,15 @@ export default function PhoneEntryScreen({ navigation }) {
           navigation.navigate('OTP', { isNewUser: false });
         } catch (otpErr) {
           if (otpErr.code === 'ACCOUNT_SUSPENDED') {
-            setInlineError('Your account has been suspended. Please contact support.');
+            setInlineError('Your account is suspended.\nPlease contact support.');
           } else {
-            setInlineError(otpErr.message || 'Could not send OTP. Try again.');
+            setInlineError('Could not send OTP.\nPlease try again.');
           }
         }
+      } else if (!err.status) {
+        setInlineError('No internet connection.\nPlease check your connection.');
       } else {
-        setInlineError(err.message || 'Something went wrong. Try again.');
+        setInlineError('Something went wrong.\nPlease try again.');
       }
     } finally {
       setLoading(false);

@@ -1,6 +1,6 @@
 {
   "auth": {
-    "welcome": "Welcome to Bahirdar",
+    "welcome": "Welcome to Bahiran Ride",
     "welcomeSub": "Enter your phone number to get started",
     "phoneLabel": "Phone Number",
     "phonePlaceholder": "09 XX XXX XXX",
@@ -130,7 +130,7 @@
       },
       "tripComplete": {
         "title": "Trip completed",
-        "body": "Thanks for riding with Bahirdar. Rate your trip and add a tip if you like.",
+        "body": "Thanks for riding with Bahiran Ride. Rate your trip and add a tip if you like.",
         "time": "Mon, 8:12 AM"
       },
       "promo": {
@@ -149,7 +149,7 @@
     "notification": "Notification",
     "emergencyContact": "Emergency contact",
     "savedPlace": "Saved place",
-    "rateApp": "Rate Bahirdar Taxi",
+    "rateApp": "Rate Bahiran Ride Taxi",
     "privacyPolicy": "Privacy Policy",
     "termsCondition": "Terms & Condition",
     "logout": "Log out",
@@ -172,9 +172,9 @@
   },
   "termsModal": {
     "title": "Terms & Conditions",
-    "intro": "Welcome to Bahirdar. By using our ride-hailing app, you agree to the following terms.",
+    "intro": "Welcome to Bahiran Ride. By using our ride-hailing app, you agree to the following terms.",
     "serviceTitle": "Our Service",
-    "serviceContent": "Bahirdar provides ride-hailing services in Bahir Dar. We connect you with verified drivers for safe, affordable trips around the city.",
+    "serviceContent": "Bahiran Ride provides ride-hailing services in Bahir Dar. We connect you with verified drivers for safe, affordable trips around the city.",
     "userTitle": "Your Responsibilities",
     "userContent": "You must provide accurate pickup and destination details. You are responsible for your conduct during the trip. Payment is due upon completion of each ride.",
     "privacyTitle": "Privacy & Data",

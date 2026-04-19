@@ -8,8 +8,6 @@ async function request(method, path, body, accessToken) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-  console.log(`[Auth] ${method} ${url}`);
-
   try {
     const res = await fetch(url, {
       method,
@@ -18,13 +16,11 @@ async function request(method, path, body, accessToken) {
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
-    console.log(`[Auth] ${method} ${url} → ${res.status}`);
     const data = await res.json();
     if (!res.ok) throw { status: res.status, message: data?.error?.message || data?.message || 'Request failed', code: data?.error?.code };
     return data;
   } catch (err) {
     clearTimeout(timeoutId);
-    console.error(`[Auth] ${method} ${url} ERROR:`, err.message || err);
     throw err;
   }
 }

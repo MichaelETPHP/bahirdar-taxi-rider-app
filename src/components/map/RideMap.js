@@ -2,12 +2,12 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 
-// Bahir Dar city center
-const BAHIR_DAR = {
-  latitude:      11.5936,
-  longitude:     37.3906,
-  latitudeDelta: 0.04,
-  longitudeDelta: 0.04,
+// Addis Ababa city center
+const ADDIS_ABABA = {
+  latitude:      9.0320,
+  longitude:     38.7469,
+  latitudeDelta: 0.05,
+  longitudeDelta: 0.05,
 };
 
 export default function RideMap({
@@ -25,7 +25,7 @@ export default function RideMap({
       ref={mapRef}
       provider={PROVIDER_GOOGLE}
       style={[styles.map, style]}
-      initialRegion={initialRegion || BAHIR_DAR}
+      initialRegion={initialRegion || ADDIS_ABABA}
       showsUserLocation={false}
       showsMyLocationButton={false}
       showsCompass={false}

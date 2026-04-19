@@ -7,10 +7,10 @@ export default {
     slug: 'BahirdarRide',
     version: '1.0.0',
     orientation: 'portrait',
-    icon: './assets/icon.png',
+    icon: './assets/bahiranLogo.png',
     userInterfaceStyle: 'light',
     splash: {
-      image: './assets/splash.png',
+      image: './assets/bahiranLogo.png',
       resizeMode: 'contain',
       backgroundColor: '#00674F',
     },
