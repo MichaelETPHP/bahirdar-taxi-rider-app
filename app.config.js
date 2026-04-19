@@ -2,7 +2,7 @@
 // All EXPO_PUBLIC_* vars are available here via process.env.
 export default {
   expo: {
-    owner: "zmichaeleth",
+    owner: "michaelexpo12",
     name: 'Bahirdar',
     slug: 'BahirdarRide',
     version: '1.0.0',
@@ -28,7 +28,7 @@ export default {
       package: 'com.bahirdar.ride',
       config: {
         googleMaps: {
-          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyB2QAbjllEn-1S95xd5_LcrjeC2_-ugiRs',
         },
       },
     },
@@ -58,12 +58,11 @@ export default {
       '@react-native-community/datetimepicker',
     ],
     extra: {
-      apiUrl: process.env.EXPO_PUBLIC_API_URL ||
-        process.env.EXPO_PUBLIC_API_BASE_URL,
-      socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL,
-      googleMapsKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      apiUrl: process.env.EXPO_PUBLIC_API_URL || 'https://taxiapi.zmichael.click/api/v1',
+      socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL || 'https://taxiapi.zmichael.click',
+      googleMapsKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyB2QAbjllEn-1S95xd5_LcrjeC2_-ugiRs',
       eas: {
-        projectId: "2fe9c462-da5d-437a-91bb-b56a4c48e258"
+        projectId: "0e88c993-9f78-4d5e-86fa-face25d64343"
       }
     },
   },

@@ -82,6 +82,8 @@ export default function PhoneEntryScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [inlineError, setInlineError] = useState('');
   const [recentPhone, setRecentPhone] = useState('');
+  const [testApiLoading, setTestApiLoading] = useState(false);
+  const [testApiSuccess, setTestApiSuccess] = useState(null);
   const phoneInputRef = useRef(null);
   const setStorePhone = useAuthStore((s) => s.setPhone);
   const storedPhone = useAuthStore((s) => s.phone);
@@ -146,12 +148,29 @@ export default function PhoneEntryScreen({ navigation }) {
   }, [isValid]);
 
   const handleTestAPI = async () => {
+    const testUrl = 'https://taxiapi.zmichael.click/health';
+    console.log('[TEST API] Starting request to:', testUrl);
+    setTestApiLoading(true);
+    setTestApiSuccess(null);
     try {
-      const res = await fetch('http://taxiapi.zmichael.click/health');
+      console.log('[TEST API] Sending request...');
+      const res = await fetch(testUrl);
+      console.log('[TEST API] Response status:', res.status);
       const data = await res.json();
-      Alert.alert('SUCCESS', JSON.stringify(data));
+      console.log('[TEST API] Response data:', data);
+      setTestApiSuccess(true);
+      Alert.alert('✅ SUCCESS', JSON.stringify(data, null, 2));
     } catch (err) {
-      Alert.alert('FAILED', `${err.message}\n${err.toString()}`);
+      setTestApiSuccess(false);
+      console.error('[TEST API] ERROR:', {
+        message: err.message,
+        code: err.code,
+        name: err.name,
+        stack: err.stack,
+      });
+      Alert.alert('❌ FAILED', `${err.message}\n\nURL: ${testUrl}\n\nCheck console for details`);
+    } finally {
+      setTestApiLoading(false);
     }
   };
 
@@ -316,11 +335,27 @@ export default function PhoneEntryScreen({ navigation }) {
                     {/* Temporary Test API Button */}
                     <TouchableOpacity
                       onPress={handleTestAPI}
-                      style={styles.testApiBtn}
-                      activeOpacity={0.7}
+                      disabled={testApiLoading}
+                      style={[
+                        styles.testApiBtn,
+                        testApiLoading && styles.testApiBtnLoading,
+                        testApiSuccess === true && styles.testApiBtnSuccess,
+                        testApiSuccess === false && styles.testApiBtnError,
+                      ]}
+                      activeOpacity={testApiLoading ? 1 : 0.7}
                     >
-                      <FontAwesome5 name="network-wired" size={14} color={colors.white} solid />
-                      <Text style={styles.testApiBtnText}>Test API Connection</Text>
+                      {testApiLoading ? (
+                        <ActivityIndicator size={14} color={colors.white} />
+                      ) : testApiSuccess === true ? (
+                        <FontAwesome5 name="check-circle" size={14} color={colors.white} solid />
+                      ) : testApiSuccess === false ? (
+                        <FontAwesome5 name="exclamation-circle" size={14} color={colors.white} solid />
+                      ) : (
+                        <FontAwesome5 name="network-wired" size={14} color={colors.white} solid />
+                      )}
+                      <Text style={styles.testApiBtnText}>
+                        {testApiLoading ? 'Testing...' : testApiSuccess === true ? '✓ Connected' : testApiSuccess === false ? '✗ Failed' : 'Test API Connection'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -603,6 +638,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     width: '100%',
+  },
+  testApiBtnLoading: {
+    backgroundColor: '#FFC107',
+    opacity: 0.8,
+  },
+  testApiBtnSuccess: {
+    backgroundColor: '#4CAF50',
+  },
+  testApiBtnError: {
+    backgroundColor: '#F44336',
   },
   testApiBtnText: {
     color: colors.white,
