@@ -1,27 +1,34 @@
 import { create } from 'zustand';
-import { saveTokens, getTokens, clearTokens } from '../utils/tokenStorage';
-import { fetchProfile } from '../services/authService';
+import { saveTokens, getTokens, clearTokens, updateTokensOnly } from '../utils/tokenStorage';
+import { getSessionStatus, updateLastActivity } from '../utils/sessionManager';
+import { fetchProfile, refreshTokens } from '../services/authService';
 import useLocationStore from './locationStore';
 import useRideStore from './rideStore';
 
-const useAuthStore = create((set) => ({
+const useAuthStore = create((set, get) => ({
   user: null,
   phone: '',
   token: null,
   refreshToken: null,
   isAuthenticated: false,
   isNewUser: false,
+  sessionExpiresAt: null,
 
   setPhone: (phone) => set({ phone }),
 
   setUser: (user) => set({ user }),
 
   /**
-   * Persist both tokens to AsyncStorage and store in state.
+   * Persist both tokens to AsyncStorage with 30-day session expiration.
+   * Tokens are automatically refreshed before expiry.
    */
-  setTokens: async (accessToken, refreshToken) => {
-    await saveTokens(accessToken, refreshToken);
-    set({ token: accessToken, refreshToken });
+  setTokens: async (accessToken, refreshToken, expiresIn = 3600) => {
+    const session = await saveTokens(accessToken, refreshToken, expiresIn);
+    set({
+      token: accessToken,
+      refreshToken,
+      sessionExpiresAt: new Date(session.expiresAt),
+    });
   },
 
   setAuthenticated: (isAuthenticated, isNewUser = false) =>
@@ -35,7 +42,7 @@ const useAuthStore = create((set) => ({
    * Call this right after login or on app resume when already authenticated.
    */
   loadProfile: async () => {
-    const token = useAuthStore.getState().token;
+    const token = get().token;
     if (!token) return;
     try {
       const res = await fetchProfile(token);
@@ -59,19 +66,88 @@ const useAuthStore = create((set) => ({
   },
 
   /**
-   * Called on app launch — restores session from AsyncStorage.
-   * Returns true if valid tokens were found.
+   * Called on app launch — restores 30-day session from storage.
+   * Returns true if valid session was found.
    */
   loadTokens: async () => {
     try {
-      const { accessToken, refreshToken } = await getTokens();
-      if (accessToken) {
-        set({ token: accessToken, refreshToken, isAuthenticated: true });
-        await useAuthStore.getState().loadProfile();
-        return true;
+      const status = await getSessionStatus();
+
+      if (status.status === 'no_session') {
+        return false;
       }
-    } catch (_) {}
-    return false;
+
+      if (status.status === 'error') {
+        return false;
+      }
+
+      // Session is active - check if tokens need refresh
+      if (status.needsRefresh && status.refreshToken) {
+        try {
+          const refreshed = await refreshTokens(status.refreshToken);
+          if (refreshed?.data?.accessToken) {
+            await updateTokensOnly(
+              refreshed.data.accessToken,
+              refreshed.data.refreshToken,
+              3600
+            );
+            set({
+              token: refreshed.data.accessToken,
+              refreshToken: refreshed.data.refreshToken,
+              isAuthenticated: true,
+              sessionExpiresAt: new Date(status.expiresAt),
+            });
+          }
+        } catch (err) {
+          console.error('Token refresh failed:', err);
+          // If refresh fails, try with existing tokens
+          set({
+            token: status.accessToken,
+            refreshToken: status.refreshToken,
+            isAuthenticated: true,
+            sessionExpiresAt: new Date(status.expiresAt),
+          });
+        }
+      } else {
+        set({
+          token: status.accessToken,
+          refreshToken: status.refreshToken,
+          isAuthenticated: true,
+          sessionExpiresAt: new Date(status.expiresAt),
+        });
+      }
+
+      // Load user profile
+      await get().loadProfile();
+      return true;
+    } catch (err) {
+      console.error('Failed to load tokens:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Update last activity timestamp (call when app comes to foreground)
+   */
+  updateActivity: async () => {
+    await updateLastActivity();
+  },
+
+  /**
+   * Check session validity and auto-logout if expired
+   */
+  validateSession: async () => {
+    const status = await getSessionStatus();
+
+    if (status.status === 'no_session' || status.status === 'error') {
+      // Session expired or invalid - logout
+      if (get().isAuthenticated) {
+        await get().logout();
+      }
+      return false;
+    }
+
+    return true;
   },
 
   logout: async () => {
@@ -88,6 +164,7 @@ const useAuthStore = create((set) => ({
       refreshToken: null,
       isAuthenticated: false,
       isNewUser: false,
+      sessionExpiresAt: null,
     });
   },
 
@@ -105,6 +182,7 @@ const useAuthStore = create((set) => ({
       refreshToken: null,
       isAuthenticated: false,
       isNewUser: false,
+      sessionExpiresAt: null,
     });
   },
 }));

@@ -1,23 +1,29 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { saveSession, getSession, clearSession, updateTokens } from './sessionManager';
 
-const ACCESS_KEY = 'rider_access_token';
-const REFRESH_KEY = 'rider_refresh_token';
+/**
+ * Token Storage - Wrapper for persistent 30-day session
+ * Uses sessionManager under the hood for proper expiration handling
+ */
 
-export async function saveTokens(accessToken, refreshToken) {
-  const pairs = [];
-  if (accessToken) pairs.push([ACCESS_KEY, accessToken]);
-  if (refreshToken) pairs.push([REFRESH_KEY, refreshToken]);
-  if (pairs.length) await AsyncStorage.multiSet(pairs);
+export async function saveTokens(accessToken, refreshToken, expiresIn = 3600) {
+  return await saveSession(accessToken, refreshToken, expiresIn);
 }
 
 export async function getTokens() {
-  const [[, accessToken], [, refreshToken]] = await AsyncStorage.multiGet([
-    ACCESS_KEY,
-    REFRESH_KEY,
-  ]);
-  return { accessToken, refreshToken };
+  const session = await getSession();
+  if (!session) {
+    return { accessToken: null, refreshToken: null };
+  }
+  return {
+    accessToken: session.accessToken,
+    refreshToken: session.refreshToken,
+  };
+}
+
+export async function updateTokensOnly(accessToken, refreshToken, expiresIn = 3600) {
+  return await updateTokens(accessToken, refreshToken, expiresIn);
 }
 
 export async function clearTokens() {
-  await AsyncStorage.multiRemove([ACCESS_KEY, REFRESH_KEY]);
+  return await clearSession();
 }
