@@ -1,12 +1,16 @@
 import { API_BASE_URL } from '../config/api';
 
-async function request(method, path, body, accessToken) {
+import useAuthStore from '../store/authStore';
+
+async function request(method, path, body, accessToken, retryCount = 0) {
   const url = `${API_BASE_URL}${path}`;
   const headers = { 'Content-Type': 'application/json' };
-  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+  
+  const activeToken = accessToken || useAuthStore.getState().token;
+  if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
     const res = await fetch(url, {
@@ -15,7 +19,24 @@ async function request(method, path, body, accessToken) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
+
     clearTimeout(timeoutId);
+
+    // ── Token Refresh Interceptor (PRO Handle 401) ──
+    if (res.status === 401 && retryCount === 0 && path !== '/auth/refresh' && path !== '/auth/rider/otp/verify') {
+      console.warn(`[Auth] 401 Detected at ${path}. Attempting token refresh...`);
+      const refreshed = await useAuthStore.getState().loadTokens();
+      if (refreshed) {
+        const newToken = useAuthStore.getState().token;
+        console.log(`[Auth] Refresh successful. Retrying ${path}...`);
+        return request(method, path, body, newToken, retryCount + 1);
+      } else {
+        // Refresh failed (refresh token expired) - force logout
+        console.error(`[Auth] Critical Auth Error at ${path}. Logging out...`);
+        useAuthStore.getState().logout();
+      }
+    }
+
     const data = await res.json();
     if (!res.ok) throw { status: res.status, message: data?.error?.message || data?.message || 'Request failed', code: data?.error?.code };
     return data;

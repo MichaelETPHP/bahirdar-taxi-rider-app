@@ -31,15 +31,16 @@ export function useNearbyDrivers(coords, radiusKm = 5) {
 
   return useQuery({
     queryKey: ["drivers-nearby", coords?.latitude, coords?.longitude],
-    queryFn: () => 
+    queryFn: () =>
       tripService.getNearbyDrivers(
-        coords.latitude, 
-        coords.longitude, 
-        radiusKm, 
+        coords.latitude,
+        coords.longitude,
+        radiusKm,
         token
       ),
     enabled: !!coords && !!token,
-    refetchInterval: 10000, // Refresh every 10s
+    refetchInterval: 30000, // Reduced from 10s to 30s to avoid constant re-renders
+    staleTime: 20000, // Data considered stale after 20s
   });
 }
 

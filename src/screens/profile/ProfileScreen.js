@@ -24,7 +24,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import Avatar from '../../components/common/Avatar';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Globe, Bell, Phone, MapPin, Star, ShieldAlert, File, Camera, CheckCircle, UserPen, ChevronDown, Check, ChevronRight, LogOut, Trash2, Mail, Calendar, AlertCircle, X, User } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
@@ -35,6 +35,26 @@ import { API_BASE_URL } from '../../config/api';
 const { width: SW } = Dimensions.get('window');
 const PAD = SW < 375 ? 14 : 16;
 const SILVER = '#9CA3AF';
+
+const ICON_COMPONENTS = {
+  globe: Globe,
+  bell: Bell,
+  'phone-alt': Phone,
+  'map-marker-alt': MapPin,
+  star: Star,
+  'shield-alt': ShieldAlert,
+  'file-alt': File,
+  camera: Camera,
+  'check-circle': CheckCircle,
+  'user-edit': UserPen,
+  'chevron-down': ChevronDown,
+  check: Check,
+  'chevron-right': ChevronRight,
+  'sign-out-alt': LogOut,
+  'trash-alt': Trash2,
+  envelope: Mail,
+  'calendar-alt': Calendar,
+};
 
 const SECTION1_ITEMS = [
   { key: 'language',         icon: 'globe',         screen: 'Language',         color: SILVER },
@@ -50,8 +70,8 @@ const SECTION2_ITEMS = [
 ];
 
 const GENDER_OPTIONS = [
-  { value: 'male',   label: 'Male',   icon: 'mars'  },
-  { value: 'female', label: 'Female', icon: 'venus' },
+  { value: 'male',   label: 'Male',   icon: 'male'  },
+  { value: 'female', label: 'Female', icon: 'female' },
 ];
 
 // Strip time portion — handles both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss.sssZ"
@@ -290,7 +310,7 @@ export default function ProfileScreen({ navigation }) {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.goBack(); }}
           activeOpacity={0.7}
         >
-          <FontAwesome5 name="arrow-left" size={14} color={colors.textPrimary} solid />
+          <X size={14} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('profile.title')}</Text>
       </View>
@@ -307,11 +327,11 @@ export default function ProfileScreen({ navigation }) {
             <View style={styles.cameraBadge}>
               {uploadingAvatar
                 ? <ActivityIndicator size={9} color={colors.white} />
-                : <FontAwesome5 name="camera" size={9} color={colors.white} solid />}
+                : <Camera size={9} color={colors.white} />}
             </View>
             {(user?.isVerified !== false) && (
               <Animated.View style={[styles.verifiedBadge, { transform: [{ scale: shineAnim }] }]}>
-                <FontAwesome5 name="check-circle" size={16} color={colors.verified} solid />
+                <CheckCircle size={16} color={colors.verified} />
               </Animated.View>
             )}
           </View>
@@ -350,12 +370,12 @@ export default function ProfileScreen({ navigation }) {
           <TouchableOpacity style={styles.accordionHeader} onPress={toggleAccordion} activeOpacity={0.8}>
             <View style={styles.accordionHeaderLeft}>
               <View style={[styles.iconBox, { backgroundColor: `${colors.primary}18` }]}>
-                <FontAwesome5 name="user-edit" size={12} color={colors.primary} solid />
+                <UserPen size={12} color={colors.primary} />
               </View>
               <Text style={styles.accordionTitle}>Edit Profile</Text>
             </View>
             <Animated.View style={{ transform: [{ rotate: chevronRotation }] }}>
-              <FontAwesome5 name="chevron-down" size={11} color={colors.textSecondary} solid />
+              <ChevronDown size={11} color={colors.textSecondary} />
             </Animated.View>
           </TouchableOpacity>
 
@@ -367,7 +387,7 @@ export default function ProfileScreen({ navigation }) {
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Full Name</Text>
                 <View style={styles.inputRow}>
-                  <FontAwesome5 name="user" size={11} color={colors.textSecondary} style={styles.inputIcon} />
+                  <User size={11} color={colors.textSecondary} style={styles.inputIcon} />
                   <TextInput
                     style={styles.fieldInput}
                     value={name}
@@ -383,7 +403,7 @@ export default function ProfileScreen({ navigation }) {
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Email</Text>
                 <View style={styles.inputRow}>
-                  <FontAwesome5 name="envelope" size={11} color={colors.textSecondary} style={styles.inputIcon} />
+                  <Mail size={11} color={colors.textSecondary} style={styles.inputIcon} />
                   <TextInput
                     style={styles.fieldInput}
                     value={email}
@@ -409,13 +429,11 @@ export default function ProfileScreen({ navigation }) {
                         onPress={() => setGender(opt.value)}
                         activeOpacity={0.75}
                       >
-                        <FontAwesome5
-                          name={opt.icon}
-                          size={12}
-                          color={active ? colors.white : colors.textSecondary}
-                          solid
-                          style={{ marginRight: 6 }}
-                        />
+                        {opt.value === 'male' ? (
+                          <User size={12} color={active ? colors.white : colors.textSecondary} style={{ marginRight: 6 }} />
+                        ) : (
+                          <User size={12} color={active ? colors.white : colors.textSecondary} style={{ marginRight: 6 }} />
+                        )}
                         <Text style={[styles.genderChipText, active && styles.genderChipTextActive]}>
                           {opt.label}
                         </Text>
@@ -433,11 +451,11 @@ export default function ProfileScreen({ navigation }) {
                   onPress={() => setShowDatePicker(true)}
                   activeOpacity={0.8}
                 >
-                  <FontAwesome5 name="calendar-alt" size={11} color={colors.textSecondary} style={styles.inputIcon} />
+                  <Calendar size={11} color={colors.textSecondary} style={styles.inputIcon} />
                   <Text style={[styles.fieldInput, !dateOfBirth && { color: colors.inputPlaceholder }]}>
                     {dateOfBirth ? formatDateDisplay(dateOfBirth) : 'DD MMM YYYY'}
                   </Text>
-                  <FontAwesome5 name="chevron-down" size={10} color={colors.textSecondary} style={{ marginRight: 2 }} />
+                  <ChevronDown size={10} color={colors.textSecondary} style={{ marginRight: 2 }} />
                 </TouchableOpacity>
               </View>
 
@@ -452,7 +470,7 @@ export default function ProfileScreen({ navigation }) {
                   <ActivityIndicator size="small" color={colors.white} />
                 ) : (
                   <>
-                    <FontAwesome5 name="check" size={12} color={colors.white} solid style={{ marginRight: 7 }} />
+                    <Check size={12} color={colors.white} style={{ marginRight: 7 }} />
                     <Text style={styles.saveBtnText}>Save Changes</Text>
                   </>
                 )}
@@ -471,10 +489,10 @@ export default function ProfileScreen({ navigation }) {
               activeOpacity={0.7}
             >
               <View style={[styles.iconBox, { backgroundColor: `${item.color}18` }]}>
-                <FontAwesome5 name={item.icon} size={12} color={item.color} solid />
+                {React.createElement(ICON_COMPONENTS[item.icon] || Globe, { size: 12, color: item.color })}
               </View>
               <Text style={styles.listLabel}>{t(`profile.${item.key}`)}</Text>
-              <FontAwesome5 name="chevron-right" size={10} color={colors.border} solid />
+              <ChevronRight size={10} color={colors.border} />
             </TouchableOpacity>
           ))}
         </View>
@@ -489,10 +507,10 @@ export default function ProfileScreen({ navigation }) {
               activeOpacity={0.7}
             >
               <View style={[styles.iconBox, { backgroundColor: `${item.color}18` }]}>
-                <FontAwesome5 name={item.icon} size={12} color={item.color} solid />
+                {React.createElement(ICON_COMPONENTS[item.icon] || Globe, { size: 12, color: item.color })}
               </View>
               <Text style={styles.listLabel}>{t(`profile.${item.key}`)}</Text>
-              <FontAwesome5 name="chevron-right" size={10} color={colors.border} solid />
+              <ChevronRight size={10} color={colors.border} />
             </TouchableOpacity>
           ))}
         </View>
@@ -501,10 +519,10 @@ export default function ProfileScreen({ navigation }) {
         <View style={styles.card}>
           <TouchableOpacity style={styles.listRow} onPress={handleLogout} activeOpacity={0.7}>
             <View style={[styles.iconBox, { backgroundColor: '#6B728018' }]}>
-              <FontAwesome5 name="sign-out-alt" size={12} color={SILVER} solid />
+              <LogOut size={12} color={SILVER} />
             </View>
             <Text style={styles.listLabel}>{t('profile.logout')}</Text>
-            <FontAwesome5 name="chevron-right" size={10} color={colors.border} solid />
+            <ChevronRight size={10} color={colors.border} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.listRow, styles.listRowLast]}
@@ -512,10 +530,10 @@ export default function ProfileScreen({ navigation }) {
             activeOpacity={0.7}
           >
             <View style={[styles.iconBox, { backgroundColor: `${colors.error}18` }]}>
-              <FontAwesome5 name="trash-alt" size={12} color={colors.error} solid />
+              <Trash2 size={12} color={colors.error} />
             </View>
             <Text style={[styles.listLabel, { color: colors.error }]}>{t('profile.deleteAccount')}</Text>
-            <FontAwesome5 name="chevron-right" size={10} color={colors.error} solid />
+            <ChevronRight size={10} color={colors.error} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -585,11 +603,11 @@ export default function ProfileScreen({ navigation }) {
           },
         ]}
       >
-        <FontAwesome5
-          name={toast.type === 'error' ? 'exclamation-circle' : 'check-circle'}
-          size={14} color={colors.white} solid
-          style={{ marginRight: 9 }}
-        />
+        {toast.type === 'error' ? (
+          <AlertCircle size={14} color={colors.white} style={{ marginRight: 9 }} />
+        ) : (
+          <CheckCircle size={14} color={colors.white} style={{ marginRight: 9 }} />
+        )}
         <Text style={styles.toastText}>{toast.message}</Text>
       </Animated.View>
 

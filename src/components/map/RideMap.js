@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { StyleSheet } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 
@@ -10,7 +10,7 @@ const ADDIS_ABABA = {
   longitudeDelta: 0.05,
 };
 
-export default function RideMap({
+function RideMap({
   children,
   mapRef,
   initialRegion,
@@ -46,6 +46,8 @@ export default function RideMap({
     </MapView>
   );
 }
+
+export default memo(RideMap);
 
 const styles = StyleSheet.create({
   map: { flex: 1 },

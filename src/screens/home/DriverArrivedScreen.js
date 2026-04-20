@@ -1,9 +1,9 @@
+import { Check, Phone } from 'lucide-react-native';
 import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, Linking, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontAwesome5 } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -130,7 +130,7 @@ export default function DriverArrivedScreen({ navigation }) {
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
       {/* Animated checkmark */}
       <Animated.View style={[styles.checkCircle, { transform: [{ scale: scaleAnim }] }]}>
-        <FontAwesome5 name="check" size={40} color={colors.white} solid />
+        <Check size={40} color={colors.white} />
       </Animated.View>
 
       <Text style={styles.title}>Your driver has arrived!</Text>
@@ -163,7 +163,7 @@ export default function DriverArrivedScreen({ navigation }) {
       </View>
 
       <TouchableOpacity style={styles.callBtn} onPress={handleCall} activeOpacity={0.85}>
-        <FontAwesome5 name="phone" size={16} color={colors.white} solid style={{ marginRight: 8 }} />
+        <Phone size={16} color={colors.white} />
         <Text style={styles.callText}>Call {driverFirstName || 'Driver'}</Text>
       </TouchableOpacity>
 

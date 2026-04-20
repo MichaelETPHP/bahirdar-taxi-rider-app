@@ -1,16 +1,14 @@
 import { Platform } from 'react-native';
 
-export const fontFamily = Platform.select({
-  ios: 'SF Pro Display',
-  android: 'sans-serif-light',
-  default: 'System',
-});
+// Plus Jakarta Sans font family
+export const fontFamily = 'PlusJakartaSans';
+export const fontFamilyBold = 'PlusJakartaSans-Bold';
+export const fontFamilySemiBold = 'PlusJakartaSans-SemiBold';
+export const fontFamilyMedium = 'PlusJakartaSans-Medium';
+export const fontFamilyRegular = 'PlusJakartaSans-Regular';
+export const fontFamilyLight = 'PlusJakartaSans-Light';
 
-export const fontFamilyItalic = Platform.select({
-  ios: 'SF Pro Display',
-  android: 'sans-serif-light',
-  default: 'System',
-});
+export const fontFamilyItalic = 'PlusJakartaSans-Italic';
 
 export const fontSize = {
   xs: 11,

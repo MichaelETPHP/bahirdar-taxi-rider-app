@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Star } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 
 export default function StarRating({ value = 0, onChange, size = 36, style }) {
@@ -14,11 +14,10 @@ export default function StarRating({ value = 0, onChange, size = 36, style }) {
     <View style={[styles.row, style]}>
       {[1, 2, 3, 4, 5].map((star) => (
         <TouchableOpacity key={star} onPress={() => handlePress(star)} activeOpacity={0.7}>
-          <FontAwesome5
-            name="star"
+          <Star
             size={size}
             color={colors.primary}
-            solid={star <= value}
+            fill={star <= value ? colors.primary : 'none'}
           />
         </TouchableOpacity>
       ))}

@@ -1,22 +1,22 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Car, Van, Users } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
 
-// Map API icon slugs → FontAwesome5 icon names
+// Map API icon slugs → Lucide components
 const ICON_MAP = {
-  'car-sedan':  'car',
-  'car':        'car',
-  'car-side':   'car-side',
-  'car-suv':    'car-side',
-  'shuttle-van': 'shuttle-van',
-  'van':        'shuttle-van',
-  'minivan':    'shuttle-van',
-  'motorcycle': 'motorcycle',
-  'taxi':       'taxi',
+  'car-sedan':  Car,
+  'car':        Car,
+  'car-side':   Car,
+  'car-suv':    Car,
+  'shuttle-van': Van,
+  'van':        Van,
+  'minivan':    Van,
+  'motorcycle': Car,
+  'taxi':       Car,
 };
 
 // Color palette cycling for categories based on display_order
@@ -38,7 +38,7 @@ function calcFare(category, distanceKm, durationMin) {
 
 export default function RideTypeCard({ category, selected, onPress, distanceKm = 5, durationMin = 14, serverFare, fareLoading = false, lang = 'en' }) {
   const palette = PALETTE[(category.display_order - 1) % PALETTE.length] || PALETTE[0];
-  const iconName = ICON_MAP[category.icon] || 'car';
+  const IconComponent = ICON_MAP[category.icon] || Car;
   const label = lang === 'am' && category.name_am ? category.name_am : category.name;
   const desc  = lang === 'am' && category.description_am ? category.description_am : category.description;
   // Prefer real server fare, fall back to client-side estimate
@@ -58,7 +58,7 @@ export default function RideTypeCard({ category, selected, onPress, distanceKm =
       >
         {/* Left: icon */}
         <View style={[styles.iconCircle, { backgroundColor: selected ? palette.bgColor : '#F3F4F6' }]}>
-          <FontAwesome5 name={iconName} size={20} color={selected ? palette.color : colors.textSecondary} solid />
+          <IconComponent size={20} color={selected ? palette.color : colors.textSecondary} />
         </View>
 
         {/* Center: info */}
@@ -74,11 +74,11 @@ export default function RideTypeCard({ category, selected, onPress, distanceKm =
           <Text style={styles.description} numberOfLines={1}>{desc}</Text>
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
-              <FontAwesome5 name="user" size={10} color={colors.textSecondary} solid />
+              <Users size={10} color={colors.textSecondary} />
               <Text style={styles.meta}>{category.capacity} seats</Text>
             </View>
             <View style={styles.metaItem}>
-              <FontAwesome5 name="road" size={10} color={colors.textSecondary} solid />
+              <Car size={10} color={colors.textSecondary} />
               <Text style={styles.meta}>{category.per_km_rate} ብር/km</Text>
             </View>
           </View>
@@ -116,24 +116,24 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 16,
     borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.white,
-    gap: 10,
+    gap: 12,
     ...shadow.sm,
   },
   cardSelected: {
     borderColor: colors.primary,
-    borderWidth: 1.5,
+    borderWidth: 2,
     backgroundColor: colors.primaryLight,
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
   },
   iconCircle: {
     width: 44,

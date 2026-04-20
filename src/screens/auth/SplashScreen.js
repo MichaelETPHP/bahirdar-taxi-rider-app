@@ -7,7 +7,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Car } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 
@@ -65,7 +65,7 @@ export default function SplashScreen({ navigation }) {
               { transform: [{ scale: logoScale }], opacity: logoOpacity },
             ]}
           >
-            <FontAwesome5 name="car" size={52} color="white" solid />
+            <Car size={52} color="white" />
           </Animated.View>
 
         <Animated.View style={[styles.textBlock, { opacity: textOpacity }]}>

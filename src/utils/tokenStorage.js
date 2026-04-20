@@ -1,12 +1,16 @@
-import { saveSession, getSession, clearSession, updateTokens } from './sessionManager';
+import { saveSession, getSession, clearSession, updateTokens, getSavedPhone } from './sessionManager';
 
 /**
  * Token Storage - Wrapper for persistent 30-day session
  * Uses sessionManager under the hood for proper expiration handling
  */
 
-export async function saveTokens(accessToken, refreshToken, expiresIn = 3600) {
-  return await saveSession(accessToken, refreshToken, expiresIn);
+export async function saveTokens(accessToken, refreshToken, expiresIn = 3600, phone = null) {
+  return await saveSession(accessToken, refreshToken, expiresIn, phone);
+}
+
+export async function getStoredPhone() {
+  return await getSavedPhone();
 }
 
 export async function getTokens() {

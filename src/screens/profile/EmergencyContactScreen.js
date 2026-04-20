@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { X } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 
@@ -19,7 +19,7 @@ export default function EmergencyContactScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBackPress} style={styles.backBtn}>
-          <FontAwesome5 name="arrow-left" size={22} color={colors.textPrimary} solid />
+          <X size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('profile.emergencyContact')}</Text>
       </View>

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
+import * as Location from 'expo-location';
 
 import HomeScreen from '../screens/home/HomeScreen';
 import SearchScreen from '../screens/home/SearchScreen';
@@ -26,6 +27,20 @@ const screenOptions = {
 };
 
 export default function AppNavigator() {
+  useEffect(() => {
+    // Request location permission when app loads
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.warn('Location permission not granted');
+        }
+      } catch (error) {
+        console.error('Failed to request location permission:', error);
+      }
+    })();
+  }, []);
+
   return (
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen name="Home" component={HomeScreen} options={{ lazy: false }} />

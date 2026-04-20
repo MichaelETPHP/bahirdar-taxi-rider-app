@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { MapPin, XCircle, Plus } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
@@ -9,7 +9,7 @@ import useLocationStore from '../../store/locationStore';
 
 const MAX_STOPS = 2;
 
-export default function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
+function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
   const { t } = useTranslation();
   const { pickup, destination, stops, clearDestination, addStop, removeStop } = useLocationStore();
   const canAddStop = stops.length < MAX_STOPS;
@@ -78,19 +78,19 @@ export default function LocationBar({ onToPress, onFromPress, onStopPress, onAdd
       {/* Connector column - dynamic pins and vertical lines */}
       <View style={styles.connectorColumn}>
         <View style={styles.pinWrapper}>
-          <FontAwesome5 name="map-marker-alt" size={18} color={colors.primary} solid />
+          <MapPin size={18} color={colors.primary} />
         </View>
         {stops.map((_, i) => (
           <React.Fragment key={i}>
             <View style={styles.dottedLine} />
             <View style={styles.pinWrapper}>
-              <FontAwesome5 name="map-marker-alt" size={16} color={colors.mapCurrentLocation} solid />
+              <MapPin size={16} color={colors.mapCurrentLocation} />
             </View>
           </React.Fragment>
         ))}
         <View style={styles.dottedLine} />
         <View style={styles.pinWrapper}>
-          <FontAwesome5 name="map-marker-alt" size={18} color={colors.mapCurrentLocation} solid />
+          <MapPin size={18} color={colors.mapCurrentLocation} />
         </View>
       </View>
 
@@ -127,7 +127,7 @@ export default function LocationBar({ onToPress, onFromPress, onStopPress, onAdd
                 onPress={() => removeStop(index)}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <FontAwesome5 name="times-circle" size={20} color="rgba(239,68,68,0.5)" solid />
+                <XCircle size={20} color="rgba(239,68,68,0.5)" />
               </TouchableOpacity>
             </View>
           </React.Fragment>
@@ -143,7 +143,7 @@ export default function LocationBar({ onToPress, onFromPress, onStopPress, onAdd
               activeOpacity={0.7}
             >
               <View style={styles.addStopIcon}>
-                <FontAwesome5 name="plus" size={12} color={colors.primary} solid />
+                <Plus size={12} color={colors.primary} />
               </View>
               <Text style={styles.addStopText}>{t('home.addStop')}</Text>
             </TouchableOpacity>
@@ -168,7 +168,7 @@ export default function LocationBar({ onToPress, onFromPress, onStopPress, onAdd
               onPress={clearDestination}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <FontAwesome5 name="times-circle" size={20} color="rgba(239,68,68,0.5)" solid />
+              <XCircle size={20} color="rgba(239,68,68,0.5)" />
             </TouchableOpacity>
           ) : (
             <View style={styles.inputAction} />
@@ -178,6 +178,8 @@ export default function LocationBar({ onToPress, onFromPress, onStopPress, onAdd
     </View>
   );
 }
+
+export default memo(LocationBar);
 
 const styles = StyleSheet.create({
   container: {

@@ -11,10 +11,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  */
 
 const SESSION_KEY = 'rider_session_data';
+const PHONE_KEY = 'rider_phone_number';
 const SESSION_TIMEOUT = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 const TOKEN_REFRESH_BUFFER = 5 * 60 * 1000; // Refresh 5 min before expiry
 
-export async function saveSession(accessToken, refreshToken, expiresIn = 3600) {
+export async function saveSession(accessToken, refreshToken, expiresIn = 3600, phone = null) {
   try {
     const now = Date.now();
     const sessionData = {
@@ -27,10 +28,26 @@ export async function saveSession(accessToken, refreshToken, expiresIn = 3600) {
     };
 
     await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+
+    // Also save phone number separately for easy retrieval
+    if (phone) {
+      await AsyncStorage.setItem(PHONE_KEY, phone);
+    }
+
     return sessionData;
   } catch (error) {
     console.error('Failed to save session:', error);
     throw error;
+  }
+}
+
+export async function getSavedPhone() {
+  try {
+    const phone = await AsyncStorage.getItem(PHONE_KEY);
+    return phone || null;
+  } catch (error) {
+    console.error('Failed to get saved phone:', error);
+    return null;
   }
 }
 
@@ -87,6 +104,7 @@ export async function updateTokens(accessToken, refreshToken, expiresIn = 3600) 
 export async function clearSession() {
   try {
     await AsyncStorage.removeItem(SESSION_KEY);
+    await AsyncStorage.removeItem(PHONE_KEY);
   } catch (error) {
     console.error('Failed to clear session:', error);
   }

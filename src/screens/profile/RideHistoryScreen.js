@@ -1,9 +1,9 @@
+import { X, Star, Check, Phone, Car, Clock, DollarSign, Share2, AlertTriangle, User } from 'lucide-react-native';
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
-import { FontAwesome5 } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
@@ -34,7 +34,7 @@ const TripCard = React.memo(({ item }) => (
         <Text style={styles.metaText}>{item.distanceKm} km · {item.durationMin} min</Text>
         <View style={styles.ratingBadge}>
           <View style={styles.ratingRow}>
-            <FontAwesome5 name="star" size={14} color="#F5A623" solid />
+            <Star size={14} color="#F5A623" />
             <Text style={styles.ratingText}>{item.userRating}/5</Text>
           </View>
         </View>
@@ -56,7 +56,7 @@ export default function RideHistoryScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBackPress} style={styles.backBtn}>
-          <FontAwesome5 name="arrow-left" size={22} color={colors.textPrimary} solid />
+          <X size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('history.title')}</Text>
       </View>

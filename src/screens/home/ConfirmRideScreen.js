@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native';
@@ -10,7 +10,7 @@ import DestMarker from '../../components/map/DestMarker';
 import RoutePolyline from '../../components/map/RoutePolyline';
 import AppButton from '../../components/common/AppButton';
 import LocationPinButton from '../../components/ui/LocationPinButton';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { X } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -93,33 +93,26 @@ export default function ConfirmRideScreen({ navigation }) {
 
   const handleRecenter = useCallback(() => {
     if (mapRef.current && userCoords && destination) {
-      // Calculate region that fits both pickup and destination
-      const minLat = Math.min(userCoords.latitude, destination.lat);
-      const maxLat = Math.max(userCoords.latitude, destination.lat);
-      const minLng = Math.min(userCoords.longitude, destination.lng);
-      const maxLng = Math.max(userCoords.longitude, destination.lng);
-
-      const centerLat = (minLat + maxLat) / 2;
-      const centerLng = (minLng + maxLng) / 2;
-      const latDelta = (maxLat - minLat) * 1.3;
-      const lngDelta = (maxLng - minLng) * 1.3;
-
-      mapRef.current.animateToRegion(
+      mapRef.current.fitToCoordinates(
+        [
+          { latitude: userCoords.latitude, longitude: userCoords.longitude },
+          { latitude: destination.lat, longitude: destination.lng }
+        ],
         {
-          latitude: centerLat,
-          longitude: centerLng,
-          latitudeDelta: Math.max(latDelta, 0.05),
-          longitudeDelta: Math.max(lngDelta, 0.05)
-        },
-        500
-      );
-    } else if (mapRef.current) {
-      mapRef.current.animateToRegion(
-        { latitude: displayCoords.latitude, longitude: displayCoords.longitude, latitudeDelta: 0.04, longitudeDelta: 0.04 },
-        500
+          edgePadding: { top: 100, right: 80, bottom: 350, left: 80 },
+          animated: true,
+        }
       );
     }
-  }, [userCoords, destination, displayCoords]);
+  }, [userCoords, destination]);
+
+  // Auto-focus on the route once coordinates are available
+  useEffect(() => {
+    if (userCoords && destination) {
+      const timer = setTimeout(handleRecenter, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [userCoords?.latitude, destination?.lat, handleRecenter]);
 
   const handleConfirm = async () => {
     if (!destination || !selectedCategory) return;
@@ -226,14 +219,14 @@ export default function ConfirmRideScreen({ navigation }) {
           style={[styles.backBtn, { top: insets.top + 12 }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.goBack(); }}
         >
-          <FontAwesome5 name="arrow-left" size={20} color={colors.textPrimary} solid />
+          <X size={20} color={colors.textPrimary} />
         </TouchableOpacity>
 
         <LocationPinButton style={[styles.pinBtn, { top: insets.top + 12 }]} onPress={handleRecenter} />
       </View>
 
       {/* Footer */}
-      <View style={[styles.footerCard, { paddingBottom: Math.max(16, insets.bottom) + 16 }]}>
+      <View style={[styles.footerCard, { paddingBottom: Math.max(12, insets.bottom) + 6 }]}>
         <View style={styles.table}>
           <View style={styles.tableRow}>
             <Text style={styles.tableLabel}>Pickup</Text>
@@ -272,6 +265,7 @@ export default function ConfirmRideScreen({ navigation }) {
           onPress={handleConfirm}
           disabled={loading || !destination || !selectedCategory}
           loading={loading}
+          shimmer={true}
           style={styles.confirmBtn}
         />
       </View>
@@ -300,7 +294,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: borderRadius['2xl'], borderTopRightRadius: borderRadius['2xl'],
     paddingTop: 16, paddingHorizontal: 20,
     borderTopWidth: 1, borderTopColor: colors.border,
-    minHeight: '42%',
+    minHeight: '38%',
     ...shadow.lg,
     elevation: 18,
   },

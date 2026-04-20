@@ -1,6 +1,6 @@
+import { Car } from 'lucide-react-native';
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
-import { FontAwesome5 } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 
 export default function SearchingAnimation() {
@@ -52,7 +52,7 @@ export default function SearchingAnimation() {
       <Animated.View style={[styles.ring, styles.ring2, ringStyle(ring2)]} />
       <Animated.View style={[styles.ring, styles.ring1, ringStyle(ring1)]} />
       <View style={styles.center}>
-        <FontAwesome5 name="car" size={22} color={colors.white} solid />
+        <Car size={22} color={colors.white} />
       </View>
     </View>
   );

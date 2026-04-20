@@ -4,7 +4,7 @@ import {
   TextInput, ActivityIndicator, Animated, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Check, Circle, MapPin, MapRoute, Clock, DollarSign, Star } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -58,7 +58,7 @@ export default function TripCompleteScreen({ navigation }) {
     >
       {/* Checkmark */}
       <Animated.View style={[styles.checkCircle, { transform: [{ scale: scaleAnim }] }]}>
-        <FontAwesome5 name="check" size={36} color={colors.white} solid />
+        <Check size={36} color={colors.white} />
       </Animated.View>
 
       <Text style={styles.title}>Trip Completed!</Text>
@@ -67,7 +67,7 @@ export default function TripCompleteScreen({ navigation }) {
       {/* Receipt */}
       <View style={styles.receipt}>
         <View style={styles.receiptRow}>
-          <FontAwesome5 name="dot-circle" size={12} color={colors.primary} solid />
+          <Circle size={12} color={colors.primary} />
           <Text style={styles.receiptLabel}>From</Text>
           <Text style={styles.receiptValue} numberOfLines={1}>
             {tripData?.pickup_address || '—'}
@@ -75,7 +75,7 @@ export default function TripCompleteScreen({ navigation }) {
         </View>
         <View style={styles.receiptDivider} />
         <View style={styles.receiptRow}>
-          <FontAwesome5 name="map-marker-alt" size={12} color="#EF4444" solid />
+          <MapPin size={12} color="#EF4444" />
           <Text style={styles.receiptLabel}>To</Text>
           <Text style={styles.receiptValue} numberOfLines={1}>
             {tripData?.dropoff_address || '—'}
@@ -84,19 +84,19 @@ export default function TripCompleteScreen({ navigation }) {
         <View style={styles.receiptSeparator} />
         <View style={styles.statRow}>
           <View style={styles.stat}>
-            <FontAwesome5 name="road" size={14} color={colors.textSecondary} solid />
+            <MapRoute size={14} color={colors.textSecondary} />
             <Text style={styles.statValue}>{parseFloat(distKm).toFixed(1)} km</Text>
             <Text style={styles.statLabel}>Distance</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
-            <FontAwesome5 name="clock" size={14} color={colors.textSecondary} solid />
+            <Clock size={14} color={colors.textSecondary} />
             <Text style={styles.statValue}>{Math.round(durMin)} min</Text>
             <Text style={styles.statLabel}>Duration</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
-            <FontAwesome5 name="money-bill-wave" size={14} color={colors.primary} solid />
+            <DollarSign size={14} color={colors.primary} />
             <Text style={[styles.statValue, { color: colors.primary }]}>
               ETB {parseFloat(fare).toFixed(2)}
             </Text>
@@ -114,11 +114,10 @@ export default function TripCompleteScreen({ navigation }) {
         <View style={styles.starsRow}>
           {[1, 2, 3, 4, 5].map((n) => (
             <TouchableOpacity key={n} onPress={() => setStars(n)} activeOpacity={0.7}>
-              <FontAwesome5
-                name="star"
+              <Star
                 size={36}
                 color={n <= stars ? '#F59E0B' : colors.border}
-                solid
+                fill={n <= stars ? '#F59E0B' : 'none'}
               />
             </TouchableOpacity>
           ))}

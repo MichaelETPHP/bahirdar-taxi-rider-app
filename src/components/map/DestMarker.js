@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { MapPin } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 
 export default React.memo(function DestMarker({ coordinate, title = 'Destination', caption }) {
@@ -17,7 +17,7 @@ export default React.memo(function DestMarker({ coordinate, title = 'Destination
         </View>
         {/* Pin body */}
         <View style={styles.body}>
-          <FontAwesome5 name="map-marker-alt" size={32} color={colors.success} solid />
+          <MapPin size={32} color="#EF4444" />
         </View>
       </View>
     </Marker>
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   captionText: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.success,
+    color: '#EF4444',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 2,
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   body: {
-    shadowColor: colors.success,
+    shadowColor: '#EF4444',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 6,

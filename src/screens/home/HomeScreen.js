@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Image, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import RideMap from '../../components/map/RideMap';
@@ -8,7 +9,17 @@ import DriverMarker from '../../components/map/DriverMarker';
 import DestMarker from '../../components/map/DestMarker';
 import UserMarker from '../../components/map/UserMarker';
 import RoutePolyline from '../../components/map/RoutePolyline';
-import { FontAwesome5 } from '@expo/vector-icons';
+import {
+  MapPin,
+  Clock,
+  Flag,
+  RefreshCw,
+  Hand,
+  History,
+  ChevronRight,
+  XCircle,
+  Settings,
+} from 'lucide-react-native';
 import HamburgerButton from '../../components/ui/HamburgerButton';
 import LocationPinButton from '../../components/ui/LocationPinButton';
 import BottomSheet from '../../components/ui/BottomSheet';
@@ -41,6 +52,18 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 // so animateToRegion / onRegionChangeComplete centers within the visible 45% map area
 const MAP_BOTTOM_PADDING = Math.round(SCREEN_HEIGHT * 0.55);
 const MAP_PADDING = { top: 0, right: 0, bottom: MAP_BOTTOM_PADDING, left: 0 };
+
+// Throttle socket updates to 500ms to prevent constant re-renders
+function createThrottle(intervalMs) {
+  let lastTime = 0;
+  return (fn) => (...args) => {
+    const now = Date.now();
+    if (now - lastTime >= intervalMs) {
+      lastTime = now;
+      fn(...args);
+    }
+  };
+}
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -205,9 +228,53 @@ export default function HomeScreen({ navigation }) {
   const [sheetExpanded, setSheetExpanded] = useState(true);
   const lastDrawerCloseAt = useRef(0);
   const bannerMarqueeX = useRef(new Animated.Value(0)).current;
+  const isLoggedInRef = useRef(!!user?.id);
+
+  // Load drawer state from storage on mount
+  useEffect(() => {
+    const loadDrawerState = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('drawerState');
+        if (stored && isLoggedInRef.current) {
+          setDrawerOpen(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.warn('Failed to load drawer state:', e);
+      }
+    };
+    loadDrawerState();
+  }, []);
+
+  // Save drawer state to storage when it changes (only while logged in)
+  useEffect(() => {
+    const saveDrawerState = async () => {
+      try {
+        if (isLoggedInRef.current) {
+          await AsyncStorage.setItem('drawerState', JSON.stringify(drawerOpen));
+        }
+      } catch (e) {
+        console.warn('Failed to save drawer state:', e);
+      }
+    };
+    saveDrawerState();
+  }, [drawerOpen]);
+
+  // Clear drawer state on logout
+  useEffect(() => {
+    if (!user?.id) {
+      isLoggedInRef.current = false;
+      setDrawerOpen(false);
+      AsyncStorage.removeItem('drawerState');
+    } else {
+      isLoggedInRef.current = true;
+    }
+  }, [user?.id]);
+
   const handleCloseDrawer = useCallback(() => {
     lastDrawerCloseAt.current = Date.now();
-    setDrawerOpen(false);
+    setTimeout(() => {
+      setDrawerOpen(false);
+    }, 200);
   }, []);
 
   const handleToggleDrawer = useCallback(() => {
@@ -215,7 +282,6 @@ export default function HomeScreen({ navigation }) {
       handleCloseDrawer();
       return;
     }
-    // Prevent accidental reopen on quick second tap after closing.
     if (Date.now() - lastDrawerCloseAt.current < 320) return;
     setDrawerOpen(true);
   }, [drawerOpen, handleCloseDrawer]);
@@ -227,6 +293,7 @@ export default function HomeScreen({ navigation }) {
   const userName = user?.fullName ? `, ${user.fullName.split(' ')[0]}` : '';
 
   const [drivers, setDrivers] = useState([]);
+  const driversRef = useRef([]);
 
   const { data: nearbyDriversRes } = useNearbyDrivers(displayCoords, 10);
 
@@ -234,7 +301,10 @@ export default function HomeScreen({ navigation }) {
     if (nearbyDriversRes) {
       const list = Array.isArray(nearbyDriversRes?.data) ? nearbyDriversRes.data : [];
       const mapped = list.map((d, idx) => normalizeDriverPoint(d, idx)).filter(Boolean);
-      setDrivers((prev) => (areDriverListsEqual(prev, mapped) ? prev : mapped));
+      if (!areDriverListsEqual(driversRef.current, mapped)) {
+        driversRef.current = mapped;
+        setDrivers(mapped);
+      }
     }
   }, [nearbyDriversRes]);
 
@@ -246,17 +316,19 @@ export default function HomeScreen({ navigation }) {
     if (!socket) return undefined;
     const riderTag = `[RIDER_SOCKET user:${user.id}]`;
 
+    const throttleLocationUpdates = createThrottle(500);
+
     const mergeDrivers = (incoming) => {
       const list = Array.isArray(incoming) ? incoming : [];
       const mapped = list.map((d, idx) => normalizeDriverPoint(d, idx)).filter(Boolean);
       if (mapped.length === 0) return;
-      setDrivers((prev) => {
-        // Merge by id so socket can update location/name/car in-place.
-        const prevMap = new Map(prev.map((d) => [d.id, d]));
-        mapped.forEach((d) => prevMap.set(d.id, { ...(prevMap.get(d.id) || {}), ...d }));
-        const next = Array.from(prevMap.values());
-        return areDriverListsEqual(prev, next) ? prev : next;
-      });
+      const prevMap = new Map(driversRef.current.map((d) => [d.id, d]));
+      mapped.forEach((d) => prevMap.set(d.id, { ...(prevMap.get(d.id) || {}), ...d }));
+      const next = Array.from(prevMap.values());
+      if (!areDriverListsEqual(driversRef.current, next)) {
+        driversRef.current = next;
+        setDrivers(next);
+      }
     };
 
     const onNearbyUpdate = (payload) => {
@@ -269,31 +341,45 @@ export default function HomeScreen({ navigation }) {
       mergeDrivers(list);
     };
 
-    const onDriverLocation = (payload) => {
+    const handleDriverLocation = (payload) => {
       const point = normalizeDriverPoint(payload?.driver ?? payload?.data ?? payload, 0);
       if (!point) return;
-      setDrivers((prev) => {
-        const base = prev;
-        const idx = base.findIndex((d) => d.id === point.id);
-        if (idx === -1) return [...base, point];
-        const next = [...base];
+      const base = driversRef.current;
+      const idx = base.findIndex((d) => d.id === point.id);
+      let next;
+      if (idx === -1) {
+        next = [...base, point];
+      } else {
+        next = [...base];
         next[idx] = { ...next[idx], ...point };
-        return areDriverListsEqual(base, next) ? base : next;
-      });
+      }
+      if (!areDriverListsEqual(base, next)) {
+        driversRef.current = next;
+        setDrivers(next);
+      }
     };
 
-    const onDriverOnline = (payload) => {
+    const onDriverLocation = throttleLocationUpdates(handleDriverLocation);
+
+    const handleDriverOnline = (payload) => {
       const point = normalizeDriverPoint(payload?.driver ?? payload?.data ?? payload, 0);
       if (!point) return;
-      setDrivers((prev) => {
-        const base = prev;
-        const idx = base.findIndex((d) => d.id === point.id);
-        if (idx === -1) return [...base, point];
-        const next = [...base];
+      const base = driversRef.current;
+      const idx = base.findIndex((d) => d.id === point.id);
+      let next;
+      if (idx === -1) {
+        next = [...base, point];
+      } else {
+        next = [...base];
         next[idx] = { ...next[idx], ...point, live: true };
-        return areDriverListsEqual(base, next) ? base : next;
-      });
+      }
+      if (!areDriverListsEqual(base, next)) {
+        driversRef.current = next;
+        setDrivers(next);
+      }
     };
+
+    const onDriverOnline = throttleLocationUpdates(handleDriverOnline);
 
     const onDriverOffline = (payload) => {
       const id = String(
@@ -304,7 +390,11 @@ export default function HomeScreen({ navigation }) {
         ''
       );
       if (!id) return;
-      setDrivers((prev) => prev.filter((d) => d.id !== id));
+      const filtered = driversRef.current.filter((d) => d.id !== id);
+      if (filtered.length !== driversRef.current.length) {
+        driversRef.current = filtered;
+        setDrivers(filtered);
+      }
     };
 
     const onConnect = () => {
@@ -538,13 +628,13 @@ export default function HomeScreen({ navigation }) {
         {destination && routeDistanceKm != null ? (
           <View style={[styles.routeInfoChip, { top: insets.top + 118 }]} pointerEvents="none">
             {/* Distance */}
-            <FontAwesome5 name="road" size={11} color={colors.primary} solid />
+            <MapPin size={11} color={colors.primary} />
             <Text style={styles.routeDistanceKm}>{formatDistance(routeDistanceKm)}</Text>
             {/* Duration */}
             {routeDurationMinFinal > 0 ? (
               <>
                 <View style={styles.routeChipDivider} />
-                <FontAwesome5 name="clock" size={11} color={colors.primary} solid />
+                <Clock size={11} color={colors.primary} />
                 <Text style={styles.routeDistanceKm}>
                   {routeDurationMinFinal < 60
                     ? `${Math.round(routeDurationMinFinal)} min`
@@ -556,7 +646,7 @@ export default function HomeScreen({ navigation }) {
             {arrivalTime ? (
               <>
                 <View style={styles.routeChipDivider} />
-                <FontAwesome5 name="flag-checkered" size={11} color={colors.primary} solid />
+                <Flag size={11} color={colors.primary} />
                 <Text style={styles.routeDistanceKm}>{arrivalTime}</Text>
               </>
             ) : null}
@@ -569,6 +659,29 @@ export default function HomeScreen({ navigation }) {
         <MovableCircleButton />
       </View>
 
+      {/* Location info at bottom - outside glass style */}
+      {userCoords && (
+        <View style={[styles.locationBottomBar, { paddingBottom: insets.bottom + 12 }]}>
+          <TouchableOpacity
+            style={styles.locationInfoButton}
+            onPress={handleRecenter}
+            activeOpacity={0.8}
+          >
+            <MapPin size={13} color={colors.primary} />
+            <Text style={styles.locationBottomText} numberOfLines={1}>
+              {pickup?.name || 'Current Location'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.locationSyncButton}
+            onPress={handleRecenter}
+            activeOpacity={0.7}
+          >
+            <RefreshCw size={12} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Overlays - only capture touches in their bounds */}
       <View style={[styles.topBar, { top: insets.top + 12 }]} pointerEvents="box-none" collapsable={false}>
         {/* Row 1: hamburger + greeting + recenter */}
@@ -580,7 +693,7 @@ export default function HomeScreen({ navigation }) {
               {greeting}{userName}{' '}
             </Text>
             <Animated.View style={{ transform: [{ rotate: handRotation }] }}>
-              <FontAwesome5 name="hand-paper" size={14} color="#00674F" solid />
+              <Hand size={14} color="#00674F" />
             </Animated.View>
           </View>
 
@@ -590,7 +703,9 @@ export default function HomeScreen({ navigation }) {
         {/* Row 2: current location label */}
         <View className="px-4 mt-2" pointerEvents="none">
           <View className="bg-white/90 self-start px-3 py-1 rounded-full flex-row items-center border border-gray-100 shadow-sm">
-            <FontAwesome5 name="map-marker-alt" size={9} color="#00674F" solid className="mr-2" />
+            <View className="mr-2">
+              <MapPin size={9} color="#00674F" />
+            </View>
             <Text className="text-primary font-italic text-[10px] font-semibold" numberOfLines={1}>
               {pickup?.name && pickup.name !== 'Your current location' && pickup.name !== 'Current Location'
                 ? pickup.name
@@ -634,7 +749,7 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => navigation.navigate('Search', { mode: 'destination' })}
                 activeOpacity={0.8}
               >
-                <FontAwesome5 name="map-marker-alt" size={14} color={colors.primary} solid style={styles.destinationOnlyIcon} />
+                <MapPin size={14} color={colors.primary} style={styles.destinationOnlyIcon} />
                 <Text style={styles.destinationOnlyText} numberOfLines={1}>
                   {destination?.name || destination?.address || t('home.whereTo')}
                 </Text>
@@ -645,7 +760,7 @@ export default function HomeScreen({ navigation }) {
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 activeOpacity={0.7}
               >
-                <FontAwesome5 name="times-circle" size={18} color="rgba(239,68,68,0.6)" solid />
+                <XCircle size={18} color="rgba(239,68,68,0.6)" />
               </TouchableOpacity>
             </View>
           )}
@@ -666,10 +781,10 @@ export default function HomeScreen({ navigation }) {
                         activeOpacity={0.7}
                       >
                         <View style={styles.recentIcon}>
-                          <FontAwesome5 name="history" size={14} color={colors.primary} solid />
+                          <History size={14} color={colors.primary} />
                         </View>
                         <Text style={styles.recentItemText} numberOfLines={1}>{trip.destination}</Text>
-                        <FontAwesome5 name="chevron-right" size={12} color={colors.textSecondary} solid />
+                        <ChevronRight size={12} color={colors.textSecondary} />
                       </TouchableOpacity>
                     );
                   })}
@@ -687,10 +802,10 @@ export default function HomeScreen({ navigation }) {
                       activeOpacity={0.7}
                     >
                       <View style={styles.recentIcon}>
-                        <FontAwesome5 name="map-marker-alt" size={14} color={colors.primary} solid />
+                        <MapPin size={14} color={colors.primary} />
                       </View>
                       <Text style={styles.recentItemText} numberOfLines={1}>{loc.name}</Text>
-                      <FontAwesome5 name="chevron-right" size={12} color={colors.textSecondary} solid />
+                      <ChevronRight size={12} color={colors.textSecondary} />
                     </TouchableOpacity>
                   ))}
                 </>
@@ -718,6 +833,7 @@ export default function HomeScreen({ navigation }) {
             onPress={handleFindDrivers}
             loading={!categorySelectionReady}
             disabled={!selectedCategory}
+            shimmer={true}
             className="w-full"
           />
         </View>
@@ -735,7 +851,7 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.locationGate} pointerEvents="box-none">
           <View style={styles.locationGateCard}>
             <View style={styles.locationGateIcon}>
-              <FontAwesome5 name="map-marker-alt" size={32} color={colors.primary} solid />
+              <MapPin size={32} color={colors.primary} />
             </View>
             <Text style={styles.locationGateTitle}>Location Required</Text>
             <Text style={styles.locationGateBody}>
@@ -746,7 +862,7 @@ export default function HomeScreen({ navigation }) {
               onPress={openLocationSettings}
               activeOpacity={0.85}
             >
-              <FontAwesome5 name="cog" size={14} color={colors.white} solid style={{ marginRight: 8 }} />
+              <Settings size={14} color={colors.white} style={{ marginRight: 8 }} />
               <Text style={styles.locationGateBtnText}>Open Settings</Text>
             </TouchableOpacity>
           </View>
@@ -1130,5 +1246,50 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: fontWeight.semibold,
     color: colors.white,
+  },
+  locationBottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  locationInfoButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.pill,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  locationBottomText: {
+    flex: 1,
+    fontSize: fontSize.xs,
+    color: colors.textPrimary,
+    fontWeight: fontWeight.medium,
+  },
+  locationSyncButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
   },
 });

@@ -1,9 +1,9 @@
+import { Check, X } from 'lucide-react-native';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
-import { FontAwesome5 } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
@@ -25,7 +25,7 @@ export default function LanguageScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBackPress} style={styles.backBtn}>
-          <FontAwesome5 name="arrow-left" size={22} color={colors.textPrimary} solid />
+          <X size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('profile.language')}</Text>
       </View>
@@ -38,7 +38,7 @@ export default function LanguageScreen({ navigation }) {
         >
           <Text style={[styles.optionText, i18n.language === 'en' && styles.optionTextActive]}>English</Text>
           {i18n.language === 'en' && (
-            <FontAwesome5 name="check" size={18} color={colors.primary} solid />
+            <Check size={18} color={colors.primary} />
           )}
         </TouchableOpacity>
         <TouchableOpacity
@@ -48,7 +48,7 @@ export default function LanguageScreen({ navigation }) {
         >
           <Text style={[styles.optionText, i18n.language === 'am' && styles.optionTextActive]}>አማርኛ</Text>
           {i18n.language === 'am' && (
-            <FontAwesome5 name="check" size={18} color={colors.primary} solid />
+            <Check size={18} color={colors.primary} />
           )}
         </TouchableOpacity>
       </View>

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { X } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
@@ -44,7 +44,7 @@ export default function TermsConditionsModal({ visible, onClose }) {
               style={styles.closeBtn}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <FontAwesome5 name="times" size={20} color={colors.textPrimary} />
+              <X size={20} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
           <ScrollView

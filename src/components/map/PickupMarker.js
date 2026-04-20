@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { colors } from '../../constants/colors';
 
-const GREEN = colors.success;
+const PICKUP_COLOR = '#FFFFFF';
 
 export default React.memo(function PickupMarker({ coordinate, title = 'Pickup' }) {
   if (!coordinate) return null;
@@ -14,7 +14,7 @@ export default React.memo(function PickupMarker({ coordinate, title = 'Pickup' }
         <View style={styles.label}>
           <Text style={styles.labelText} numberOfLines={1}>{title}</Text>
         </View>
-        {/* Green dot */}
+        {/* White dot */}
         <View style={styles.circle} />
         <View style={styles.tail} />
       </View>
@@ -50,12 +50,12 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: GREEN,
+    backgroundColor: PICKUP_COLOR,
     borderWidth: 2,
-    borderColor: colors.white,
-    shadowColor: GREEN,
+    borderColor: 'rgba(0,0,0,0.15)',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 4,
   },
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 6,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: GREEN,
+    borderTopColor: 'rgba(0,0,0,0.1)',
     marginTop: -1,
   },
 });

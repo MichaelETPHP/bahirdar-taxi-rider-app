@@ -219,6 +219,10 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingHorizontal: 20,
     overflow: 'hidden',
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.2,
+    borderRightWidth: 1.2,
+    borderColor: '#D1D5DB', // Silver highlight
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,

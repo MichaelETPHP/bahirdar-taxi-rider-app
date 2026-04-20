@@ -12,7 +12,20 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
-import { FontAwesome5 } from '@expo/vector-icons';
+import {
+  History,
+  MapPin,
+  ChevronRight,
+  X,
+  Search,
+  XCircle,
+  Plane,
+  Landmark,
+  ShoppingBag,
+  GraduationCap,
+  Hospital,
+  Hotel,
+} from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
@@ -35,12 +48,12 @@ const BAHIRDAR_POPULAR = [
 ];
 
 const CATEGORY_ICONS = {
-  transport: 'plane',
-  landmark:  'landmark',
-  shopping:  'shopping-bag',
-  education: 'graduation-cap',
-  hospital:  'hospital',
-  hotel:     'hotel',
+  transport: Plane,
+  landmark:  Landmark,
+  shopping:  ShoppingBag,
+  education: GraduationCap,
+  hospital:  Hospital,
+  hotel:     Hotel,
 };
 
 export default function SearchScreen({ navigation, route }) {
@@ -138,8 +151,12 @@ export default function SearchScreen({ navigation, route }) {
   }, [addToRecentDestination, setDestination, setStop, searchMode, stopIndex, navigation]);
 
   const renderPlace = useCallback(({ item, section }) => {
-    const icon = CATEGORY_ICONS[item.category] || 'map-marker-alt';
+    const IconComponent = isRecent => {
+      if (isRecent) return History;
+      return CATEGORY_ICONS[item.category] || MapPin;
+    };
     const isRecent = section?.key === 'recent';
+    const Icon = IconComponent(isRecent);
     return (
       <TouchableOpacity
         style={styles.item}
@@ -148,11 +165,9 @@ export default function SearchScreen({ navigation, route }) {
         disabled={selecting}
       >
         <View style={[styles.itemIcon, isRecent && styles.itemIconRecent]}>
-          <FontAwesome5
-            name={isRecent ? 'history' : icon}
+          <Icon
             size={15}
             color={isRecent ? colors.textSecondary : colors.primary}
-            solid
           />
         </View>
         <View style={styles.itemText}>
@@ -161,7 +176,7 @@ export default function SearchScreen({ navigation, route }) {
             <Text style={styles.itemAddress} numberOfLines={1}>{item.address}</Text>
           )}
         </View>
-        <FontAwesome5 name="chevron-right" size={12} color={colors.border} solid />
+        <ChevronRight size={12} color={colors.border} />
       </TouchableOpacity>
     );
   }, [handleSelect, selecting]);
@@ -189,10 +204,10 @@ export default function SearchScreen({ navigation, route }) {
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.goBack(); }}
           style={styles.backBtn}
         >
-          <FontAwesome5 name="chevron-left" size={18} color={colors.textPrimary} solid />
+          <X size={18} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.inputWrap}>
-          <FontAwesome5 name="search" size={14} color={colors.primary} style={styles.inputIcon} />
+          <Search size={14} color={colors.primary} style={styles.inputIcon} />
           <TextInput
             ref={inputRef}
             style={styles.input}
@@ -207,7 +222,7 @@ export default function SearchScreen({ navigation, route }) {
           {loading && <ActivityIndicator size="small" color={colors.primary} style={styles.spinner} />}
           {!loading && query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn}>
-              <FontAwesome5 name="times-circle" size={16} color={colors.textSecondary} solid />
+              <XCircle size={16} color={colors.textSecondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -237,7 +252,7 @@ export default function SearchScreen({ navigation, route }) {
           ListEmptyComponent={
             !loading ? (
               <View style={styles.noResults}>
-                <FontAwesome5 name="search" size={32} color={colors.border} />
+                <Search size={32} color={colors.border} />
                 <Text style={styles.noResultsText}>No results for "{query}"</Text>
                 <Text style={styles.noResultsSub}>Try a neighbourhood, landmark or street in Bahir Dar</Text>
               </View>

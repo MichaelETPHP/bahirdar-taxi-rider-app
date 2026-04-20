@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import AuthNavigator from './AuthNavigator';
 import AppNavigator from './AppNavigator';
 import useAuthStore from '../store/authStore';
+import useSessionManager from '../hooks/useSessionManager';
 
 const Stack = createStackNavigator();
 export const navigationRef = createNavigationContainerRef();
@@ -13,9 +14,29 @@ export default function RootNavigator() {
   const loadTokens = useAuthStore((s) => s.loadTokens);
   const [bootstrapped, setBootstrapped] = useState(false);
 
+  // Initialize 30-day session management with app lifecycle tracking
+  useSessionManager();
+
   useEffect(() => {
-    loadTokens().finally(() => setBootstrapped(true));
-  }, []);
+    const bootstrap = async () => {
+      try {
+        // Load existing session (30-day persistent login)
+        const hasValidSession = await loadTokens();
+
+        if (hasValidSession) {
+          console.log('[Auth] Session restored from AsyncStorage');
+        } else {
+          console.log('[Auth] No valid session found, user needs to login');
+        }
+      } catch (err) {
+        console.error('[Auth] Failed to load tokens:', err);
+      } finally {
+        setBootstrapped(true);
+      }
+    };
+
+    bootstrap();
+  }, [loadTokens]);
 
   // Wait until tokens are loaded before rendering navigation
   if (!bootstrapped) return null;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Star, Phone, MessageCircle } from 'lucide-react-native';
 import Avatar from '../common/Avatar';
 import Badge from '../common/Badge';
 import { colors } from '../../constants/colors';
@@ -35,7 +35,7 @@ export default function DriverCard({ driver, compact = false, style }) {
           )}
         </View>
         <View style={styles.metaRow}>
-          <FontAwesome5 name="star" size={12} color={colors.primary} solid />
+          <Star size={12} color={colors.primary} />
           <Text style={styles.rating}>{driver.rating}</Text>
           <Text style={styles.dot}>·</Text>
           <Text style={styles.trips}>{driver.totalTrips} trips</Text>
@@ -48,10 +48,10 @@ export default function DriverCard({ driver, compact = false, style }) {
       {!compact && (
         <View style={styles.actions}>
           <TouchableOpacity style={styles.actionBtn} onPress={handleCall}>
-            <FontAwesome5 name="phone" size={18} color={colors.white} solid />
+            <Phone size={18} color={colors.white} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, styles.actionBtnOutline]} onPress={handleChat}>
-            <FontAwesome5 name="comment" size={18} color={colors.primary} solid />
+            <MessageCircle size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
       )}

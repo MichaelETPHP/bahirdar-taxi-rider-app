@@ -1,15 +1,13 @@
-import React from "react";
-import { TouchableOpacity, Text, View, ActivityIndicator } from "react-native";
+import React, { useRef, useEffect } from "react";
+import { TouchableOpacity, Text, View, ActivityIndicator, Animated, StyleSheet } from "react-native";
 import { styled } from "nativewind";
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const StyledTouchableOpacity = styled(TouchableOpacity);
 const StyledText = styled(Text);
 const StyledView = styled(View);
 
-/**
- * Premium Button component for BahirdarRide.
- * Supports variants: primary, secondary, outline, ghost.
- */
 export default function Button({
   label,
   onPress,
@@ -21,10 +19,37 @@ export default function Button({
   labelClassName = "",
   iconBefore,
   iconAfter,
+  shimmer = false,
 }) {
+  const shimmerPos = useRef(new Animated.Value(-1.5)).current;
+
+  useEffect(() => {
+    if (shimmer && !disabled && !loading) {
+      const animation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerPos, {
+            toValue: 1.5,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.delay(2000),
+        ])
+      );
+      animation.start();
+      return () => animation.stop();
+    }
+  }, [shimmer, disabled, loading]);
+
+  const handlePress = () => {
+    if (onPress) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onPress();
+    }
+  };
+
   const getContainerStyles = () => {
-    let styles = "flex-row items-center justify-center rounded-xl px-4 ";
-    
+    let styles = "flex-row items-center justify-center rounded-full px-4 overflow-hidden ";
+
     // Size logic
     if (size === "sm") styles += "h-10 ";
     else if (size === "lg") styles += "h-14 ";
@@ -37,6 +62,8 @@ export default function Button({
       styles += "bg-primary ";
     } else if (variant === "secondary") {
       styles += "bg-secondary ";
+    } else if (variant === "danger") {
+      styles += "bg-red-600 ";
     } else if (variant === "outline") {
       styles += "border-2 border-primary bg-transparent ";
     } else if (variant === "ghost") {
@@ -47,7 +74,7 @@ export default function Button({
   };
 
   const getLabelStyles = () => {
-    let styles = "font-italic text-base font-semibold ";
+    let styles = "font-italic text-xl font-semibold ";
     
     if (disabled || loading) {
       styles += "text-gray-400 ";
@@ -55,6 +82,8 @@ export default function Button({
       styles += "text-white ";
     } else if (variant === "secondary") {
       styles += "text-primary ";
+    } else if (variant === "danger") {
+      styles += "text-white ";
     } else if (variant === "outline" || variant === "ghost") {
       styles += "text-primary ";
     }
@@ -62,13 +91,35 @@ export default function Button({
     return styles + labelClassName;
   };
 
+  const shimmerTranslateX = shimmerPos.interpolate({
+    inputRange: [-1.5, 1.5],
+    outputRange: [-300, 300],
+  });
+
   return (
     <StyledTouchableOpacity
-      onPress={onPress}
+      onPress={handlePress}
       disabled={disabled || loading}
       activeOpacity={0.7}
       className={getContainerStyles()}
     >
+      {shimmer && !disabled && !loading && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { transform: [{ translateX: shimmerTranslateX }, { skewX: '-25deg' }] },
+          ]}
+        >
+          <LinearGradient
+            colors={['transparent', 'rgba(255,255,255,0.0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.0)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+      )}
+
       {loading ? (
         <ActivityIndicator color={variant === "primary" ? "white" : "#00674F"} />
       ) : (

@@ -3,15 +3,15 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { X, HelpCircle, Phone, AlertTriangle, ChevronRight } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
 
 const SUPPORT_ITEMS = [
-  { icon: 'question-circle', labelKey: 'support.faq' },
-  { icon: 'phone', labelKey: 'support.contact' },
-  { icon: 'exclamation-triangle', labelKey: 'support.reportIssue' },
+  { icon: 'faq', iconComp: HelpCircle, labelKey: 'support.faq' },
+  { icon: 'contact', iconComp: Phone, labelKey: 'support.contact' },
+  { icon: 'issue', iconComp: AlertTriangle, labelKey: 'support.reportIssue' },
 ];
 
 export default function SupportScreen({ navigation }) {
@@ -26,7 +26,7 @@ export default function SupportScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBackPress} style={styles.backBtn}>
-          <FontAwesome5 name="arrow-left" size={22} color={colors.textPrimary} solid />
+          <X size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('support.title')}</Text>
       </View>
@@ -39,9 +39,9 @@ export default function SupportScreen({ navigation }) {
             onPress={() => Alert.alert(t('common.comingSoon'))}
             activeOpacity={0.7}
           >
-            <FontAwesome5 name={item.icon} size={22} color={colors.primary} solid style={styles.icon} />
+            {React.createElement(item.iconComp, { size: 22, color: colors.primary, style: styles.icon })}
             <Text style={styles.label}>{t(item.labelKey)}</Text>
-            <FontAwesome5 name="chevron-right" size={16} color={colors.textSecondary} solid />
+            <ChevronRight size={16} color={colors.textSecondary} />
           </TouchableOpacity>
         ))}
       </View>

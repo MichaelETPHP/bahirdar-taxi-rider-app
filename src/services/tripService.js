@@ -1,18 +1,20 @@
 import { API_BASE_URL } from '../config/api';
 
-async function request(method, path, body, token) {
+import useAuthStore from '../store/authStore';
+
+async function request(method, path, body, token, retryCount = 0) {
   const url = `${API_BASE_URL}${path}`;
   const headers = {
     'Content-Type': 'application/json',
-    // Keep-Alive helps with connection reuse
     'Connection': 'keep-alive',
   };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  
+  // Use provided token or fall back to store token
+  const activeToken = token || useAuthStore.getState().token;
+  if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-  console.log(`[Trip] ${method} ${url}`);
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
     const res = await fetch(url, {
@@ -20,11 +22,26 @@ async function request(method, path, body, token) {
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
-      keepalive: true,  // Reuse connection
+      keepalive: true,
     });
 
     clearTimeout(timeoutId);
-    console.log(`[Trip] ${method} ${url} → ${res.status}`);
+
+    // ── Token Refresh Interceptor (PRO Handle 401) ──
+    if (res.status === 401 && retryCount === 0) {
+      console.warn(`[Trip] 401 Detected at ${path}. Attempting token refresh...`);
+      const refreshed = await useAuthStore.getState().loadTokens();
+      if (refreshed) {
+        const newToken = useAuthStore.getState().token;
+        console.log(`[Trip] Refresh successful. Retrying ${path}...`);
+        return request(method, path, body, newToken, retryCount + 1);
+      } else {
+        // Refresh failed (refresh token expired) - force logout
+        console.error(`[Trip] Critical Auth Error at ${path}. Logging out...`);
+        useAuthStore.getState().logout();
+      }
+    }
+
     const text = await res.text();
     let data = {};
 
@@ -49,11 +66,7 @@ async function request(method, path, body, token) {
     console.error(`[Trip] ${method} ${url} ERROR:`, err.message || err.code || err);
 
     if (err.name === 'AbortError') {
-      throw {
-        status: 504,
-        message: 'Request timeout. Please check your connection.',
-        code: 'REQUEST_TIMEOUT',
-      };
+      throw { status: 504, message: 'Request timeout', code: 'REQUEST_TIMEOUT' };
     }
     throw err;
   }

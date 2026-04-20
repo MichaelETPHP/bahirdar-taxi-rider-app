@@ -1,3 +1,4 @@
+import { User } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   View,
@@ -14,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import AppButton from '../../components/common/AppButton';
 import AppInput from '../../components/common/AppInput';
-import { FontAwesome5 } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import useAuthStore from '../../store/authStore';
@@ -64,7 +64,7 @@ export default function ProfileSetupScreen({ navigation }) {
               <View style={styles.content}>
                 <View style={styles.avatarSection}>
                   <View style={styles.avatarCircle}>
-                    <FontAwesome5 name="user" size={44} color={colors.primary} solid />
+                    <User size={44} color={colors.primary} />
                   </View>
                 </View>
 

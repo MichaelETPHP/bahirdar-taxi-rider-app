@@ -25,7 +25,8 @@ import AppInput from '../../components/common/AppInput';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Globe, ChevronDown, Car, CheckCircle, History, Ban, Share2, Users, Music } from 'lucide-react-native';
+
 import {
   formatPhone,
   validateEthiopianPhone,
@@ -233,9 +234,9 @@ export default function PhoneEntryScreen({ navigation }) {
         onPress={handleLanguageToggle}
         activeOpacity={0.8}
       >
-        <FontAwesome5 name="globe" size={12} color="rgba(255,255,255,0.9)" solid />
+        <Globe size={12} color="rgba(255,255,255,0.9)" />
         <Text style={styles.langBtnText}>{i18n.language === 'en' ? 'EN' : 'አማ'}</Text>
-        <FontAwesome5 name="chevron-down" size={9} color="rgba(255,255,255,0.7)" solid />
+        <ChevronDown size={9} color="rgba(255,255,255,0.7)" />
       </TouchableOpacity>
 
       <View style={styles.flex}>
@@ -260,7 +261,7 @@ export default function PhoneEntryScreen({ navigation }) {
                 <View style={styles.content}>
                   <View style={styles.logoWrapper}>
                     <View style={styles.logoCircle}>
-                      <FontAwesome5 name="car" size={40} color="white" solid />
+                      <Car size={40} color="white" />
                     </View>
                   </View>
                   <Text style={styles.heading}>{t('auth.welcome')}</Text>
@@ -307,7 +308,7 @@ export default function PhoneEntryScreen({ navigation }) {
                           {loading ? (
                             <ActivityIndicator size={22} color={colors.primary} />
                           ) : isValid ? (
-                            <FontAwesome5 name="check-circle" size={30} color={colors.primary} solid />
+                            <CheckCircle size={30} color={colors.primary} />
                           ) : (
                             <View style={styles.emptyCircle} />
                           )}
@@ -323,13 +324,13 @@ export default function PhoneEntryScreen({ navigation }) {
                         onPress={() => setPhone(formatPhone(recentPhone))}
                         activeOpacity={0.8}
                       >
-                        <FontAwesome5 name="history" size={12} color={colors.primary} solid />
+                        <History size={12} color={colors.primary} />
                         <Text style={styles.recentPhoneText}>{`Use recent: ${formatPhone(recentPhone)}`}</Text>
                       </TouchableOpacity>
                     )}
                     {!!inlineError && (
                       <View style={styles.suspendedBanner}>
-                        <FontAwesome5 name="ban" size={13} color={colors.error} solid style={{ marginRight: 7 }} />
+                        <Ban size={13} color={colors.error} style={{ marginRight: 7 }} />
                         <Text style={styles.suspendedText}>{inlineError}</Text>
                       </View>
                     )}
@@ -349,11 +350,11 @@ export default function PhoneEntryScreen({ navigation }) {
                       {testApiLoading ? (
                         <ActivityIndicator size={14} color={colors.white} />
                       ) : testApiSuccess === true ? (
-                        <FontAwesome5 name="check-circle" size={14} color={colors.white} solid />
+                        <CheckCircle size={14} color={colors.white} />
                       ) : testApiSuccess === false ? (
-                        <FontAwesome5 name="exclamation-circle" size={14} color={colors.white} solid />
+                        <AlertCircle size={14} color={colors.white} />
                       ) : (
-                        <FontAwesome5 name="network-wired" size={14} color={colors.white} solid />
+                        <Wifi size={14} color={colors.white} />
                       )}
                       <Text style={styles.testApiBtnText}>
                         {testApiLoading ? 'Testing...' : testApiSuccess === true ? '✓ Connected' : testApiSuccess === false ? '✗ Failed' : 'Test API Connection'}
@@ -369,9 +370,9 @@ export default function PhoneEntryScreen({ navigation }) {
 
           <View style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}>
             <View style={styles.socialIcons}>
-              <FontAwesome5 name="instagram" size={18} color={colors.white} brand />
-              <FontAwesome5 name="facebook-f" size={18} color={colors.white} brand />
-              <FontAwesome5 name="tiktok" size={18} color={colors.white} brand />
+              <Users size={18} color={colors.white} />
+              <Share2 size={18} color={colors.white} />
+              <Music size={18} color={colors.white} />
             </View>
             <TouchableOpacity
               onPress={() => setTermsModalVisible(true)}

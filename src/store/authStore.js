@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import { saveTokens, getTokens, clearTokens, updateTokensOnly } from '../utils/tokenStorage';
+import { saveTokens, getTokens, clearTokens, updateTokensOnly, getStoredPhone } from '../utils/tokenStorage';
 import { getSessionStatus, updateLastActivity } from '../utils/sessionManager';
 import { fetchProfile, refreshTokens } from '../services/authService';
 import useLocationStore from './locationStore';
 import useRideStore from './rideStore';
 
+// Don't use persist middleware for auth - session is managed via sessionManager
 const useAuthStore = create((set, get) => ({
   user: null,
   phone: '',
@@ -23,7 +24,8 @@ const useAuthStore = create((set, get) => ({
    * Tokens are automatically refreshed before expiry.
    */
   setTokens: async (accessToken, refreshToken, expiresIn = 3600) => {
-    const session = await saveTokens(accessToken, refreshToken, expiresIn);
+    const currentPhone = get().phone;
+    const session = await saveTokens(accessToken, refreshToken, expiresIn, currentPhone);
     set({
       token: accessToken,
       refreshToken,
@@ -67,23 +69,38 @@ const useAuthStore = create((set, get) => ({
 
   /**
    * Called on app launch — restores 30-day session from storage.
-   * Returns true if valid session was found.
+   * Returns true if valid session was found and restored.
    */
   loadTokens: async () => {
     try {
       const status = await getSessionStatus();
 
-      if (status.status === 'no_session') {
+      // No session or session has expired
+      if (status.status === 'no_session' || status.status === 'error') {
+        console.log('[loadTokens] No valid session:', status.status);
+        // Ensure clean state
+        set({
+          token: null,
+          refreshToken: null,
+          isAuthenticated: false,
+          sessionExpiresAt: null,
+          phone: '',
+        });
         return false;
       }
 
-      if (status.status === 'error') {
-        return false;
+      // Session is active - restore phone number first
+      console.log('[loadTokens] Session found, expires in', status.daysRemaining, 'days');
+      const storedPhone = await getStoredPhone();
+      if (storedPhone) {
+        set({ phone: storedPhone });
+        console.log('[loadTokens] Phone number restored:', storedPhone);
       }
 
-      // Session is active - check if tokens need refresh
+      // Check if tokens need refresh before using them
       if (status.needsRefresh && status.refreshToken) {
         try {
+          console.log('[loadTokens] Token needs refresh, attempting refresh...');
           const refreshed = await refreshTokens(status.refreshToken);
           if (refreshed?.data?.accessToken) {
             await updateTokensOnly(
@@ -97,10 +114,11 @@ const useAuthStore = create((set, get) => ({
               isAuthenticated: true,
               sessionExpiresAt: new Date(status.expiresAt),
             });
+            console.log('[loadTokens] Token refreshed successfully');
           }
         } catch (err) {
-          console.error('Token refresh failed:', err);
-          // If refresh fails, try with existing tokens
+          console.warn('[loadTokens] Token refresh failed, using existing tokens:', err.message);
+          // If refresh fails, continue with existing valid tokens
           set({
             token: status.accessToken,
             refreshToken: status.refreshToken,
@@ -109,6 +127,7 @@ const useAuthStore = create((set, get) => ({
           });
         }
       } else {
+        // Tokens are still fresh, use them directly
         set({
           token: status.accessToken,
           refreshToken: status.refreshToken,
@@ -117,11 +136,22 @@ const useAuthStore = create((set, get) => ({
         });
       }
 
-      // Load user profile
-      await get().loadProfile();
+      // Load user profile in background (non-blocking)
+      get().loadProfile().catch((err) => {
+        console.warn('[loadTokens] Failed to load profile:', err.message);
+      });
+
       return true;
     } catch (err) {
-      console.error('Failed to load tokens:', err);
+      console.error('[loadTokens] Fatal error:', err);
+      // Ensure clean state on error
+      set({
+        token: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        sessionExpiresAt: null,
+        phone: '',
+      });
       return false;
     }
   },

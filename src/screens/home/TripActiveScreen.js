@@ -1,7 +1,7 @@
+import { Clock, Phone } from 'lucide-react-native';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontAwesome5 } from '@expo/vector-icons';
 import RideMap from '../../components/map/RideMap';
 import DriverMarker from '../../components/map/DriverMarker';
 import DestMarker from '../../components/map/DestMarker';
@@ -245,7 +245,7 @@ export default function TripActiveScreen({ navigation }) {
             <Text style={styles.vehicleHeader} numberOfLines={1}>{carMake} {carModel}</Text>
           </View>
           <View style={styles.timerRow}>
-            <FontAwesome5 name="clock" size={11} color={colors.textSecondary} solid />
+            <Clock size={11} color={colors.textSecondary} />
             <Text style={styles.timerText}>{formatTime(elapsed)} elapsed</Text>
             <Text style={styles.plateText}>{carPlate}</Text>
           </View>
@@ -254,7 +254,7 @@ export default function TripActiveScreen({ navigation }) {
           style={styles.callCircleBtn} 
           onPress={() => driver?.phone && Linking.openURL(`tel:${driver.phone}`)}
         >
-          <FontAwesome5 name="phone" size={16} color="#22C55E" solid />
+          <Phone size={16} color="#22C55E" />
         </TouchableOpacity>
       </View>
 

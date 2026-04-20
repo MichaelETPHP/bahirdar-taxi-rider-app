@@ -12,6 +12,8 @@ import { colors } from '../../constants/colors';
 import { buttonHeight, borderRadius, shadow } from '../../constants/layout';
 import { fontSize, fontWeight } from '../../constants/typography';
 
+import { LinearGradient } from 'expo-linear-gradient';
+
 const pressSpringIn = { stiffness: 380, damping: 32, mass: 0.6, useNativeDriver: true };
 const pressSpringOut = { stiffness: 260, damping: 26, mass: 0.55, useNativeDriver: true };
 
@@ -24,9 +26,28 @@ export default function AppButton({
   style,
   textStyle,
   icon,
+  shimmer = false,
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pressOverlayOpacity = useRef(new Animated.Value(0)).current;
+  const shimmerPos = useRef(new Animated.Value(-1.5)).current;
+
+  React.useEffect(() => {
+    if (shimmer && !disabled && !loading) {
+      const animation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerPos, {
+            toValue: 1.5,
+            duration: 1500,
+            useNativeDriver: true,
+          }),
+          Animated.delay(2000),
+        ])
+      );
+      animation.start();
+      return () => animation.stop();
+    }
+  }, [shimmer, disabled, loading]);
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -63,6 +84,7 @@ export default function AppButton({
     variant === 'primary' && styles.primary,
     variant === 'outline' && styles.outline,
     variant === 'ghost' && styles.ghost,
+    variant === 'danger' && styles.danger,
     disabled && styles.disabled,
     style,
   ];
@@ -72,9 +94,15 @@ export default function AppButton({
     variant === 'primary' && styles.labelPrimary,
     variant === 'outline' && styles.labelOutline,
     variant === 'ghost' && styles.labelGhost,
+    variant === 'danger' && styles.labelDanger,
     disabled && styles.labelDisabled,
     textStyle,
   ];
+
+  const shimmerTranslateX = shimmerPos.interpolate({
+    inputRange: [-1.5, 1.5],
+    outputRange: [-300, 300],
+  });
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
@@ -90,10 +118,28 @@ export default function AppButton({
           pointerEvents="none"
           style={[
             styles.pressOverlay,
-            variant === 'primary' ? styles.pressOverlayPrimary : styles.pressOverlaySecondary,
+            (variant === 'primary' || variant === 'danger') ? styles.pressOverlayPrimary : styles.pressOverlaySecondary,
             { opacity: pressOverlayOpacity },
           ]}
         />
+
+        {shimmer && !disabled && !loading && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { transform: [{ translateX: shimmerTranslateX }, { skewX: '-25deg' }] },
+            ]}
+          >
+            <LinearGradient
+              colors={['transparent', 'rgba(255,255,255,0.0)', 'rgba(255,255,255,0.25)', 'rgba(255,255,255,0.0)', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+        )}
+
         {loading ? (
           <ActivityIndicator
             color={variant === 'primary' ? colors.white : colors.primary}
@@ -113,7 +159,7 @@ export default function AppButton({
 const styles = StyleSheet.create({
   base: {
     minHeight: buttonHeight,
-    borderRadius: borderRadius.pill,
+    borderRadius: 180,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
@@ -135,6 +181,13 @@ const styles = StyleSheet.create({
   ghost: {
     backgroundColor: 'transparent',
   },
+  danger: {
+    backgroundColor: '#EF4444',
+    ...shadow.md,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 5,
+  },
   disabled: {
     backgroundColor: colors.border,
     borderColor: colors.border,
@@ -148,7 +201,7 @@ const styles = StyleSheet.create({
   },
   pressOverlay: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: borderRadius.pill,
+    borderRadius: 180,
   },
   pressOverlayPrimary: {
     backgroundColor: 'rgba(255,255,255,0.18)',
@@ -157,7 +210,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,103,79,0.10)',
   },
   label: {
-    fontSize: fontSize.lg,
+    fontSize: fontSize.xl,
     fontWeight: fontWeight.semibold,
     letterSpacing: 0.2,
   },
@@ -169,6 +222,9 @@ const styles = StyleSheet.create({
   },
   labelGhost: {
     color: colors.primary,
+  },
+  labelDanger: {
+    color: colors.white,
   },
   labelDisabled: {
     color: colors.textSecondary,

@@ -1,3 +1,4 @@
+import { Car, DollarSign } from 'lucide-react-native';
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
@@ -5,7 +6,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { FontAwesome5 } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -251,10 +251,13 @@ export default function SearchingScreen({ navigation }) {
     return () => clearInterval(pollRef.current);
   }, [tripId, token, navigate, goBack, setDriver, setTripStatus, setFinalFare, mergeTripData]);
 
+  const [cancelling, setCancelling] = useState(false);
+
   const handleCancel = () => {
+    setCancelling(true);
     triggerSpin();
-    Alert.alert('Cancel Trip', 'Are you sure you want to cancel?', [
-      { text: 'No', style: 'cancel' },
+    Alert.alert('Cancel Request', 'Are you sure you want to cancel?', [
+      { text: 'No', style: 'cancel', onPress: () => setCancelling(false) },
       {
         text: 'Yes, Cancel', style: 'destructive',
         onPress: async () => {
@@ -299,7 +302,7 @@ export default function SearchingScreen({ navigation }) {
           <PulseRing delay={0} />
           <PulseRing delay={600} />
           <Animated.View style={[styles.pulseCore, { transform: [{ rotate: spinDeg }] }]}>
-            <FontAwesome5 name="car" size={14} color={colors.white} solid />
+            <Car size={14} color={colors.white} />
           </Animated.View>
         </View>
         <View>
@@ -319,7 +322,7 @@ export default function SearchingScreen({ navigation }) {
         {/* Route summary */}
         <View style={styles.routeCard}>
           <View style={styles.routeRow}>
-            <View style={[styles.routeDot, { backgroundColor: colors.white }]} />
+            <View style={[styles.routeDot, { backgroundColor: '#FFFFFF' }]} />
             <Text style={styles.routeText} numberOfLines={1}>
               {tripData?.pickup_address || 'Your location'}
             </Text>
@@ -327,12 +330,12 @@ export default function SearchingScreen({ navigation }) {
 
           <View style={styles.routeConnector}>
             {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={styles.connectorDash} />
+              <View key={i} style={[styles.connectorDash, { backgroundColor: colors.success }]} />
             ))}
           </View>
 
           <View style={styles.routeRow}>
-            <View style={[styles.routeDot, { backgroundColor: '#F87171' }]} />
+            <View style={[styles.routeDot, { backgroundColor: '#EF4444' }]} />
             <Text style={styles.routeText} numberOfLines={1}>
               {tripData?.dropoff_address || destination?.name || 'Destination'}
             </Text>
@@ -342,22 +345,23 @@ export default function SearchingScreen({ navigation }) {
         {/* Meta row */}
         <View style={styles.metaRow}>
           <View style={styles.metaChip}>
-            <FontAwesome5 name="car-side" size={11} color="rgba(255,255,255,0.8)" solid />
+            <Car size={11} color="rgba(255,255,255,0.8)" />
             <Text style={styles.metaText}>{category}</Text>
           </View>
           <View style={styles.metaChip}>
-            <FontAwesome5 name="money-bill-wave" size={11} color="rgba(255,255,255,0.8)" solid />
+            <DollarSign size={11} color="rgba(255,255,255,0.8)" />
             <Text style={styles.metaText}>Cash</Text>
           </View>
         </View>
 
         {/* Cancel */}
         <Button 
-          label="Cancel Trip" 
-          variant="outline" 
+          label="Cancel Request" 
+          variant="danger" 
           onPress={handleCancel}
-          labelClassName="text-red-300"
-          className="border-red-500/50 bg-red-500/10"
+          loading={cancelling}
+          shimmer={!cancelling}
+          className="w-full"
         />
       </View>
     </View>

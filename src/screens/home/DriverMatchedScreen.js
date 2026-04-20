@@ -1,3 +1,4 @@
+import { Car, Star, Phone, Clock, DollarSign, Share2, AlertTriangle } from 'lucide-react-native';
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
@@ -5,7 +6,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { FontAwesome5 } from '@expo/vector-icons';
 import RideMap from '../../components/map/RideMap';
 import DriverMarker from '../../components/map/DriverMarker';
 import PickupMarker from '../../components/map/PickupMarker';
@@ -274,11 +274,11 @@ export default function DriverMatchedScreen({ navigation }) {
 
   const handleSOS = () => {
     Alert.alert(
-      'Emergency SOS',
-      'Call local emergency services (991)?',
+      'Support Center',
+      'Call 9040 for assistance?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Call 991', style: 'destructive', onPress: () => Linking.openURL('tel:991') },
+        { text: 'Call 9040', style: 'default', onPress: () => Linking.openURL('tel:9040') },
       ]
     );
   };
@@ -364,7 +364,7 @@ export default function DriverMatchedScreen({ navigation }) {
 
       {/* ── Top badge: "Driver is on the way!" ── */}
       <View style={[styles.topBadge, { top: insets.top + 16 }]}>
-        <FontAwesome5 name="car" size={13} color={colors.white} solid />
+        <Car size={13} color={colors.white} />
         <Text style={styles.topBadgeText}>Driver is on the way!</Text>
       </View>
 
@@ -403,7 +403,7 @@ export default function DriverMatchedScreen({ navigation }) {
               <Text style={styles.vehicleHeader} numberOfLines={1}>{carMake} {carModel}</Text>
             </View>
             <View style={styles.ratingRow}>
-              <FontAwesome5 name="star" size={11} color="#F59E0B" solid />
+              <Star size={11} color="#F59E0B" />
               <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
               <Text style={styles.vehiclePlate}>{carPlate}</Text>
             </View>
@@ -411,14 +411,14 @@ export default function DriverMatchedScreen({ navigation }) {
 
           {/* Call button */}
           <TouchableOpacity style={styles.callBtn} onPress={handleCall} activeOpacity={0.85}>
-            <FontAwesome5 name="phone" size={18} color="#22C55E" solid />
+            <Phone size={18} color="#22C55E" />
           </TouchableOpacity>
         </View>
 
         {/* ── ETA + progress bar ── */}
         <View style={styles.etaCard}>
           <View style={styles.etaRow}>
-            <FontAwesome5 name="clock" size={13} color="rgba(255,255,255,0.85)" solid />
+            <Clock size={13} color="rgba(255,255,255,0.85)" />
             <Text style={styles.etaText}>
               {etaMin != null ? `Arriving in ${etaMin} minute${etaMin !== 1 ? 's' : ''}` : 'Calculating…'}
             </Text>
@@ -449,7 +449,7 @@ export default function DriverMatchedScreen({ navigation }) {
           </View>
           {fare !== '0.00' && (
             <View style={styles.tripFareRow}>
-              <FontAwesome5 name="money-bill-wave" size={11} color="rgba(255,255,255,0.7)" solid />
+              <DollarSign size={11} color="rgba(255,255,255,0.7)" />
               <Text style={styles.tripFareText}>ETB {fare}</Text>
               <View style={styles.tripPayChip}>
                 <Text style={styles.tripPayText}>Cash</Text>
@@ -461,13 +461,13 @@ export default function DriverMatchedScreen({ navigation }) {
         {/* ── Share trip + SOS ── */}
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.actionBtn} onPress={handleShareTrip} activeOpacity={0.85}>
-            <FontAwesome5 name="share-alt" size={14} color={colors.white} solid />
+            <Share2 size={14} color={colors.white} />
             <Text style={styles.actionBtnText}>Share Trip</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.actionBtn, styles.sosBtn]} onPress={handleSOS} activeOpacity={0.85}>
-            <FontAwesome5 name="exclamation-triangle" size={14} color="#FFADAD" solid />
-            <Text style={[styles.actionBtnText, styles.sosBtnText]}>SOS</Text>
+            <Phone size={14} color={colors.white} />
+            <Text style={[styles.actionBtnText, styles.sosBtnText]}>9040</Text>
           </TouchableOpacity>
         </View>
 
@@ -601,20 +601,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
-    borderRadius: borderRadius.pill,
-    paddingVertical: 13,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)',
+    borderRadius: 16,
+    paddingVertical: 14,
   },
   actionBtnText: {
-    fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.white,
+    fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.white, letterSpacing: 0.2,
   },
   sosBtn: {
-    backgroundColor: 'rgba(239,68,68,0.18)',
-    borderColor: 'rgba(239,68,68,0.45)',
+    backgroundColor: '#F59E0B', // Amber/Yellow
+    borderColor: 'rgba(255,255,255,0.4)',
     flex: 0.5,
   },
-  sosBtnText: { color: '#FFADAD' },
+  sosBtnText: { color: colors.white, fontWeight: fontWeight.bold },
 
   // Trip details card
   tripCard: {
@@ -662,14 +662,18 @@ const styles = StyleSheet.create({
 
   // Cancel
   cancelBtn: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: borderRadius.pill,
-    paddingVertical: 12,
+    backgroundColor: '#EF4444',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.md,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
   },
   cancelText: {
-    fontSize: fontSize.sm, fontWeight: fontWeight.medium, color: 'rgba(255,255,255,0.6)',
+    fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.white, letterSpacing: 0.2,
   },
 });

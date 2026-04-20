@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 import OTPInput from '../../components/common/OTPInput';
 import AppButton from '../../components/common/AppButton';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { X, MessageCircle } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { formatPhoneDisplay } from '../../utils/formatters';
@@ -71,9 +71,11 @@ export default function OTPScreen({ navigation, route }) {
     setLoading(true);
     try {
       const res = await verifyOtp(phone, code);
-      const { accessToken, refreshToken, user } = res.data;
+      const { accessToken, refreshToken, user, expiresIn } = res.data;
 
-      await setTokens(accessToken, refreshToken);
+      // Save tokens with 30-day session persistence
+      // expiresIn is the token expiry time (usually 3600 seconds = 1 hour)
+      await setTokens(accessToken, refreshToken, expiresIn || 3600);
       setUser({ ...user, isVerified: true });
       await loadProfile();
 
@@ -118,12 +120,12 @@ export default function OTPScreen({ navigation, route }) {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false} delayPressIn={0}>
           <View style={[styles.flex, styles.scroll]}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backBtn}>
-              <FontAwesome5 name="arrow-left" size={24} color={colors.textPrimary} solid />
+              <X size={24} color={colors.textPrimary} />
             </TouchableOpacity>
 
             <View style={styles.content}>
               <View style={styles.iconCircle}>
-                <FontAwesome5 name="comment-dots" size={32} color={colors.primary} solid />
+                <MessageCircle size={32} color={colors.primary} />
               </View>
 
               <Text style={styles.heading}>{t('auth.verifyTitle')}</Text>

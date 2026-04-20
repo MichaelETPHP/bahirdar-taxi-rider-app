@@ -1,12 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, PanResponder, Animated, Dimensions, Linking, Alert } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../../constants/colors';
 import { shadow } from '../../constants/layout';
 import { fontSize, fontWeight } from '../../constants/typography';
+import { Phone } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SIZE = 56;
+const SIZE = 66;
 const HALF = SIZE / 2;
 const START_X = SCREEN_WIDTH - HALF - 16;
 const START_Y = SCREEN_HEIGHT / 2;
@@ -17,7 +18,21 @@ export default function MovableCircleButton() {
   const posRef = useRef(position);
   const dragStart = useRef({ x: START_X, y: START_Y });
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
   posRef.current = position;
+
+  useEffect(() => {
+    // Continuous ringing animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -1, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+        Animated.delay(1200),
+      ])
+    ).start();
+  }, []);
 
   const playBounce = () => {
     Animated.sequence([
@@ -35,25 +50,12 @@ export default function MovableCircleButton() {
     ]).start();
   };
 
-  const handleCall911 = () => {
+  const handleCallCenter = async () => {
     playBounce();
-    Alert.alert(
-      'Call Emergency',
-      'Do you want to call 911 for emergency assistance?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Call 911',
-          style: 'destructive',
-          onPress: async () => {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            Linking.openURL('tel:911').catch(() => {
-              Alert.alert('Error', 'Unable to open phone dialer.');
-            });
-          },
-        },
-      ]
-    );
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Linking.openURL('tel:9040').catch(() => {
+      Alert.alert('Error', 'Unable to open phone dialer.');
+    });
   };
 
   const panResponder = useRef(
@@ -72,8 +74,7 @@ export default function MovableCircleButton() {
       onPanResponderRelease: (_, { dx, dy }) => {
         const moved = Math.sqrt(dx * dx + dy * dy);
         if (moved < TAP_THRESHOLD) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          handleCall911();
+          handleCallCenter();
         } else {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           const newX = dragStart.current.x + dx;
@@ -85,6 +86,11 @@ export default function MovableCircleButton() {
       },
     })
   ).current;
+
+  const rotateIcon = shakeAnim.interpolate({
+    inputRange: [-1, 1],
+    outputRange: ['-15deg', '15deg'],
+  });
 
   return (
     <Animated.View
@@ -98,7 +104,12 @@ export default function MovableCircleButton() {
         },
       ]}
     >
-      <Text style={styles.sosText}>SOS</Text>
+      <Animated.View style={{ transform: [{ rotate: rotateIcon }] }}>
+        <Phone size={20} color={colors.white} strokeWidth={3} />
+      </Animated.View>
+      <View style={styles.pulseContainer}>
+        <Text style={styles.sosText}>9040</Text>
+      </View>
     </Animated.View>
   );
 }
@@ -111,15 +122,22 @@ const styles = StyleSheet.create({
     width: SIZE,
     height: SIZE,
     borderRadius: HALF,
-    backgroundColor: colors.error,
+    backgroundColor: colors.warning,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 1,
     ...shadow.md,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  pulseContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sosText: {
-    fontSize: fontSize.lg,
+    fontSize: 12,
     fontWeight: fontWeight.bold,
     color: colors.white,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
 });

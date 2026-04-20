@@ -1,16 +1,22 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { TouchableOpacity, StyleSheet } from 'react-native';
-import { FontAwesome5 } from '@expo/vector-icons';
+import { Menu, X } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { shadow } from '../../constants/layout';
 
-export default function HamburgerButton({ onPress, style, isOpen = false }) {
+function HamburgerButton({ onPress, style, isOpen = false }) {
   return (
     <TouchableOpacity style={[styles.button, style]} onPress={onPress} activeOpacity={0.8}>
-      <FontAwesome5 name={isOpen ? 'times' : 'bars'} size={22} color={colors.primary} solid />
+      {isOpen ? (
+        <X size={24} color={colors.primary} />
+      ) : (
+        <Menu size={24} color={colors.primary} />
+      )}
     </TouchableOpacity>
   );
 }
+
+export default memo(HamburgerButton);
 
 const styles = StyleSheet.create({
   button: {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import RideTypeCard from './RideTypeCard';
@@ -9,7 +9,7 @@ import useLocationStore from '../../store/locationStore';
 import { colors } from '../../constants/colors';
 import { fontSize } from '../../constants/typography';
 
-export default function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) {
+function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) {
   const { i18n } = useTranslation();
   const {
     categories, categoriesLoaded, selectedCategoryId,
@@ -110,6 +110,8 @@ export default function RideTypeSelector({ distanceKm = 5, durationMin = 14, sho
     </View>
   );
 }
+
+export default memo(RideTypeSelector);
 
 const styles = StyleSheet.create({
   cardList: { paddingVertical: 2 },

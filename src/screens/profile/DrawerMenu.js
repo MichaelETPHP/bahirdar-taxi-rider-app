@@ -9,7 +9,19 @@ import {
 } from 'react-native';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { useTranslation } from 'react-i18next';
-import { FontAwesome5 } from '@expo/vector-icons';
+import {
+  User,
+  History,
+  Bell,
+  MessageCircle,
+  Globe,
+  LogOut,
+  Users,
+  Share2,
+  Music,
+  Send,
+  Settings,
+} from 'lucide-react-native';
 import Avatar from '../../components/common/Avatar';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
@@ -25,15 +37,35 @@ const MENU_ITEMS = [
 ];
 
 const SOCIAL_LINKS = [
-  { key: 'facebook', icon: 'facebook-f', url: 'https://facebook.com' },
-  { key: 'instagram', icon: 'instagram', url: 'https://instagram.com' },
-  { key: 'twitter', icon: 'twitter', url: 'https://twitter.com' },
-  { key: 'telegram', icon: 'telegram-plane', url: 'https://t.me' },
+  { key: 'facebook', url: 'https://facebook.com' },
+  { key: 'instagram', url: 'https://instagram.com' },
+  { key: 'twitter', url: 'https://twitter.com' },
+  { key: 'telegram', url: 'https://t.me' },
 ];
+
+const SOCIAL_ICON_MAP = {
+  facebook: Users,
+  instagram: Share2,
+  twitter: Send,
+  telegram: Send,
+};
 
 export default function DrawerMenu(props) {
   const { t, i18n } = useTranslation();
   const { user, phone, logout } = useAuthStore();
+
+  // Format phone number correctly
+  const formatPhoneNumber = (phoneStr) => {
+    if (!phoneStr) return 'No phone';
+    // If already international format, return as is
+    if (phoneStr.startsWith('+251')) return phoneStr;
+    // If local format (09XXXXXXXX or 0911111111), convert to international
+    if (phoneStr.startsWith('0')) return `+251 ${phoneStr.slice(1)}`;
+    // Otherwise return as is
+    return phoneStr;
+  };
+
+  const displayPhone = formatPhoneNumber(phone);
 
   const handleLanguageToggle = async () => {
     const next = i18n.language === 'en' ? 'am' : 'en';
@@ -68,24 +100,33 @@ export default function DrawerMenu(props) {
         />
         <View style={styles.profileInfo}>
           <Text style={styles.userName}>{user?.fullName || ''}</Text>
-          <Text style={styles.userPhone}>+251 {phone.slice(1)}</Text>
+          <Text style={styles.userPhone}>{displayPhone}</Text>
         </View>
       </View>
 
       <View style={styles.divider} />
 
       {/* Menu items */}
-      {MENU_ITEMS.map((item) => (
-        <TouchableOpacity
-          key={item.key}
-          style={styles.menuItem}
-          onPress={() => props.navigation.navigate(item.screen)}
-          activeOpacity={0.7}
-        >
-          <FontAwesome5 name={item.icon} size={20} color={colors.textSecondary} solid style={styles.menuIcon} />
-          <Text style={styles.menuLabel}>{t(item.label)}</Text>
-        </TouchableOpacity>
-      ))}
+      {MENU_ITEMS.map((item) => {
+        const iconProps = { size: 20, color: colors.textSecondary, style: styles.menuIcon };
+        const IconComponent = {
+          'profile': User,
+          'history': History,
+          'notification': Bell,
+          'support': MessageCircle,
+        }[item.key] || User;
+        return (
+          <TouchableOpacity
+            key={item.key}
+            style={styles.menuItem}
+            onPress={() => props.navigation.navigate(item.screen)}
+            activeOpacity={0.7}
+          >
+            <IconComponent {...iconProps} />
+            <Text style={styles.menuLabel}>{t(item.label)}</Text>
+          </TouchableOpacity>
+        );
+      })}
 
       {/* Language toggle */}
       <TouchableOpacity
@@ -93,7 +134,7 @@ export default function DrawerMenu(props) {
         onPress={handleLanguageToggle}
         activeOpacity={0.7}
       >
-        <FontAwesome5 name="globe" size={20} color={colors.textSecondary} solid style={styles.menuIcon} />
+        <Globe size={20} color={colors.textSecondary} style={styles.menuIcon} />
         <Text style={styles.menuLabel}>{t('drawer.language')}</Text>
         <View style={styles.langToggle}>
           <Text style={[styles.langOption, i18n.language === 'en' && styles.langActive]}>EN</Text>
@@ -110,22 +151,25 @@ export default function DrawerMenu(props) {
         onPress={handleLogout}
         activeOpacity={0.7}
       >
-        <FontAwesome5 name="door-open" size={20} color={colors.error} solid style={styles.menuIcon} />
+        <LogOut size={20} color={colors.error} style={styles.menuIcon} />
         <Text style={styles.logoutLabel}>{t('drawer.logout')}</Text>
       </TouchableOpacity>
 
       {/* Social media links */}
       <View style={styles.footer}>
-        {SOCIAL_LINKS.map((item) => (
-          <TouchableOpacity
-            key={item.key}
-            style={styles.socialBtn}
-            onPress={() => Linking.openURL(item.url)}
-            activeOpacity={0.7}
-          >
-            <FontAwesome5 name={item.icon} size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-        ))}
+        {SOCIAL_LINKS.map((item) => {
+          const Icon = SOCIAL_ICON_MAP[item.key] || Send;
+          return (
+            <TouchableOpacity
+              key={item.key}
+              style={styles.socialBtn}
+              onPress={() => Linking.openURL(item.url)}
+              activeOpacity={0.7}
+            >
+              <Icon size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </DrawerContentScrollView>
   );
