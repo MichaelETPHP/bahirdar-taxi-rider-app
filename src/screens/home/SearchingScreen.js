@@ -268,16 +268,19 @@ export default function SearchingScreen({ navigation }) {
     ]);
   };
 
-  // Fare priority: 1) server trip fare  2) fareEstimates for selected category  3) 0
+  // ── Fare Logic (EXACT match to what user confirmed) ──
+  const confirmedFare = tripData?.estimated_fare_etb || tripData?.total_fare_etb;
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const matchedEstimate = fareEstimates.find(
     (e) => e.vehicle_category?.toLowerCase() === (tripData?.vehicle_category || selectedCategory?.name || '').toLowerCase()
   );
-  const fareRaw = parseFloat(tripData?.estimated_fare_etb) || parseFloat(matchedEstimate?.estimated_fare_etb) || 0;
-  const fare = fareRaw.toFixed(2);
+
+  const fareRaw = parseFloat(confirmedFare) || parseFloat(matchedEstimate?.estimated_fare_etb) || 0;
+  const fare = fareRaw > 0 ? fareRaw.toFixed(2) : '—';
+
   const category = tripData?.vehicle_category
     ? tripData.vehicle_category.charAt(0).toUpperCase() + tripData.vehicle_category.slice(1)
-    : 'Economy';
+    : selectedCategory?.name || 'Ride';
 
   return (
     <View style={styles.root}>

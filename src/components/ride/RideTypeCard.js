@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Car, Van, Users } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
@@ -42,7 +43,53 @@ export default function RideTypeCard({ category, selected, onPress, distanceKm =
   const label = lang === 'am' && category.name_am ? category.name_am : category.name;
   const desc  = lang === 'am' && category.description_am ? category.description_am : category.description;
   // Prefer real server fare, fall back to client-side estimate
-  const fare  = serverFare != null ? Math.round(serverFare) : calcFare(category, distanceKm, durationMin);
+  const fare  = serverFare != null ? parseFloat(serverFare) : calcFare(category, distanceKm, durationMin);
+
+  // ── Mirror Flash (Shimmer) & Wiggle Logic ──
+  const shimmerPos = useRef(new Animated.Value(-1.5)).current;
+  const wiggleAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (selected) {
+      // Shimmer loop
+      const shimmerLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmerPos, { toValue: 1.5, duration: 1800, useNativeDriver: true }),
+          Animated.delay(2200),
+        ])
+      );
+      
+      // Wiggle loop (Enhanced Intensity)
+      const wiggleLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(wiggleAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+          Animated.timing(wiggleAnim, { toValue: -1, duration: 400, useNativeDriver: true }),
+          Animated.timing(wiggleAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+          Animated.delay(1800),
+        ])
+      );
+      
+      Animated.parallel([shimmerLoop, wiggleLoop]).start();
+      
+      return () => {
+        shimmerLoop.stop();
+        wiggleLoop.stop();
+      };
+    } else {
+      shimmerPos.setValue(-1.5);
+      wiggleAnim.setValue(0);
+    }
+  }, [selected]);
+
+  const shimmerTranslateX = shimmerPos.interpolate({
+    inputRange: [-1.5, 1.5],
+    outputRange: [-450, 450],
+  });
+
+  const wiggleRotate = wiggleAnim.interpolate({
+    inputRange: [-1, 1],
+    outputRange: ['-15deg', '15deg'],
+  });
 
   const handlePress = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -56,10 +103,35 @@ export default function RideTypeCard({ category, selected, onPress, distanceKm =
         onPress={handlePress}
         activeOpacity={1}
       >
-        {/* Left: icon */}
-        <View style={[styles.iconCircle, { backgroundColor: selected ? palette.bgColor : '#F3F4F6' }]}>
-          <IconComponent size={20} color={selected ? palette.color : colors.textSecondary} />
-        </View>
+        {/* Mirror Flash Shimmer Overlay */}
+        {selected && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { transform: [{ translateX: shimmerTranslateX }, { skewX: '-25deg' }] },
+            ]}
+          >
+            <LinearGradient
+              colors={['transparent', 'rgba(255,255,255,0.0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.0)', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+        )}
+        {/* Left: icon with wiggle */}
+        <Animated.View 
+          style={[
+            styles.iconCircle, 
+            { 
+              backgroundColor: selected ? palette.bgColor : '#F3F4F6',
+              transform: [{ rotate: wiggleRotate }]
+            }
+          ]}
+        >
+          <IconComponent size={22} color={selected ? palette.color : colors.textSecondary} />
+        </Animated.View>
 
         {/* Center: info */}
         <View style={styles.info}>
@@ -92,7 +164,7 @@ export default function RideTypeCard({ category, selected, onPress, distanceKm =
             </View>
           ) : (
             <View style={styles.priceWrap}>
-              <Text style={styles.price}>{fare} ብር</Text>
+              <Text style={styles.price}>{typeof fare === 'number' ? fare.toFixed(2) : fare} ብር</Text>
               {serverFare != null && (
                 <View style={styles.liveTag}>
                   <Text style={styles.liveText}>LIVE</Text>

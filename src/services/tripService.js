@@ -63,10 +63,14 @@ async function request(method, path, body, token, retryCount = 0) {
     return data;
   } catch (err) {
     clearTimeout(timeoutId);
-    console.error(`[Trip] ${method} ${url} ERROR:`, err.message || err.code || err);
+    const isAbort = err.name === 'AbortError' || err.message?.toLowerCase().includes('aborted');
+    
+    if (!isAbort) {
+      console.error(`[Trip] ${method} ${url} ERROR:`, err.message || err.code || err);
+    }
 
-    if (err.name === 'AbortError') {
-      throw { status: 504, message: 'Request timeout', code: 'REQUEST_TIMEOUT' };
+    if (isAbort) {
+      throw { status: 499, message: 'Request cancelled', code: 'ABORTED', silent: true };
     }
     throw err;
   }
@@ -129,6 +133,13 @@ export function cancelTrip(tripId, reason, token, meta = {}) {
     err.code = 'MISSING_TRIP_ID';
     throw err;
   }
+  
+  // If we're still in "optimistic/pending" state, don't ping server
+  if (tripId.startsWith('pending-')) {
+    console.log('[Trip] Skipping server cancel for optimistic tripId:', tripId);
+    return Promise.resolve({ success: true, message: 'Optimistic trip cleared locally' });
+  }
+
   const body = { ...meta };
   if (reason !== undefined && reason !== null) body.reason = reason;
   return request('PATCH', `/trips/${tripId}/cancel`, body, token);
