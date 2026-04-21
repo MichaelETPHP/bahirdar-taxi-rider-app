@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first expo start",
+    "android": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first expo start --android",
+    "ios": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first expo start --ios",
+    "web": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first expo start --web"
   },
   "dependencies": {
     "20": "^3.1.9",
@@ -21,6 +21,7 @@
     "expo": "~54.0.0",
     "expo-av": "^16.0.8",
     "expo-constants": "~18.0.13",
+    "expo-crypto": "~15.0.8",
     "expo-haptics": "~15.0.8",
     "expo-image-manipulator": "~14.0.8",
     "expo-image-picker": "~17.0.10",
@@ -38,14 +39,17 @@
     "react-native-ico-social-icons": "^7.0.1",
     "react-native-maps": "1.20.1",
     "react-native-paper": "5.15.1",
-    "react-native-reanimated": "4.3.0",
+    "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
-    "react-native-svg": "^15.15.4",
+    "react-native-svg": "15.12.1",
     "react-native-svg-transformer": "^1.5.3",
     "socket.io-client": "^4.8.3",
     "tailwindcss": "3.3.2",
     "zustand": "^4.5.5"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "cross-env": "^10.1.0"
+  }
 }

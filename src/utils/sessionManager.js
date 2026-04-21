@@ -15,12 +15,13 @@ const PHONE_KEY = 'rider_phone_number';
 const SESSION_TIMEOUT = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 const TOKEN_REFRESH_BUFFER = 5 * 60 * 1000; // Refresh 5 min before expiry
 
-export async function saveSession(accessToken, refreshToken, expiresIn = 3600, phone = null) {
+export async function saveSession(accessToken, refreshToken, expiresIn = 3600, phone = null, user = null) {
   try {
     const now = Date.now();
     const sessionData = {
       accessToken,
       refreshToken,
+      user, // Save user profile for instant retrieval on boot
       loginTime: now,
       lastActivity: now,
       expiresAt: now + SESSION_TIMEOUT,
@@ -128,6 +129,7 @@ export async function getSessionStatus() {
       status: 'active',
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
+      user: session.user,
       loginTime: new Date(session.loginTime),
       expiresAt: new Date(session.expiresAt),
       daysRemaining,

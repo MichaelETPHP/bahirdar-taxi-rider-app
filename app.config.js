@@ -20,12 +20,18 @@ export default {
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       },
+      infoPlist: {
+        NSAppTransportSecurity: {
+          NSAllowsArbitraryLoads: true,
+        },
+      },
     },
     android: {
       adaptiveIcon: {
         backgroundColor: '#00674F',
       },
       package: 'com.bahirdar.ride',
+      usesCleartextTraffic: true,
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyB2QAbjllEn-1S95xd5_LcrjeC2_-ugiRs',

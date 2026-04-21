@@ -157,7 +157,11 @@
     "deleteAccount": "Delete account",
     "deleteReasonAsk": "Please tell us why you want to delete your account (optional but helps us improve).",
     "deleteReasonPlaceholder": "Enter your reason...",
-    "deleteReasonRequired": "Please provide a reason before deleting your account."
+    "deleteReasonRequired": "Please provide a reason before deleting your account.",
+    "changePhoto": "Change Photo",
+    "chooseSource": "How do you want to change your profile photo?",
+    "takePhoto": "Take Photo",
+    "chooseGallery": "Choose from Gallery"
   },
   "history": {
     "title": "Ride History",

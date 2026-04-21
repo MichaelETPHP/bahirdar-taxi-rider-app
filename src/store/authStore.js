@@ -25,7 +25,8 @@ const useAuthStore = create((set, get) => ({
    */
   setTokens: async (accessToken, refreshToken, expiresIn = 3600) => {
     const currentPhone = get().phone;
-    const session = await saveTokens(accessToken, refreshToken, expiresIn, currentPhone);
+    const currentUser = get().user;
+    const session = await saveTokens(accessToken, refreshToken, expiresIn, currentPhone, currentUser);
     set({
       token: accessToken,
       refreshToken,
@@ -46,6 +47,14 @@ const useAuthStore = create((set, get) => ({
   loadProfile: async () => {
     const token = get().token;
     if (!token) return;
+
+    // Skip API call for locally-generated mock tokens — they are not real JWTs
+    // Real RS256 JWTs always start with 'eyJ' (base64 for '{"alg"')
+    if (!token.startsWith('eyJ')) {
+      console.log('[loadProfile] Skipping API call: local mock token detected.');
+      return;
+    }
+
     try {
       const res = await fetchProfile(token);
       const u = res?.data;
@@ -60,7 +69,8 @@ const useAuthStore = create((set, get) => ({
           email:       u.email        ?? state.user?.email,
           gender:      u.gender       ?? state.user?.gender,
           dateOfBirth: u.date_of_birth ?? state.user?.dateOfBirth,
-          avatarUrl:   u.avatar_url   ?? state.user?.avatarUrl,
+          avatarUrl:   u.avatar_url   || u.profileImage || state.user?.avatarUrl,
+          preferredLang: u.preferred_lang || state.user?.preferredLang,
           isVerified:  u.is_verified  ?? state.user?.isVerified,
         },
       }));
@@ -108,33 +118,36 @@ const useAuthStore = create((set, get) => ({
               refreshed.data.refreshToken,
               3600
             );
+              set({
+                token: refreshed.data.accessToken,
+                refreshToken: refreshed.data.refreshToken,
+                user: status.user, // Restore user info immediately
+                isAuthenticated: true,
+                sessionExpiresAt: new Date(status.expiresAt),
+              });
+              console.log('[loadTokens] Token refreshed successfully');
+            }
+          } catch (err) {
+            console.warn('[loadTokens] Token refresh failed, using existing tokens:', err.message);
+            // If refresh fails, continue with existing valid tokens
             set({
-              token: refreshed.data.accessToken,
-              refreshToken: refreshed.data.refreshToken,
+              token: status.accessToken,
+              refreshToken: status.refreshToken,
+              user: status.user, // Restore user info immediately
               isAuthenticated: true,
               sessionExpiresAt: new Date(status.expiresAt),
             });
-            console.log('[loadTokens] Token refreshed successfully');
           }
-        } catch (err) {
-          console.warn('[loadTokens] Token refresh failed, using existing tokens:', err.message);
-          // If refresh fails, continue with existing valid tokens
+        } else {
+          // Tokens are still fresh, use them directly
           set({
             token: status.accessToken,
             refreshToken: status.refreshToken,
+            user: status.user, // Restore user info immediately
             isAuthenticated: true,
             sessionExpiresAt: new Date(status.expiresAt),
           });
         }
-      } else {
-        // Tokens are still fresh, use them directly
-        set({
-          token: status.accessToken,
-          refreshToken: status.refreshToken,
-          isAuthenticated: true,
-          sessionExpiresAt: new Date(status.expiresAt),
-        });
-      }
 
       // Load user profile in background (non-blocking)
       get().loadProfile().catch((err) => {

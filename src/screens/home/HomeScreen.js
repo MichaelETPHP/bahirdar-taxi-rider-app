@@ -409,10 +409,18 @@ export default function HomeScreen({ navigation }) {
     const onConnectError = async (err) => {
       const msg = err?.message || err || '';
       console.error(`${riderTag} connect_error:`, msg);
-      
+
       // Auto-recover from expired JWTs instantly
       if (msg.includes('Invalid token') || msg.includes('expired')) {
+        const currentToken = useAuthStore.getState().token;
         const currentRefreshToken = useAuthStore.getState().refreshToken;
+
+        // Skip refresh for mock/local tokens — they are not real JWTs
+        if (!currentToken || !currentToken.startsWith('eyJ')) {
+          console.warn(`${riderTag} Mock token detected — skipping socket refresh.`);
+          return;
+        }
+
         if (currentRefreshToken) {
           try {
             console.log(`${riderTag} Token naturally expired. Securing a fresh JWT core...`);

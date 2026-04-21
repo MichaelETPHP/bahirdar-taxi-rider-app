@@ -157,7 +157,11 @@
     "deleteAccount": "መለያ ሰርዝ",
     "deleteReasonAsk": "መለያዎን ለማጥፋት ለምን እንደሚፈልጉ ይንገሩን።",
     "deleteReasonPlaceholder": "ምክንያትዎን ያስገቡ...",
-    "deleteReasonRequired": "መለያዎን ከመሰረዝ በፊት ምክንያት ያስገቡ።"
+    "deleteReasonRequired": "መለያዎን ከመሰረዝ በፊት ምክንያት ያስገቡ።",
+    "changePhoto": "ፎቶ ቀይር",
+    "chooseSource": "የመገለጫ ፎቶዎን እንዴት መቀየር ይፈልጋሉ?",
+    "takePhoto": "ፎቶ አንሳ (ካሜራ)",
+    "chooseGallery": "ከጋለሪ ምረጥ"
   },
   "history": {
     "title": "የጉዞ ታሪክ",

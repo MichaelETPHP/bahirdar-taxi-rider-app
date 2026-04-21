@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   embeddedWrapper: {
     borderWidth: 0,
     backgroundColor: 'transparent',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 0,
     height: undefined,
     minHeight: undefined,

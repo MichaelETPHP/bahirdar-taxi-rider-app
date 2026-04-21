@@ -14,6 +14,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
@@ -25,7 +26,8 @@ import AppInput from '../../components/common/AppInput';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
-import { Globe, ChevronDown, Car, CheckCircle, History, Ban, Share2, Users, Music } from 'lucide-react-native';
+import { Globe, ChevronDown, Car, CarTaxiFront, CheckCircle, History, Ban, Share2, Users, Music } from 'lucide-react-native';
+import { FacebookIcon, InstagramIcon, TiktokIcon, TelegramIcon } from '../../components/common/BrandIcons';
 
 import {
   formatPhone,
@@ -35,10 +37,11 @@ import {
 } from '../../utils/formatters';
 import useAuthStore from '../../store/authStore';
 import TermsConditionsModal from '../../components/auth/TermsConditionsModal';
-import { registerRider, sendOtp } from '../../services/authService';
+import { registerRider, sendOtp, verifyOtp, checkPhoneExistence } from '../../services/authService';
 import { changeLanguage } from '../../i18n';
+import AppButton from '../../components/common/AppButton';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('screen');
 const ETHIOPIA_FLAG_URI = 'https://flagcdn.com/w80/et.png';
 const RECENT_PHONE_KEY = 'bahirdar_recent_phone';
 
@@ -87,6 +90,9 @@ export default function PhoneEntryScreen({ navigation }) {
   const [testApiSuccess, setTestApiSuccess] = useState(null);
   const phoneInputRef = useRef(null);
   const setStorePhone = useAuthStore((s) => s.setPhone);
+  const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
+  const setTokens = useAuthStore((s) => s.setTokens);
+  const setUser = useAuthStore((s) => s.setUser);
   const storedPhone = useAuthStore((s) => s.phone);
   const bounceAnim = useRef(new Animated.Value(1)).current;
   const prevValid = useRef(false);
@@ -182,52 +188,81 @@ export default function PhoneEntryScreen({ navigation }) {
     setLoading(true);
     setInlineError('');
     const intlPhone = toInternationalPhone(rawDigits);
-    AsyncStorage.setItem(RECENT_PHONE_KEY, intlPhone).catch(() => {});
+    AsyncStorage.setItem(RECENT_PHONE_KEY, intlPhone).catch(() => { });
+
     try {
-      // Try registering — 201 = new user (OTP auto-sent), 409 = existing user
-      await registerRider(intlPhone);
+      // Step 1: Save phone and check existence
       setStorePhone(intlPhone);
-      navigation.navigate('OTP', { isNewUser: true });
-    } catch (err) {
-      if (err.code === 'ACCOUNT_SUSPENDED') {
-        setInlineError('Your account is suspended.\nPlease contact support.');
-      } else if (err.status === 409 || err.message?.includes('already registered')) {
-        // Existing user — send OTP then skip ProfileSetup
-        try {
-          await sendOtp(intlPhone);
-          setStorePhone(intlPhone);
-          navigation.navigate('OTP', { isNewUser: false });
-        } catch (otpErr) {
-          if (otpErr.code === 'ACCOUNT_SUSPENDED') {
-            setInlineError('Your account is suspended.\nPlease contact support.');
-          } else {
-            setInlineError('Could not send OTP.\nPlease try again.');
-          }
-        }
-      } else if (!err.status) {
-        setInlineError('No internet connection.\nPlease check your connection.');
+      console.log('[PhoneEntry] Checking phone existence:', intlPhone);
+      
+      const checkRes = await checkPhoneExistence(intlPhone, 'rider');
+      const { exists } = checkRes.data;
+      
+      if (!exists) {
+        console.log('[PhoneEntry] User does not exist. Attempting to register rider...');
+        await registerRider(intlPhone);
+        console.log('[PhoneEntry] Rider registered - OTP sent');
       } else {
-        setInlineError('Something went wrong.\nPlease try again.');
+        console.log('[PhoneEntry] User exists. Sending OTP...');
+        await sendOtp(intlPhone);
+        console.log('[PhoneEntry] OTP sent successfully');
       }
+
+      // Step 2: DEMO bypass — try '1234'
+      try {
+        console.log('[PhoneEntry] DEMO: Auto-verifying with bypass OTP 1234...');
+        const res = await verifyOtp(intlPhone, '1234');
+        const { accessToken, refreshToken, user, expiresIn } = res.data;
+
+        await setTokens(accessToken, refreshToken, expiresIn || 3600);
+        setUser({ ...user, isVerified: true });
+
+        const displayName = user?.fullName || user?.full_name;
+        if (!displayName) {
+          // New user (or existing without name) -> go to ProfileSetup
+          navigation.navigate('ProfileSetup');
+        } else {
+          // Existing user with name -> Login!
+          setAuthenticated(true, false);
+        }
+        console.log('[PhoneEntry] DEMO login success!');
+      } catch (bypassErr) {
+        // Demo bypass failed — fallback to OTP screen
+        console.warn('[PhoneEntry] Demo bypass failed:', bypassErr?.message);
+        navigation.navigate('OTP', { isNewUser: !exists });
+      }
+    } catch (err) {
+      console.error('[PhoneEntry] Auth error:', err);
+      const msg = err?.message || 'Something went wrong. Please try again.';
+      setInlineError(msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <View style={styles.flex}>
       <View style={styles.gradientContainer}>
-        <Svg width={SCREEN_WIDTH} height={SCREEN_HEIGHT} style={StyleSheet.absoluteFill}>
-          <Defs>
-            <LinearGradient id="emeraldGradient" x1="0" y1="1" x2="0" y2="0">
-              <Stop offset="0" stopColor={colors.primaryDark} stopOpacity="1" />
-              <Stop offset="0.5" stopColor={colors.primary} stopOpacity="1" />
-              <Stop offset="1" stopColor={colors.primaryLight} stopOpacity="1" />
-            </LinearGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#emeraldGradient)" />
-        </Svg>
+        <Image 
+          source={require('../../../assets/bg-pattern.png')}
+          style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, position: 'absolute' }}
+          resizeMode="cover"
+        />
+        <View style={StyleSheet.absoluteFill}>
+          <Svg width={SCREEN_WIDTH} height={SCREEN_HEIGHT}>
+            <Defs>
+              <LinearGradient id="emeraldGradient" x1="0" y1="1" x2="0" y2="0">
+                <Stop offset="0" stopColor={colors.primaryDark} stopOpacity="0.9" />
+                <Stop offset="0.5" stopColor={colors.primary} stopOpacity="0.85" />
+                <Stop offset="1" stopColor={colors.primaryLight} stopOpacity="0.8" />
+              </LinearGradient>
+            </Defs>
+            <Rect width="100%" height="100%" fill="url(#emeraldGradient)" />
+          </Svg>
+        </View>
       </View>
+
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       {/* Language selector — top right, always below status bar */}
       <TouchableOpacity
         style={[styles.langBtn, { top: insets.top + 10 }]}
@@ -247,96 +282,97 @@ export default function PhoneEntryScreen({ navigation }) {
           enabled={Platform.OS === 'ios'}
         >
           <View style={styles.column}>
-          <ScrollView
-            style={styles.scrollFill}
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            scrollEnabled={false}
-            showsVerticalScrollIndicator={false}
-          >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-            <View style={styles.scrollInner}>
-            <View style={styles.centerWrapper}>
-              <View style={styles.container}>
-                <View style={styles.content}>
-                  <View style={styles.logoWrapper}>
-                    <View style={styles.logoCircle}>
-                      <Car size={40} color="white" />
-                    </View>
-                  </View>
-                  <Text style={styles.heading}>{t('auth.welcome')}</Text>
-                  <Text style={styles.sub}>{t('auth.welcomeSub')}</Text>
+            <ScrollView
+              style={styles.scrollFill}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+            >
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+                <View style={styles.scrollInner}>
+                  <View style={styles.centerWrapper}>
+                    <View style={styles.container}>
+                      <View style={styles.content}>
+                        <View style={styles.logoWrapper}>
+                          <View style={styles.logoCircle}>
+                            <CarTaxiFront size={44} color="white" />
+                          </View>
+                        </View>
+                        <Text style={styles.heading}>{t('auth.welcome')}</Text>
+                        <Text style={styles.sub}>{t('auth.welcomeSub')}</Text>
 
-                  <View style={styles.loginCard}>
-                    <View style={[styles.phoneInput, inputFocused && styles.phoneInputFocused, isValid && styles.phoneInputValid, hasPrefixError && styles.phoneInputError]}>
-                      <TouchableOpacity
-                        style={styles.countryCodeSection}
-                        onPress={() => phoneInputRef.current?.focus()}
-                        activeOpacity={0.7}
-                      >
-                        <Image
-                          source={{ uri: ETHIOPIA_FLAG_URI }}
-                          style={styles.ethiopiaFlagImage}
-                          resizeMode="contain"
-                        />
-                        <Text style={styles.code}>+251</Text>
-                      </TouchableOpacity>
-                      <View style={styles.divider} />
-                      <AppInput
-                        placeholder={t('auth.phonePlaceholder')}
-                        placeholderTextColor={colors.inputPlaceholder}
-                        value={phone}
-                        onChangeText={handlePhoneChange}
-                        keyboardType="phone-pad"
-                        autoComplete="tel"
-                        textContentType="telephoneNumber"
-                        autoCapitalize="none"
-                        embedded
-                        style={styles.phoneInputInner}
-                        inputStyle={[styles.phoneInputText, isValid && styles.phoneInputTextValid]}
-                        inputRef={phoneInputRef}
-                        onFocus={() => setInputFocused(true)}
-                        onBlur={() => setInputFocused(false)}
-                      />
-                      <TouchableOpacity
-                        onPress={handleCheckPress}
-                        disabled={!isValid || loading}
-                        activeOpacity={0.7}
-                        style={styles.checkButtonInline}
-                      >
-                        <Animated.View style={[styles.checkCircle, { transform: [{ scale: bounceAnim }] }]}>
-                          {loading ? (
-                            <ActivityIndicator size={22} color={colors.primary} />
-                          ) : isValid ? (
-                            <CheckCircle size={30} color={colors.primary} />
-                          ) : (
-                            <View style={styles.emptyCircle} />
+                        <View style={styles.loginCard}>
+                          <View style={[styles.phoneInput, inputFocused && styles.phoneInputFocused, isValid && styles.phoneInputValid, hasPrefixError && styles.phoneInputError]}>
+                            <TouchableOpacity
+                              style={styles.countryCodeSection}
+                              onPress={() => phoneInputRef.current?.focus()}
+                              activeOpacity={0.7}
+                            >
+                              <Image
+                                source={{ uri: ETHIOPIA_FLAG_URI }}
+                                style={styles.ethiopiaFlagImage}
+                                resizeMode="contain"
+                              />
+                              <Text style={styles.code}>+251</Text>
+                            </TouchableOpacity>
+                            <View style={styles.divider} />
+                            <AppInput
+                              placeholder={t('auth.phonePlaceholder')}
+                              placeholderTextColor={colors.inputPlaceholder}
+                              value={phone}
+                              onChangeText={handlePhoneChange}
+                              keyboardType="phone-pad"
+                              autoComplete="tel"
+                              textContentType="telephoneNumber"
+                              autoCapitalize="none"
+                              embedded
+                              style={styles.phoneInputInner}
+                              inputStyle={[styles.phoneInputText, isValid && styles.phoneInputTextValid]}
+                              inputRef={phoneInputRef}
+                              onFocus={() => setInputFocused(true)}
+                              onBlur={() => setInputFocused(false)}
+                            />
+                            <TouchableOpacity
+                              onPress={handleCheckPress}
+                              disabled={!isValid || loading}
+                              activeOpacity={0.7}
+                              style={styles.checkButtonInline}
+                            >
+                              <Animated.View style={[styles.checkCircle, { transform: [{ scale: bounceAnim }] }]}>
+                                {loading ? (
+                                  <ActivityIndicator size={22} color={colors.primary} />
+                                ) : isValid ? (
+                                  <CheckCircle size={30} color={colors.primary} />
+                                ) : (
+                                  <View style={styles.emptyCircle} />
+                                )}
+                              </Animated.View>
+                            </TouchableOpacity>
+                          </View>
+
+                          {hasPrefixError && (
+                            <Text style={styles.phoneError}>{`😠 ${t('auth.phonePrefixError')}`}</Text>
                           )}
-                        </Animated.View>
-                      </TouchableOpacity>
-                    </View>
-                    {hasPrefixError && (
-                      <Text style={styles.phoneError}>{`😠 ${t('auth.phonePrefixError')}`}</Text>
-                    )}
-                    {!phone && !!recentPhone && (
-                      <TouchableOpacity
-                        style={styles.recentPhoneChip}
-                        onPress={() => setPhone(formatPhone(recentPhone))}
-                        activeOpacity={0.8}
-                      >
-                        <History size={12} color={colors.primary} />
-                        <Text style={styles.recentPhoneText}>{`Use recent: ${formatPhone(recentPhone)}`}</Text>
-                      </TouchableOpacity>
-                    )}
-                    {!!inlineError && (
-                      <View style={styles.suspendedBanner}>
-                        <Ban size={13} color={colors.error} style={{ marginRight: 7 }} />
-                        <Text style={styles.suspendedText}>{inlineError}</Text>
-                      </View>
-                    )}
+                          {!phone && !!recentPhone && (
+                            <TouchableOpacity
+                              style={styles.recentPhoneChip}
+                              onPress={() => setPhone(formatPhone(recentPhone))}
+                              activeOpacity={0.8}
+                            >
+                              <History size={12} color={colors.primary} />
+                              <Text style={styles.recentPhoneText}>{`Use recent: ${formatPhone(recentPhone)}`}</Text>
+                            </TouchableOpacity>
+                          )}
+                          {!!inlineError && (
+                            <View style={styles.suspendedBanner}>
+                              <Ban size={13} color={colors.error} style={{ marginRight: 7 }} />
+                              <Text style={styles.suspendedText}>{inlineError}</Text>
+                            </View>
+                          )}
 
-                    {/* Temporary Test API Button — COMMENTED OUT FOR PRODUCTION */}
-                    {/* <TouchableOpacity
+                          {/* Temporary Test API Button — COMMENTED OUT FOR PRODUCTION */}
+                          {/* <TouchableOpacity
                       onPress={handleTestAPI}
                       disabled={testApiLoading}
                       style={[
@@ -360,27 +396,44 @@ export default function PhoneEntryScreen({ navigation }) {
                         {testApiLoading ? 'Testing...' : testApiSuccess === true ? '✓ Connected' : testApiSuccess === false ? '✗ Failed' : 'Test API Connection'}
                       </Text>
                     </TouchableOpacity> */}
+
+                          <View style={styles.dividerHorizontal} />
+
+                          <AppButton 
+                            title={t('auth.signIn', 'Sign in')}
+                            onPress={handleCheckPress}
+                            disabled={!isValid || loading}
+                            loading={loading}
+                            shimmer={true}
+                            style={{ width: '100%', marginTop: 4 }}
+                          />
+                        </View>
+                      </View>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </View>
-            </View>
-          </TouchableWithoutFeedback>
-          </ScrollView>
+              </TouchableWithoutFeedback>
+            </ScrollView>
 
-          <View style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}>
-            <View style={styles.socialIcons}>
-              <Users size={18} color={colors.white} />
-              <Share2 size={18} color={colors.white} />
-              <Music size={18} color={colors.white} />
+            <View style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}>
+              <View style={styles.socialIcons}>
+                <TouchableOpacity onPress={() => Linking.openURL('https://facebook.com')} style={styles.socialBtn}>
+                  <FacebookIcon size={18} color={colors.white} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => Linking.openURL('https://t.me')} style={styles.socialBtn}>
+                  <TelegramIcon size={18} color={colors.white} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => Linking.openURL('https://instagram.com')} style={styles.socialBtn}>
+                  <InstagramIcon size={18} color={colors.white} />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                onPress={() => setTermsModalVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.terms}>{t('auth.terms')}</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              onPress={() => setTermsModalVisible(true)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.terms}>{t('auth.terms')}</Text>
-            </TouchableOpacity>
-          </View>
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -388,7 +441,8 @@ export default function PhoneEntryScreen({ navigation }) {
         visible={termsModalVisible}
         onClose={() => setTermsModalVisible(false)}
       />
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -470,7 +524,8 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: colors.white,
     borderRadius: 12,
-    padding: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
     alignItems: 'center',
     ...shadow.sm,
   },
@@ -483,7 +538,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 27,
     backgroundColor: colors.white,
-    paddingHorizontal: 6,
+    paddingHorizontal: 12,
   },
   phoneInputFocused: {
     borderColor: '#C0C0C0',
@@ -529,6 +584,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     flex: 1,
     height: 54,
+    marginLeft: 4,
   },
   phoneInputText: {
     fontSize: fontSize.md,
@@ -537,6 +593,13 @@ const styles = StyleSheet.create({
   phoneInputTextValid: {
     color: '#111111',
     fontWeight: fontWeight.semibold,
+  },
+  dividerHorizontal: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginTop: 24,
+    marginBottom: 8,
   },
   checkButtonInline: {
     paddingHorizontal: 10,
@@ -565,8 +628,18 @@ const styles = StyleSheet.create({
   socialIcons: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 24,
+    gap: 16,
     marginBottom: 12,
+  },
+  socialBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   terms: {
     fontSize: fontSize.xs,

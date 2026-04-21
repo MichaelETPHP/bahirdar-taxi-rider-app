@@ -7,7 +7,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { Car } from 'lucide-react-native';
+import { CarTaxiFront } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 
@@ -65,7 +65,7 @@ export default function SplashScreen({ navigation }) {
               { transform: [{ scale: logoScale }], opacity: logoOpacity },
             ]}
           >
-            <Car size={52} color="white" />
+            <CarTaxiFront size={56} color="white" />
           </Animated.View>
 
         <Animated.View style={[styles.textBlock, { opacity: textOpacity }]}>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,6 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const SCREEN_HEIGHT = Dimensions.get('window').height;
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 import OTPInput from '../../components/common/OTPInput';
@@ -29,6 +27,9 @@ import useAuthStore from '../../store/authStore';
 import { verifyOtp, sendOtp } from '../../services/authService';
 
 const OTP_LENGTH = 4;
+
+// ── DEMO: Use '1234' as the bypass OTP (backend accepts this in dev mode)
+const DEMO_OTP = '1234';
 
 export default function OTPScreen({ navigation, route }) {
   const isNewUser = route.params?.isNewUser ?? true;
@@ -44,6 +45,8 @@ export default function OTPScreen({ navigation, route }) {
   const [hasError, setHasError] = useState(false);
   const { formattedTime, canResend, resend: resetTimer } = useOTPTimer();
   const slideAnim = useRef(new Animated.Value(0)).current;
+  // Use a ref so the auto-submit useEffect can always call the latest handleVerify
+  const handleVerifyRef = useRef(null);
 
   const slideUpAndNavigate = (action) => {
     Keyboard.dismiss();
@@ -60,12 +63,6 @@ export default function OTPScreen({ navigation, route }) {
     navigation.goBack();
   };
 
-  const handleOTPChange = (code) => {
-    setOtp(code);
-    setHasError(false);
-    if (code.length === OTP_LENGTH) handleVerify(code);
-  };
-
   const handleVerify = async (code = otp) => {
     if (code.length < OTP_LENGTH || loading) return;
     setLoading(true);
@@ -73,29 +70,61 @@ export default function OTPScreen({ navigation, route }) {
       const res = await verifyOtp(phone, code);
       const { accessToken, refreshToken, user, expiresIn } = res.data;
 
-      // Save tokens with 30-day session persistence
-      // expiresIn is the token expiry time (usually 3600 seconds = 1 hour)
+      // Save real backend tokens with 30-day session persistence
       await setTokens(accessToken, refreshToken, expiresIn || 3600);
       setUser({ ...user, isVerified: true });
       await loadProfile();
 
       const displayName = user?.fullName || user?.full_name;
       if (!displayName) {
-        // New user — no name yet, force ProfileSetup
         slideUpAndNavigate(() => navigation.replace('ProfileSetup'));
       } else {
-        // Existing user — has name, enter app directly
         slideUpAndNavigate(() => setAuthenticated(true, false));
       }
     } catch (err) {
-      setHasError(true);
-      setOtp('');
-      if (err.status === 429) {
-        Alert.alert('Too many attempts', 'Please wait before trying again.');
+      // Demo bypass failing at backend (e.g. user doesn't exist or bypass disabled)
+      // We should NOT fallback to local session as it breaks API calls later.
+      if (code === DEMO_OTP && (err?.message?.includes('not found') || err?.status === 404 || err?.status === 401)) {
+        console.warn('[OTP] Demo bypass failed at backend. User must register or use real OTP.');
+        setHasError(true);
+        setOtp('');
+        Alert.alert('Bypass Failed', 'The master OTP 1234 was rejected by the server. Please check if your account is registered.');
+      } else {
+        // Real error — show error state
+        setHasError(true);
+        setOtp('');
+        if (err.status === 429) {
+          Alert.alert('Too many attempts', 'Please wait before trying again.');
+        } else if (err?.message) {
+          Alert.alert('Verification Failed', err.message);
+        }
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  // Keep ref in sync so the auto-submit can call the latest version
+  handleVerifyRef.current = handleVerify;
+
+  // ── DEMO MODE: Auto-fill and auto-submit OTP "1234" ──────────────────
+  useEffect(() => {
+    const fillTimer = setTimeout(() => {
+      setOtp(DEMO_OTP);
+      // Auto-submit shortly after filling
+      const submitTimer = setTimeout(() => {
+        handleVerifyRef.current(DEMO_OTP);
+      }, 400);
+      return () => clearTimeout(submitTimer);
+    }, 800);
+    return () => clearTimeout(fillTimer);
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────
+
+  const handleOTPChange = (code) => {
+    setOtp(code);
+    setHasError(false);
+    if (code.length === OTP_LENGTH) handleVerify(code);
   };
 
   const handleResend = async () => {
@@ -126,6 +155,11 @@ export default function OTPScreen({ navigation, route }) {
             <View style={styles.content}>
               <View style={styles.iconCircle}>
                 <MessageCircle size={32} color={colors.primary} />
+              </View>
+
+              {/* DEMO badge — visible during development */}
+              <View style={styles.demoBadge}>
+                <Text style={styles.demoBadgeText}>🔧 DEMO — Auto-verifying with OTP: 1234</Text>
               </View>
 
               <Text style={styles.heading}>{t('auth.verifyTitle')}</Text>
@@ -196,7 +230,23 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
+  },
+  demoBadge: {
+    backgroundColor: '#FFF3CD',
+    borderColor: '#FBBF24',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginBottom: 20,
+    alignSelf: 'flex-start',
+  },
+  demoBadgeText: {
+    fontSize: 11,
+    color: '#92400E',
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   heading: {
     fontSize: 26,

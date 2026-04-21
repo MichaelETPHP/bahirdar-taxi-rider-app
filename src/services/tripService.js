@@ -2,13 +2,16 @@ import { API_BASE_URL } from '../config/api';
 
 import useAuthStore from '../store/authStore';
 
+// Global lock to prevent multiple simultaneous token refreshes
+let _isTripRefreshing = false;
+
 async function request(method, path, body, token, retryCount = 0) {
   const url = `${API_BASE_URL}${path}`;
   const headers = {
     'Content-Type': 'application/json',
     'Connection': 'keep-alive',
   };
-  
+
   // Use provided token or fall back to store token
   const activeToken = token || useAuthStore.getState().token;
   if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
@@ -27,20 +30,47 @@ async function request(method, path, body, token, retryCount = 0) {
 
     clearTimeout(timeoutId);
 
-    // ── Token Refresh Interceptor (PRO Handle 401) ──
-    if (res.status === 401 && retryCount === 0) {
-      console.warn(`[Trip] 401 Detected at ${path}. Attempting token refresh...`);
-      const refreshed = await useAuthStore.getState().loadTokens();
-      if (refreshed) {
-        const newToken = useAuthStore.getState().token;
-        console.log(`[Trip] Refresh successful. Retrying ${path}...`);
-        return request(method, path, body, newToken, retryCount + 1);
-      } else {
-        // Refresh failed (refresh token expired) - force logout
-        console.error(`[Trip] Critical Auth Error at ${path}. Logging out...`);
+    // ── Token Refresh Interceptor ──────────────────────────────────────
+    // Only retry ONCE. Skip if already refreshing or token is a local mock.
+    if (res.status === 401 && retryCount === 0 && !_isTripRefreshing) {
+      const currentToken = useAuthStore.getState().token;
+      // Mock tokens (not real JWTs) cannot be refreshed — skip silently
+      if (!currentToken || !currentToken.startsWith('eyJ')) {
+        console.warn(`[Trip] 401 with mock token at ${path} — skipping refresh.`);
+        throw { status: 401, message: 'Invalid token' };
+      }
+
+      console.warn(`[Trip] 401 at ${path}. Attempting one-time token refresh...`);
+      _isTripRefreshing = true;
+      try {
+        const currentRefreshToken = useAuthStore.getState().refreshToken;
+        if (!currentRefreshToken) throw new Error('No refresh token');
+
+        const refreshRes = await fetch(`${API_BASE_URL}/auth/rider/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: currentRefreshToken }),
+        });
+
+        if (!refreshRes.ok) throw new Error(`Refresh failed: ${refreshRes.status}`);
+
+        const refreshData = await refreshRes.json();
+        const newToken = refreshData?.data?.accessToken;
+        const newRefresh = refreshData?.data?.refreshToken;
+        if (!newToken) throw new Error('No token in refresh response');
+
+        await useAuthStore.getState().setTokens(newToken, newRefresh || currentRefreshToken, 3600);
+        console.log(`[Trip] Token refreshed. Retrying ${path}...`);
+        return request(method, path, body, newToken, 1);
+      } catch (refreshErr) {
+        console.error(`[Trip] Refresh failed at ${path}:`, refreshErr.message, '→ Logging out.');
         useAuthStore.getState().logout();
+        throw { status: 401, message: 'Session expired. Please log in again.' };
+      } finally {
+        _isTripRefreshing = false;
       }
     }
+    // ──────────────────────────────────────────────────────────────────
 
     const text = await res.text();
     let data = {};

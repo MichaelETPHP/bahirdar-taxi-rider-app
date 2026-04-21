@@ -5,8 +5,8 @@ import { saveSession, getSession, clearSession, updateTokens, getSavedPhone } fr
  * Uses sessionManager under the hood for proper expiration handling
  */
 
-export async function saveTokens(accessToken, refreshToken, expiresIn = 3600, phone = null) {
-  return await saveSession(accessToken, refreshToken, expiresIn, phone);
+export async function saveTokens(accessToken, refreshToken, expiresIn = 3600, phone = null, user = null) {
+  return await saveSession(accessToken, refreshToken, expiresIn, phone, user);
 }
 
 export async function getStoredPhone() {
