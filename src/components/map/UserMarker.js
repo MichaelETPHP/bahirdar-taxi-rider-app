@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { Marker } from 'react-native-maps';
 import { colors } from '../../constants/colors';
 
@@ -8,6 +9,14 @@ const AVATAR_OUTER = 48;
 
 export default React.memo(function UserMarker({ coordinate, avatarUrl, name, label }) {
   const [imageReady, setImageReady] = useState(false);
+  const [forceTrack, setForceTrack] = useState(true);
+
+  // Stop tracking changes after 3 seconds or when image is ready to save performance
+  // But keep it true for at least a few frames on Android to ensure paint
+  React.useEffect(() => {
+    const timer = setTimeout(() => setForceTrack(false), 3000);
+    return () => clearTimeout(timer);
+  }, [imageReady]);
 
   if (!coordinate) return null;
 
@@ -21,13 +30,20 @@ export default React.memo(function UserMarker({ coordinate, avatarUrl, name, lab
         .toUpperCase()
     : null;
 
-  const tracks = Boolean(avatarUrl && !imageReady);
+  // On Android, we MUST track view changes while the image loads, 
+  // otherwise it stays blank.
+  const tracks = forceTrack || (Boolean(avatarUrl) && !imageReady);
 
   // Anchor at center of avatar (below optional label) so lat/lng matches pickup point
   const anchor = label ? { x: 0.5, y: 0.72 } : { x: 0.5, y: 0.5 };
 
   return (
-    <Marker coordinate={coordinate} tracksViewChanges={tracks} anchor={anchor}>
+    <Marker 
+      coordinate={coordinate} 
+      tracksViewChanges={tracks} 
+      anchor={anchor}
+      zIndex={99} // Ensure user is always on top
+    >
       <View style={styles.column}>
         {label ? (
           <View style={styles.labelPill}>
@@ -70,13 +86,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     marginBottom: LABEL_GAP,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.12)',
   },
   labelText: {
     fontSize: 11,
@@ -106,11 +117,6 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
     overflow: 'hidden',
     backgroundColor: colors.primary,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    elevation: 6,
   },
   avatar: {
     width: '100%',

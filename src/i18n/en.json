@@ -39,7 +39,7 @@
     "routeDistance": "Route"
   },
   "search": {
-    "placeholder": "Search destination in Bahir Dar",
+    "placeholder": "Where to go?",
     "recent": "Recent",
     "popular": "Popular in Bahir Dar",
     "typeToSearch": "Type to search for a destination",

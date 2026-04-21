@@ -45,8 +45,14 @@ const useRideStore = create(
   },
 
   loadCategories: async () => {
-    if (get().categoriesLoaded || get().categoriesLoading) return;
-    set({ categoriesLoading: true });
+    const hasData = get().categories.length > 0;
+    
+    // If we have data, we don't show the loading spinner (Silent Refetch)
+    // If no data, we show the initial loader
+    if (!hasData) {
+      set({ categoriesLoading: true });
+    }
+
     try {
       const res = await fetchVehicleCategories();
       const cats = res?.data?.categories;
@@ -154,6 +160,8 @@ const useRideStore = create(
       partialize: (state) => ({
         selectedCategoryId: state.selectedCategoryId,
         selectedRideType: state.selectedRideType,
+        categories: state.categories,
+        categoriesLoaded: state.categoriesLoaded,
       }),
     }
   )

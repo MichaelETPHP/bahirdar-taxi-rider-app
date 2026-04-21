@@ -74,11 +74,13 @@ export default function ConfirmRideScreen({ navigation }) {
   const fare = serverEstimate
     ? parseFloat(serverEstimate.estimated_fare_etb)
     : selectedCategory
-      ? Math.max(
-          parseFloat(selectedCategory.minimum_fare) || 0,
-          parseFloat(selectedCategory.base_fare) +
-          distKm * parseFloat(selectedCategory.per_km_rate) +
-          durMin * parseFloat(selectedCategory.per_minute_rate)
+      ? parseFloat(
+          Math.max(
+            parseFloat(selectedCategory.minimum_fare) || 0,
+            parseFloat(selectedCategory.base_fare) +
+            distKm * parseFloat(selectedCategory.per_km_rate) +
+            durMin * parseFloat(selectedCategory.per_minute_rate)
+          ).toFixed(2)
         )
       : 0;
 

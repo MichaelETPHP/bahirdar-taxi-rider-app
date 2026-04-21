@@ -269,6 +269,7 @@ export default function SearchingScreen({ navigation }) {
   };
 
   // ── Fare Logic (EXACT match to what user confirmed) ──
+  // We prioritize the fare recorded in the trip object to ensure zero discrepancy
   const confirmedFare = tripData?.estimated_fare_etb || tripData?.total_fare_etb;
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const matchedEstimate = fareEstimates.find(
@@ -276,6 +277,7 @@ export default function SearchingScreen({ navigation }) {
   );
 
   const fareRaw = parseFloat(confirmedFare) || parseFloat(matchedEstimate?.estimated_fare_etb) || 0;
+  // Ensure we use the exact same rounding (toFixed(2)) as the previous screen
   const fare = fareRaw > 0 ? fareRaw.toFixed(2) : '—';
 
   const category = tripData?.vehicle_category

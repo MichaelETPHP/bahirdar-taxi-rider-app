@@ -12,10 +12,10 @@ import {
   Platform,
   ActivityIndicator,
   Dimensions,
-  Image,
   Modal,
   RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import KeyboardAwareModal from '../../components/ui/KeyboardAwareModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -251,6 +251,10 @@ export default function ProfileScreen({ navigation }) {
       if (result.canceled) return;
 
       const asset = result.assets[0];
+      
+      // OPTIMISTIC UI: Show the local image immediately
+      setAvatarUri(asset.uri);
+      // We don't call updateUser yet, but the local state handles the instant visual update
 
       // Compress & resize to 800px max
       const compressed = await ImageManipulator.manipulateAsync(
@@ -271,8 +275,11 @@ export default function ProfileScreen({ navigation }) {
         const res = await uploadAvatar(form, token);
         const url = res?.data?.avatar_url || res?.avatarUrl;
         if (!url) throw new Error('Server did not return an avatar URL');
-        setAvatarUri(url);
-        updateUser({ avatarUrl: url });
+        
+        // Finalize state with the server URL (adding a cache buster timestamp)
+        const finalUrl = `${url}?t=${Date.now()}`;
+        setAvatarUri(finalUrl);
+        updateUser({ avatarUrl: finalUrl });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast('Profile photo updated!', 'success');
       } catch (err) {
@@ -386,7 +393,13 @@ export default function ProfileScreen({ navigation }) {
         <TouchableOpacity onPress={handleAvatarPress} activeOpacity={0.8} disabled={uploadingAvatar}>
           <View style={styles.avatarWithBadge}>
             {avatarUri ? (
-              <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              <Image
+                source={{ uri: avatarUri }}
+                style={styles.avatarImage}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="disk"
+              />
             ) : (
               <Avatar initials={user?.fullName?.slice(0, 2)?.toUpperCase() || '?'} size={64} />
             )}

@@ -211,7 +211,7 @@ export default function SearchScreen({ navigation, route }) {
           <TextInput
             ref={inputRef}
             style={styles.input}
-            placeholder="Search in Bahir Dar…"
+            placeholder={t('search.placeholder')}
             placeholderTextColor={colors.textSecondary}
             value={query}
             onChangeText={setQuery}

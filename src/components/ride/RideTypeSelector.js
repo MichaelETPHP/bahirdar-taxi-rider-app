@@ -23,6 +23,9 @@ function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) 
 
   useEffect(() => {
     loadCategories();
+    // Background heartbeat: Silently check for admin price updates every 30 seconds
+    const interval = setInterval(loadCategories, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Call fare-estimate whenever pickup + destination are available
@@ -71,8 +74,9 @@ function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) 
 
   const visibleCategories = showAll ? categories : categories.slice(0, 3);
 
-  // One full-card skeleton pass for fares+route (no per-row price shimmer).
-  const farePending = Boolean(destination && fareEstimateLoading);
+  // One full-card skeleton pass for fares+route ONLY if it's the very first time.
+  // Otherwise, we allow the cards to stay visible and just show a loading state on the price if needed.
+  const farePending = Boolean(destination && fareEstimateLoading && fareEstimates.length === 0);
 
   if (farePending) {
     return (

@@ -70,7 +70,14 @@ const useAuthStore = create((set, get) => ({
           email:       u.email        ?? state.user?.email,
           gender:      u.gender       ?? state.user?.gender,
           dateOfBirth: u.date_of_birth ?? state.user?.dateOfBirth,
-          avatarUrl:   u.avatar_url   || u.profileImage || state.user?.avatarUrl,
+          avatarUrl:   (() => {
+            const serverUrl = u.avatar_url || u.avatarUrl || u.profileImage;
+            if (!serverUrl) return state.user?.avatarUrl;
+            // If the server URL is the same as our base URL, keep our current local URL 
+            // (which likely has a cache-busting ?t= timestamp for instant display)
+            if (state.user?.avatarUrl?.startsWith(serverUrl)) return state.user.avatarUrl;
+            return serverUrl;
+          })(),
           preferredLang: u.preferred_lang || state.user?.preferredLang,
           isVerified:  u.is_verified  ?? state.user?.isVerified,
         },

@@ -208,36 +208,9 @@ export default function PhoneEntryScreen({ navigation }) {
         console.log('[PhoneEntry] OTP sent successfully');
       }
 
-      // Step 2: DEMO bypass — try '1234'
-      try {
-        console.log('[PhoneEntry] DEMO: Auto-verifying with bypass OTP 1234...');
-        const res = await verifyOtp(intlPhone, '1234');
-        const { accessToken, refreshToken, user, expiresIn } = res.data;
-
-        // Map user data for immediate persistence
-        const mappedUser = {
-          ...user,
-          avatarUrl: user.avatar_url || user.avatarUrl,
-          fullName: user.full_name || user.fullName,
-          isVerified: true
-        };
-
-        await setTokens(accessToken, refreshToken, expiresIn || 3600, mappedUser);
-
-        const displayName = user?.fullName || user?.full_name;
-        if (!displayName) {
-          // New user (or existing without name) -> go to ProfileSetup
-          navigation.navigate('ProfileSetup');
-        } else {
-          // Existing user with name -> Login!
-          setAuthenticated(true, false);
-        }
-        console.log('[PhoneEntry] DEMO login success!');
-      } catch (bypassErr) {
-        // Demo bypass failed — fallback to OTP screen
-        console.warn('[PhoneEntry] Demo bypass failed:', bypassErr?.message);
-        navigation.navigate('OTP', { isNewUser: !exists });
-      }
+      // Step 2: Navigate to OTP screen for verification
+      // (The OTP screen will handle the visible '1234' auto-verify in Demo mode)
+      navigation.navigate('OTP', { isNewUser: !exists });
     } catch (err) {
       console.error('[PhoneEntry] Auth error:', err);
       const msg = err?.message || 'Something went wrong. Please try again.';

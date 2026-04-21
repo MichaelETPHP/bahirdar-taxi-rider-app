@@ -30,6 +30,7 @@ const OTP_LENGTH = 4;
 
 // ── DEMO: Use '1234' as the bypass OTP (backend accepts this in dev mode)
 const DEMO_OTP = '1234';
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function OTPScreen({ navigation, route }) {
   const isNewUser = route.params?.isNewUser ?? true;

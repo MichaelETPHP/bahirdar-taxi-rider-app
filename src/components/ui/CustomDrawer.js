@@ -9,8 +9,8 @@ import {
   PanResponder,
   Alert,
   Linking,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -266,7 +266,13 @@ function CustomDrawer({ visible, onClose, navigation }) {
           </Svg>
 
           {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            <Image
+              source={{ uri: avatarUrl }}
+              style={styles.avatar}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="disk"
+            />
           ) : (
             <Avatar
               initials={user?.fullName?.slice(0, 2)?.toUpperCase() || '?'}

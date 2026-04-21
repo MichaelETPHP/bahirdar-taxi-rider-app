@@ -46,10 +46,15 @@ export default {
     web: {
       favicon: './assets/favicon.png',
     },
+    notification: {
+      icon: './assets/android-icon-monochrome.png',
+      color: '#00674F',
+    },
     plugins: [
       [
         'expo-notifications',
         {
+          icon: './assets/android-icon-monochrome.png',
           color: '#00674F',
           defaultChannel: 'default',
         },
