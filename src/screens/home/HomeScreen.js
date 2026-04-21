@@ -19,6 +19,7 @@ import {
   ChevronRight,
   XCircle,
   Settings,
+  Smile,
 } from 'lucide-react-native';
 import HamburgerButton from '../../components/ui/HamburgerButton';
 import LocationPinButton from '../../components/ui/LocationPinButton';
@@ -229,6 +230,28 @@ export default function HomeScreen({ navigation }) {
   const lastDrawerCloseAt = useRef(0);
   const bannerMarqueeX = useRef(new Animated.Value(0)).current;
   const isLoggedInRef = useRef(!!user?.id);
+  const [showSmile, setShowSmile] = useState(false);
+  const locationPulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Start waving animation for location text
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(locationPulseAnim, {
+          toValue: 1.08,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(locationPulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [locationPulseAnim]);
 
   // Load drawer state from storage on mount
   useEffect(() => {
@@ -557,10 +580,15 @@ export default function HomeScreen({ navigation }) {
           duration: 150,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => {
+        // Toggle smile after wave finishes
+        setTimeout(() => {
+          setShowSmile(prev => !prev);
+        }, 1200);
+      });
     };
     wave();
-    const interval = setInterval(wave, 2000);
+    const interval = setInterval(wave, 2500);
     return () => clearInterval(interval);
   }, [waveAnim]);
 
@@ -701,20 +729,32 @@ export default function HomeScreen({ navigation }) {
               {greeting}{userName}{' '}
             </Text>
             <Animated.View style={{ transform: [{ rotate: handRotation }] }}>
-              <Hand size={14} color="#00674F" />
+              {showSmile ? (
+                <Text style={{ fontSize: 13, marginLeft: 2 }}>😂</Text>
+              ) : (
+                <Hand size={14} color="#00674F" />
+              )}
             </Animated.View>
           </View>
 
           <LocationPinButton onPress={handleRecenter} />
         </View>
 
-        {/* Row 2: current location label */}
-        <View className="px-4 mt-2" pointerEvents="none">
-          <View className="bg-white/90 self-start px-3 py-1 rounded-full flex-row items-center border border-gray-100 shadow-sm">
+        {/* Row 2: current location label with waving animation */}
+        <Animated.View 
+          className="px-4 mt-2 items-center" 
+          pointerEvents="none"
+          style={{ transform: [{ scale: locationPulseAnim }] }}
+        >
+          <View className="bg-white/90 self-center px-3 py-1 rounded-full flex-row items-center border border-gray-100 shadow-sm">
             <View className="mr-2">
-              <MapPin size={9} color="#00674F" />
+              <MapPin size={9} color="#FF0000" />
             </View>
-            <Text className="text-primary font-italic text-[10px] font-semibold" numberOfLines={1}>
+            <Text 
+              className="font-italic text-[10px] font-semibold" 
+              style={{ color: '#FF0000' }}
+              numberOfLines={1}
+            >
               {pickup?.name && pickup.name !== 'Your current location' && pickup.name !== 'Current Location'
                 ? pickup.name
                 : userCoords
@@ -722,7 +762,7 @@ export default function HomeScreen({ navigation }) {
                   : 'Enable location'}
             </Text>
           </View>
-        </View>
+        </Animated.View>
       </View>
 
       {/* Bottom sheet:

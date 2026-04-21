@@ -214,8 +214,15 @@ export default function PhoneEntryScreen({ navigation }) {
         const res = await verifyOtp(intlPhone, '1234');
         const { accessToken, refreshToken, user, expiresIn } = res.data;
 
-        await setTokens(accessToken, refreshToken, expiresIn || 3600);
-        setUser({ ...user, isVerified: true });
+        // Map user data for immediate persistence
+        const mappedUser = {
+          ...user,
+          avatarUrl: user.avatar_url || user.avatarUrl,
+          fullName: user.full_name || user.fullName,
+          isVerified: true
+        };
+
+        await setTokens(accessToken, refreshToken, expiresIn || 3600, mappedUser);
 
         const displayName = user?.fullName || user?.full_name;
         if (!displayName) {

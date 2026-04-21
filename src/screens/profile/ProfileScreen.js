@@ -31,7 +31,7 @@ import {
   X, User, Wallet,
 } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
-import { fontSize, fontWeight } from '../../constants/typography';
+import { fontSize, fontWeight, fontFamilyBold, fontFamilySemiBold, fontFamilyMedium, fontFamilyRegular } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
 import useAuthStore from '../../store/authStore';
 import { updateProfile, uploadAvatar } from '../../services/authService';
@@ -60,7 +60,6 @@ const SECTION2_ITEMS = [
 const GENDER_OPTIONS = [
   { value: 'male',   label: 'Male' },
   { value: 'female', label: 'Female' },
-  { value: 'other',  label: 'Other' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -409,15 +408,8 @@ export default function ProfileScreen({ navigation }) {
             {user?.fullName || t('profile.title')}
           </Text>
           <Text style={styles.profilePhone}>
-            {phone ? `+251${phone.replace(/^0/, '')}` : '—'}
+            {phone ? phone.replace(/^(\+251|0)/, '0') : '—'}
           </Text>
-          {/* Wallet balance */}
-          <View style={styles.walletRow}>
-            <Wallet size={11} color={colors.primary} style={{ marginRight: 4 }} />
-            <Text style={styles.walletText}>
-              {walletBalance.toFixed(2)} ETB
-            </Text>
-          </View>
           <TouchableOpacity onPress={handleAvatarPress} disabled={uploadingAvatar} activeOpacity={0.7}>
             <Text style={styles.changePhotoText}>
               {uploadingAvatar ? 'Uploading…' : 'Change photo'}
@@ -499,7 +491,7 @@ export default function ProfileScreen({ navigation }) {
                 <View style={[styles.inputRow, styles.inputRowDisabled]}>
                   <Phone size={11} color={colors.textSecondary} style={styles.inputIcon} />
                   <Text style={[styles.fieldInput, { color: colors.textSecondary }]}>
-                    {phone ? `+251${phone.replace(/^0/, '')}` : '—'}
+                    {phone ? phone.replace(/^(\+251|0)/, '0') : '—'}
                   </Text>
                 </View>
               </View>
@@ -761,7 +753,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: colors.border,
   },
-  title: { fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.textPrimary },
+  title: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    fontFamily: fontFamilyBold,
+    color: colors.textPrimary
+  },
 
   // ── Avatar card
   avatarCard: {
@@ -795,13 +792,31 @@ const styles = StyleSheet.create({
   },
   avatarInfo: { flex: 1 },
   profileName: {
-    fontSize: fontSize.md, fontWeight: fontWeight.bold,
-    color: colors.textPrimary, marginBottom: 2,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    fontFamily: fontFamilyBold,
+    color: colors.textPrimary,
+    marginBottom: 2,
   },
-  profilePhone: { fontSize: fontSize.xs, color: colors.textSecondary, marginBottom: 3 },
+  profilePhone: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontFamily: fontFamilyRegular,
+    marginBottom: 3
+  },
   walletRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  walletText:  { fontSize: fontSize.xs, color: colors.primary, fontWeight: fontWeight.semibold },
-  changePhotoText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: fontWeight.semibold },
+  walletText:  {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilySemiBold
+  },
+  changePhotoText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilySemiBold
+  },
 
   // ── Scroll
   scroll: { paddingHorizontal: PAD, paddingBottom: 40 },
@@ -822,7 +837,12 @@ const styles = StyleSheet.create({
     paddingVertical: 13, paddingHorizontal: PAD,
   },
   accordionHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  accordionTitle: { fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.textPrimary },
+  accordionTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilySemiBold,
+    color: colors.textPrimary
+  },
   accordionContent: { paddingHorizontal: PAD, paddingBottom: 16 },
   hairline: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginBottom: 14 },
 
@@ -831,9 +851,12 @@ const styles = StyleSheet.create({
   // ── Form fields
   fieldGroup: { marginBottom: 12 },
   fieldLabel: {
-    fontSize: 10, fontWeight: fontWeight.semibold,
+    fontSize: 11,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilySemiBold,
     color: colors.textSecondary,
-    textTransform: 'uppercase', letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    letterSpacing: 0.9,
     marginBottom: 6,
   },
   inputRow: {
@@ -845,7 +868,13 @@ const styles = StyleSheet.create({
   },
   inputRowDisabled: { backgroundColor: '#F3F4F6', opacity: 0.75 },
   inputIcon: { marginRight: 8 },
-  fieldInput: { flex: 1, fontSize: fontSize.base, color: colors.textPrimary, paddingVertical: 0 },
+  fieldInput: {
+    flex: 1,
+    fontSize: fontSize.md,
+    color: colors.textPrimary,
+    fontFamily: fontFamilyMedium,
+    paddingVertical: 0
+  },
 
   // ── Gender chips
   genderRow: { flexDirection: 'row', gap: 8 },
@@ -857,7 +886,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundAlt,
   },
   genderChipActive:     { borderColor: colors.primary, backgroundColor: colors.primary },
-  genderChipText:       { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: fontWeight.semibold },
+  genderChipText: {
+    fontSize: fontSize.base,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilySemiBold
+  },
   genderChipTextActive: { color: colors.white },
 
   // ── Save button
@@ -866,7 +900,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: borderRadius.md,
     height: 44, marginTop: 6,
   },
-  saveBtnText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.white },
+  saveBtnText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.bold,
+    fontFamily: fontFamilyBold,
+    color: colors.white
+  },
 
   // ── List rows
   listRow: {
@@ -876,12 +915,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   listRowLast: { borderBottomWidth: 0 },
-  listLabel: { flex: 1, fontSize: fontSize.base, color: colors.textPrimary, fontWeight: fontWeight.medium },
+  listLabel: {
+    flex: 1,
+    fontSize: fontSize.md,
+    color: colors.textPrimary,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilyRegular
+  },
 
   // ── Version text
   versionText: {
-    textAlign: 'center', fontSize: fontSize.xs,
-    color: colors.textSecondary, marginTop: 8, marginBottom: 4,
+    textAlign: 'center',
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontFamily: fontFamilyRegular,
+    marginTop: 8,
+    marginBottom: 4,
   },
 
   // ── iOS Date Picker modal
@@ -902,8 +951,12 @@ const styles = StyleSheet.create({
     alignSelf: 'center', marginBottom: 14,
   },
   dateModalTitle: {
-    fontSize: fontSize.base, fontWeight: fontWeight.semibold,
-    color: colors.textPrimary, marginBottom: 4, alignSelf: 'flex-start',
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilySemiBold,
+    color: colors.textPrimary,
+    marginBottom: 4,
+    alignSelf: 'flex-start',
   },
   dateModalConfirm: {
     width: '100%', height: 46,
@@ -912,7 +965,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     marginTop: 8,
   },
-  dateModalConfirmText: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.white },
+  dateModalConfirmText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    fontFamily: fontFamilyBold,
+    color: colors.white
+  },
 
   // ── Toast
   toast: {
@@ -930,9 +988,12 @@ const styles = StyleSheet.create({
   toastSuccess: { backgroundColor: colors.primary },
   toastError:   { backgroundColor: colors.error },
   toastText: {
-    flex: 1, fontSize: fontSize.sm,
+    flex: 1,
+    fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
-    color: colors.white, lineHeight: 18,
+    fontFamily: fontFamilySemiBold,
+    color: colors.white,
+    lineHeight: 18,
   },
 
   // ── Delete modal
@@ -941,14 +1002,30 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg, padding: 22,
   },
-  modalTitle:    { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.textPrimary, marginBottom: 6 },
-  modalSubtitle: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: 14 },
+  modalTitle:    {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    fontFamily: fontFamilyBold,
+    color: colors.textPrimary,
+    marginBottom: 6
+  },
+  modalSubtitle: {
+    fontSize: fontSize.base,
+    color: colors.textSecondary,
+    fontFamily: fontFamilyRegular,
+    marginBottom: 14
+  },
   reasonInput: {
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: borderRadius.md,
-    paddingHorizontal: 12, paddingVertical: 10,
-    fontSize: fontSize.sm, color: colors.textPrimary,
-    minHeight: 72, marginBottom: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: fontSize.sm,
+    color: colors.textPrimary,
+    fontFamily: fontFamilyRegular,
+    minHeight: 72,
+    marginBottom: 18,
   },
   modalButtons:       { flexDirection: 'row', gap: 10 },
   modalBtnCancel: {
@@ -956,11 +1033,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundAlt,
     justifyContent: 'center', alignItems: 'center',
   },
-  modalBtnCancelText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textPrimary },
+  modalBtnCancelText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilySemiBold,
+    color: colors.textPrimary
+  },
   modalBtnDelete: {
     flex: 1, height: 42, borderRadius: borderRadius.md,
     backgroundColor: colors.error,
     justifyContent: 'center', alignItems: 'center',
   },
-  modalBtnDeleteText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.white },
+  modalBtnDeleteText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilySemiBold,
+    color: colors.white
+  },
 });

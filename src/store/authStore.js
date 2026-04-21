@@ -21,15 +21,16 @@ const useAuthStore = create((set, get) => ({
 
   /**
    * Persist both tokens to AsyncStorage with 30-day session expiration.
-   * Tokens are automatically refreshed before expiry.
+   * Optionally takes a user object to ensure latest profile data is saved immediately.
    */
-  setTokens: async (accessToken, refreshToken, expiresIn = 3600) => {
+  setTokens: async (accessToken, refreshToken, expiresIn = 3600, user = null) => {
     const currentPhone = get().phone;
-    const currentUser = get().user;
+    const currentUser = user || get().user;
     const session = await saveTokens(accessToken, refreshToken, expiresIn, currentPhone, currentUser);
     set({
       token: accessToken,
       refreshToken,
+      user: currentUser, // Ensure in-memory user is also updated if provided
       sessionExpiresAt: new Date(session.expiresAt),
     });
   },

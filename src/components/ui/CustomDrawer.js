@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   userPhone: {
-    fontSize: fontSize.xl,
+    fontSize: fontSize.lg,
     color: 'rgba(255,255,255,0.85)',
     fontWeight: fontWeight.regular,
     fontFamily: fontFamilyRegular,

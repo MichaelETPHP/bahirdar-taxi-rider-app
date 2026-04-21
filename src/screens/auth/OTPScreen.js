@@ -69,10 +69,18 @@ export default function OTPScreen({ navigation, route }) {
     try {
       const res = await verifyOtp(phone, code);
       const { accessToken, refreshToken, user, expiresIn } = res.data;
+      
+      // Ensure the avatar and fullName are mapped correctly for immediate UI display
+      const mappedUser = {
+        ...user,
+        avatarUrl: user.avatar_url || user.avatarUrl,
+        fullName: user.full_name || user.fullName,
+        isVerified: true
+      };
 
-      // Save real backend tokens with 30-day session persistence
-      await setTokens(accessToken, refreshToken, expiresIn || 3600);
-      setUser({ ...user, isVerified: true });
+      // Save user at the same time as tokens to ensure immediate persistence
+      await setTokens(accessToken, refreshToken, expiresIn || 3600, mappedUser);
+      // loadProfile runs in background to get extra details
       await loadProfile();
 
       const displayName = user?.fullName || user?.full_name;

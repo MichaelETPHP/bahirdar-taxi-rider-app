@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   labelText: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.primary,
+    color: '#FF0000',
   },
   outer: {
     width: AVATAR_OUTER,
