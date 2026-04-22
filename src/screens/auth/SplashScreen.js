@@ -59,7 +59,8 @@ export default function SplashScreen({ navigation }) {
 
       <View style={styles.content}>
         <View style={styles.topHalf}>
-          <Animated.View
+
+          {/* <Animated.View
             style={[
               styles.logoCircle,
               { transform: [{ scale: logoScale }], opacity: logoOpacity },
@@ -72,14 +73,16 @@ export default function SplashScreen({ navigation }) {
           <Text style={styles.appName}>Welcome to Bahiran Ride</Text>
           <Text style={styles.taglineAmharic}>ወደ መዳረሻዎ በፍጥነት</Text>
           <Text style={styles.taglineEn}>Fast rides in Addis Ababa</Text>
-        </Animated.View>
+        </Animated.View> */}
+
+
         </View>
 
         <View style={styles.bottomHalf}>
           <View style={styles.barTrack}>
             <Animated.View style={[styles.barFill, { width: barWidth }]} />
           </View>
-          <Text style={styles.loadingText}>Preparing your ride...</Text>
+          <Text style={styles.loadingText} style={{ color: 'white' }}>Preparing your ride...</Text>
         </View>
       </View>
     </View>
