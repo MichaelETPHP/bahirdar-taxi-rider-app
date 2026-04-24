@@ -27,6 +27,7 @@ import BottomSheet from '../../components/ui/BottomSheet';
 import CustomDrawer from '../../components/ui/CustomDrawer';
 import RideTypeSelector from '../../components/ride/RideTypeSelector';
 import LocationBar from '../../components/ride/LocationBar';
+import RecentTrips from '../../components/ride/RecentTrips';
 import AppButton from '../../components/common/AppButton';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
@@ -34,7 +35,11 @@ import { shadow, borderRadius } from '../../constants/layout';
 import useAuthStore from '../../store/authStore';
 import useLocationStore from '../../store/locationStore';
 import useRideStore from '../../store/rideStore';
-import useLocation, { openLocationSettings } from '../../hooks/useLocation';
+import useLocationV2 from '../../hooks/useLocationV2';
+import { detectCity } from '../../services/locationServiceV2';
+import { extractNeighborhoodName } from '../../services/addressParserService';
+
+console.log('🚀 HomeScreen loaded, detectCity function available:', typeof detectCity);
 import { mockTrips } from '../../data/mockTrips';
 import { mockLocations } from '../../data/mockLocations';
 import { getNearbyDrivers } from '../../services/tripService';
@@ -227,6 +232,38 @@ export default function HomeScreen({ navigation }) {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(true);
+  const [isInServiceArea, setIsInServiceArea] = useState(true);
+  const { currentLocation, currentAddress, loading: locLoading, permissionDenied } = useLocationV2();
+
+  // Get readable neighborhood name instead of full address
+  const readableLocationName = useMemo(() => {
+    if (!currentAddress || !currentLocation) return 'Getting location...';
+    return extractNeighborhoodName(currentAddress, currentLocation.lat, currentLocation.lng);
+  }, [currentAddress, currentLocation]);
+
+  useEffect(() => {
+    if (currentLocation) {
+      const checkCity = async () => {
+        try {
+          const res = await detectCity(currentLocation.lat, currentLocation.lng);
+          setIsInServiceArea(res?.city !== 'unknown');
+        } catch (err) {
+          console.error('City check failed:', err);
+        }
+      };
+      checkCity();
+
+      // Update pickup location with readable name
+      if (readableLocationName && readableLocationName !== 'Getting location...') {
+        setPickup({
+          name: readableLocationName,
+          address: currentAddress,
+          lat: currentLocation.lat,
+          lng: currentLocation.lng,
+        });
+      }
+    }
+  }, [currentLocation, readableLocationName, currentAddress, setPickup]);
   const lastDrawerCloseAt = useRef(0);
   const bannerMarqueeX = useRef(new Animated.Value(0)).current;
   const isLoggedInRef = useRef(!!user?.id);
@@ -308,9 +345,6 @@ export default function HomeScreen({ navigation }) {
     if (Date.now() - lastDrawerCloseAt.current < 320) return;
     setDrawerOpen(true);
   }, [drawerOpen, handleCloseDrawer]);
-
-
-  const { permissionDenied } = useLocation();
 
   const avatarUrl = user?.avatarUrl || user?.avatar_url || null;
   const userName = user?.fullName ? `, ${user.fullName.split(' ')[0]}` : '';
@@ -625,8 +659,6 @@ export default function HomeScreen({ navigation }) {
     return () => shimmer.stop();
   }, [destination, categoriesLoaded, selectBtnSkeletonOpacity]);
 
-  const recentTrips = useMemo(() => mockTrips.slice(0, 4), []);
-
   const getLocationFromTripDestination = useCallback((destName) => {
     const found = mockLocations.find((l) => l.name === destName);
     return found || { id: `trip-${destName}`, name: destName, address: destName, lat: 9.0192, lng: 38.7525 };
@@ -784,12 +816,19 @@ export default function HomeScreen({ navigation }) {
           initialExpanded={destination ? false : true}
           onExpandedChange={setSheetExpanded}
           header={!destination ? (
-            <LocationBar
-              onToPress={() => navigation.navigate('Search', { mode: 'destination' })}
-              onFromPress={() => {}}
-              onStopPress={(index) => navigation.navigate('Search', { mode: 'stop', stopIndex: index })}
-              onAddStopPress={null}
-            />
+            isInServiceArea ? (
+              <LocationBar
+                onToPress={() => navigation.navigate('Search', { mode: 'destination' })}
+                onFromPress={() => {}}
+                onStopPress={(index) => navigation.navigate('Search', { mode: 'stop', stopIndex: index })}
+                onAddStopPress={null}
+              />
+            ) : (
+              <View style={styles.outOfAreaBanner}>
+                <MapPin size={20} color={colors.textSecondary} />
+                <Text style={styles.outOfAreaText}>Bahirdar is not available in your area yet</Text>
+              </View>
+            )
           ) : (
             <View style={styles.destinationOnlyInput}>
               <TouchableOpacity
@@ -798,9 +837,16 @@ export default function HomeScreen({ navigation }) {
                 activeOpacity={0.8}
               >
                 <MapPin size={14} color={colors.primary} style={styles.destinationOnlyIcon} />
-                <Text style={styles.destinationOnlyText} numberOfLines={1}>
-                  {destination?.name || destination?.address || t('home.whereTo')}
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.destinationOnlyText} numberOfLines={1}>
+                    {destination?.name || destination?.address || t('home.whereTo')}
+                  </Text>
+                  {routeDistanceKm != null && (
+                    <Text style={styles.destinationSubText}>
+                      {formatDistance(routeDistanceKm)} • {Math.round(routeDurationMinFinal)} min
+                    </Text>
+                  )}
+                </View>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.destinationOnlyAction}
@@ -815,50 +861,14 @@ export default function HomeScreen({ navigation }) {
         >
           {!destination && (
             <View style={styles.recentSection}>
-              {/* Recent trips - max 4 */}
-              {recentTrips.length > 0 && (
-                <>
-                  <Text style={styles.recentLabel}>{t('home.recentTrips')}</Text>
-                  {recentTrips.map((trip) => {
-                    const loc = getLocationFromTripDestination(trip.destination);
-                    return (
-                      <TouchableOpacity
-                        key={trip.id}
-                        style={styles.recentItem}
-                        onPress={() => setDestination(loc)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.recentIcon}>
-                          <History size={14} color={colors.primary} />
-                        </View>
-                        <Text style={styles.recentItemText} numberOfLines={1}>{trip.destination}</Text>
-                        <ChevronRight size={12} color={colors.textSecondary} />
-                      </TouchableOpacity>
-                    );
-                  })}
-                </>
-              )}
-              {/* Recent search destinations */}
-              {recentDestinations.length > 0 && (
-                <>
-                  <Text style={[styles.recentLabel, recentTrips.length > 0 && styles.recentLabelMargin]}>{t('search.recent')}</Text>
-                  {recentDestinations.map((loc) => (
-                    <TouchableOpacity
-                      key={loc.id}
-                      style={styles.recentItem}
-                      onPress={() => setDestination(loc)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.recentIcon}>
-                        <MapPin size={14} color={colors.primary} />
-                      </View>
-                      <Text style={styles.recentItemText} numberOfLines={1}>{loc.name}</Text>
-                      <ChevronRight size={12} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                  ))}
-                </>
-              )}
-              {recentTrips.length === 0 && recentDestinations.length === 0 && (
+              {/* Actual search history - limited to 3 */}
+              <RecentTrips
+                onSelectPlace={(place) => setDestination(place)}
+                limit={3}
+              />
+              
+              {/* If no history yet, show a hint */}
+              {recentDestinations.length === 0 && (
                 <View style={styles.hintSection}>
                   <Text style={styles.hintText}>{t('search.typeToSearch')}</Text>
                 </View>
@@ -1339,5 +1349,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+  },
+  outOfAreaBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 16,
+    borderRadius: borderRadius.lg,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    marginBottom: 8,
+  },
+  outOfAreaText: {
+    fontSize: fontSize.sm,
+    color: '#991B1B',
+    fontWeight: fontWeight.medium,
+  },
+  destinationSubText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });

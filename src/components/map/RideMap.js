@@ -26,7 +26,8 @@ function RideMap({
       provider={PROVIDER_GOOGLE}
       style={[styles.map, style]}
       initialRegion={initialRegion || ADDIS_ABABA}
-      showsUserLocation={false}
+      showsUserLocation={true}
+      followsUserLocation={true}
       showsMyLocationButton={false}
       showsCompass={false}
       showsTraffic={false}

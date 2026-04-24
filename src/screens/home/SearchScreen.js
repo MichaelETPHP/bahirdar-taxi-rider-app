@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -29,23 +29,11 @@ import {
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
-import { mockLocations } from '../../data/mockLocations';
 import useLocationStore from '../../store/locationStore';
-import { searchPlaces, getPlaceDetails } from '../../services/googlePlaces';
+import { searchPlaces, getPlaceDetails } from '../../services/locationServiceV2';
+import { saveSearchPlace, getSearchHistory } from '../../services/searchHistoryService';
 
-const SEARCH_DEBOUNCE_MS = 350;
-
-// Popular Bahir Dar landmarks always shown before user types
-const BAHIRDAR_POPULAR = [
-  { id: 'p1', name: 'Bahir Dar Airport',     address: 'Ginbot 20, Bahir Dar', lat: 11.6033, lng: 37.3167 },
-  { id: 'p2', name: 'Lake Tana Pier',        address: 'Shore Rd, Bahir Dar', lat: 11.5994, lng: 37.3892 },
-  { id: 'p3', name: 'Bahir Dar University',  address: 'Peda Campus, Bahir Dar', lat: 11.5833, lng: 37.3833 },
-  { id: 'p4', name: 'Blue Nile Falls',        address: 'Tis Abay, Bahir Dar', lat: 11.4851, lng: 37.5879 },
-  { id: 'p5', name: 'Felege Hiwot Hospital', address: 'Hospital Rd, Bahir Dar', lat: 11.5912, lng: 37.3915 },
-  { id: 'p6', name: 'Ghion Hotel',           address: 'Shore Rd, Bahir Dar', lat: 11.6012, lng: 37.3876 },
-  { id: 'p7', name: 'St. George Church',     address: 'Piazza, Bahir Dar', lat: 11.6054, lng: 37.3850 },
-  { id: 'p8', name: 'Abay River Bridge',     address: 'Main Highway, Bahir Dar', lat: 11.5975, lng: 37.4082 },
-];
+const SEARCH_DEBOUNCE_MS = 300;
 
 const CATEGORY_ICONS = {
   transport: Plane,
@@ -62,12 +50,21 @@ export default function SearchScreen({ navigation, route }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selecting, setSelecting] = useState(false);
+  const [searchHistory, setSearchHistory] = useState([]);
   const debounceRef = useRef(null);
   const inputRef = useRef(null);
 
-  const { setDestination, setStop, addToRecentDestination, recentDestinations } = useLocationStore();
+  const { setDestination, setStop, addToRecentDestination, recentDestinations, userCoords } = useLocationStore();
   const searchMode = route?.params?.mode ?? 'destination';
   const stopIndex  = route?.params?.stopIndex ?? -1;
+
+  // Load search history on mount
+  useEffect(() => {
+    (async () => {
+      const history = await getSearchHistory();
+      setSearchHistory(history);
+    })();
+  }, []);
 
   // Search when query changes
   useEffect(() => {
@@ -79,72 +76,80 @@ export default function SearchScreen({ navigation, route }) {
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        // Local Bahir Dar list — always fast, always available
-        const localMatches = BAHIRDAR_POPULAR.filter(
-          (l) =>
-            l.name.toLowerCase().includes(query.toLowerCase()) ||
-            l.address.toLowerCase().includes(query.toLowerCase())
-        );
+        const lat = userCoords?.latitude || 11.5936;
+        const lng = userCoords?.longitude || 37.3906;
 
         // Google Places search
-        let apiResults = [];
-        try {
-          apiResults = await searchPlaces(query.trim());
-        } catch (err) {
-          console.warn('[SearchScreen] Google Places error:', err);
-        }
+        const apiResults = await searchPlaces(query.trim(), lat, lng);
+        const formattedResults = apiResults.map(p => ({
+          placeId: p.placeId,
+          name: p.mainText,
+          address: p.secondaryText,
+          description: p.description
+        }));
 
-        // Merge: API results first, then local matches not already included
-        const apiIds = new Set(apiResults.map((p) => p.id));
-        const merged = [
-          ...apiResults,
-          ...localMatches.filter((l) => !apiIds.has(l.id)),
-        ];
-        setResults(merged.length > 0 ? merged : localMatches);
+        setResults(formattedResults);
       } catch (err) {
         console.error('[SearchScreen] Search error:', err);
-        const localMatches = BAHIRDAR_POPULAR.filter(
-          (l) =>
-            l.name.toLowerCase().includes(query.toLowerCase()) ||
-            l.address.toLowerCase().includes(query.toLowerCase())
-        );
-        setResults(localMatches);
       } finally {
         setLoading(false);
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query]);
+  }, [query, userCoords]);
 
   const handleSelect = useCallback(async (item) => {
     let finalItem = item;
-    
+
+    setSelecting(true);
+
     // If coordinates are missing (common for Google Places autocomplete results), fetch them
     if (finalItem.lat == null || finalItem.lng == null) {
-      if (!finalItem.placeId) return;
-      setSelecting(true);
-      try {
-        const details = await getPlaceDetails(finalItem.placeId);
-        if (!details) return;
-        finalItem = details;
-      } catch (err) {
-        console.warn('Place details error:', err);
+      if (!finalItem.placeId) {
+        setSelecting(false);
         return;
-      } finally {
-        setLoading(false); // Clear search loading if any
+      }
+      try {
+        console.log('[SearchScreen] Fetching place details for:', finalItem.placeId);
+        const details = await getPlaceDetails(finalItem.placeId);
+        if (!details) {
+          console.warn('[SearchScreen] No details found');
+          setSelecting(false);
+          return;
+        }
+        finalItem = details;
+        console.log('[SearchScreen] Got details:', details);
+      } catch (err) {
+        console.error('[SearchScreen] Place details error:', err);
+        setSelecting(false);
+        return;
       }
     }
 
-    setSelecting(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      // Save to search history
+      await saveSearchPlace({
+        placeId: finalItem.placeId,
+        name: finalItem.name,
+        address: finalItem.address,
+        lat: finalItem.lat,
+        lng: finalItem.lng,
+      });
+
       addToRecentDestination(finalItem);
+
       if (searchMode === 'stop' && stopIndex >= 0) {
         setStop(stopIndex, finalItem);
       } else {
         setDestination(finalItem);
       }
+
+      console.log('[SearchScreen] Selected place:', finalItem);
       navigation.goBack();
+    } catch (err) {
+      console.error('[SearchScreen] Selection error:', err);
     } finally {
       setSelecting(false);
     }
@@ -189,10 +194,12 @@ export default function SearchScreen({ navigation, route }) {
 
   // Build sections for empty-query view
   const sections = [];
-  if (recentDestinations.length > 0) {
-    sections.push({ key: 'recent', title: 'Recent', data: recentDestinations.slice(0, 4) });
+  if (searchHistory.length > 0) {
+    sections.push({ key: 'history', title: 'Search History', data: searchHistory.slice(0, 5) });
   }
-  sections.push({ key: 'popular', title: 'Popular in Bahir Dar', data: BAHIRDAR_POPULAR });
+  if (recentDestinations.length > 0) {
+    sections.push({ key: 'recent', title: 'Recent Destinations', data: recentDestinations.slice(0, 4) });
+  }
 
   const isSearching = query.trim().length > 0;
 

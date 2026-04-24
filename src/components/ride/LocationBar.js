@@ -80,8 +80,8 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
         <View style={styles.pinWrapper}>
           <MapPin size={18} color={colors.primary} />
         </View>
-        {stops.map((_, i) => (
-          <React.Fragment key={i}>
+        {stops.map((stop, i) => (
+          <React.Fragment key={`stop-${stop.placeId || stop.id || i}`}>
             <View style={styles.dottedLine} />
             <View style={styles.pinWrapper}>
               <MapPin size={16} color={colors.mapCurrentLocation} />
@@ -107,7 +107,7 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
 
         {/* Dynamic stops */}
         {stops.map((stop, index) => (
-          <React.Fragment key={index}>
+          <React.Fragment key={`stop-input-${stop.placeId || stop.id || index}`}>
             <View style={styles.divider} />
             <View style={styles.inputRow}>
               <TouchableOpacity

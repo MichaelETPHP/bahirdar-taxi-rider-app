@@ -1,75 +1,31 @@
 /**
- * Route service — calls the public OSRM demo server directly.
+ * DEPRECATED: Old Route Service
  *
- * OSRM has global road coverage (including Bahirdar) and returns actual
- * road-following geometry.  The backend proxy (/geo/route) was omitting
- * the geometry field, which caused the straight-line fallback.
+ * ❌ DO NOT USE - This service calls OSRM directly from mobile app
  *
- * API:  https://router.project-osrm.org/route/v1/driving/{lon},{lat};{lon},{lat}
- *       ?overview=full&geometries=geojson&steps=false
+ * MIGRATION:
+ * Use routeServiceV2.js instead:
+ * import { getRouteFromBackend } from './routeServiceV2';
  *
- * NOTE: The public demo server is suitable for development.  For production
- * point OSRM_BASE at your own OSRM instance.
+ * Architecture:
+ * OLD (broken):  Mobile App → OSRM localhost:5000 ❌
+ *                (phone has no OSRM, timeouts)
+ *
+ * NEW (correct): Mobile App → Backend API → OSRM (via SSH) ✅
+ *                (backend handles routing internally)
  */
 
-const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
-const TIMEOUT_MS = 10000;
-
-/**
- * Fetch a road-following route between two points via OSRM.
- *
- * @param {{ latitude: number, longitude: number }} origin
- * @param {{ latitude: number, longitude: number }} destination
- * @returns {Promise<{ coordinates: Array<{latitude,longitude}>, distanceKm: number, durationMin: number }>}
- */
 export async function getRoadRoute(origin, destination) {
-  const fallback = {
-    coordinates: [
-      { latitude: origin.latitude,      longitude: origin.longitude },
-      { latitude: destination.latitude, longitude: destination.longitude },
-    ],
-    distanceKm:  0,
-    durationMin: 0,
-  };
+  throw new Error(
+    'Direct OSRM calls from mobile app are DEPRECATED!\n\n' +
+    'Use routeServiceV2.getRouteFromBackend() instead.\n\n' +
+    'The backend API handles all routing via:\n' +
+    'POST /api/v1/trips/estimate\n' +
+    'Body: { pickupLat, pickupLng, dropoffLat, dropoffLng }\n\n' +
+    'Backend connects to OSRM internally via SSH tunnel.'
+  );
+}
 
-  if (!origin || !destination) return fallback;
-
-  try {
-    // OSRM expects coordinates as longitude,latitude
-    const url =
-      `${OSRM_BASE}/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}` +
-      `?overview=full&geometries=geojson&steps=false`;
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timer);
-
-    if (!res.ok) return fallback;
-
-    let json;
-    try { json = await res.json(); } catch { return fallback; }
-
-    if (json?.code !== 'Ok') return fallback;
-
-    const route = json?.routes?.[0];
-    if (!route) return fallback;
-
-    const geomCoords = route?.geometry?.coordinates;
-    if (!Array.isArray(geomCoords) || geomCoords.length < 2) return fallback;
-
-    // GeoJSON coordinates are [longitude, latitude]
-    const coordinates = geomCoords.map(([lng, lat]) => ({
-      latitude:  lat,
-      longitude: lng,
-    }));
-
-    const distanceKm  = (route.distance  ?? 0) / 1000;        // metres → km
-    const durationMin = (route.duration  ?? 0) / 60;          // seconds → minutes
-
-    return { coordinates, distanceKm, durationMin };
-  } catch {
-    return fallback;
-  }
+export async function estimateRoute(origin, destination) {
+  throw new Error('Use routeServiceV2.getRouteFromBackend() instead');
 }

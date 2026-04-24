@@ -7,20 +7,20 @@ export default function RoutePolyline({ coordinates, dashed = false }) {
 
   return (
     <>
-      {/* White outline for contrast against map tiles */}
+      {/* White outline for high contrast */}
       <Polyline
         coordinates={coordinates}
         strokeColor="rgba(255,255,255,0.9)"
-        strokeWidth={7}
+        strokeWidth={8}
         lineCap="round"
         lineJoin="round"
         zIndex={1}
       />
-      {/* Primary emerald route line */}
+      {/* Premium Blue route line (Modern Google Maps style) */}
       <Polyline
         coordinates={coordinates}
-        strokeColor={colors.primary}
-        strokeWidth={4}
+        strokeColor="#2563EB"
+        strokeWidth={5}
         lineDashPattern={dashed ? [8, 6] : null}
         lineCap="round"
         lineJoin="round"

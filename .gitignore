@@ -42,3 +42,8 @@ yarn-error.*
 
 # Claude working notes (not for repo)
 Claude_understand/
+
+# Documentation and Guides (Private)
+Guide/
+*.md
+*.txt

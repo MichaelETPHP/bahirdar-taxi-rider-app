@@ -34,7 +34,7 @@ export default {
       usesCleartextTraffic: true,
       config: {
         googleMaps: {
-          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyB2QAbjllEn-1S95xd5_LcrjeC2_-ugiRs',
+          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
         },
       },
     },
@@ -69,9 +69,11 @@ export default {
       '@react-native-community/datetimepicker',
     ],
     extra: {
-      apiUrl: process.env.EXPO_PUBLIC_API_URL || 'https://taxiapi.zmichael.click/api/v1',
-      socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL || 'https://taxiapi.zmichael.click',
-      googleMapsKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyB2QAbjllEn-1S95xd5_LcrjeC2_-ugiRs',
+      apiUrl: process.env.EXPO_PUBLIC_API_URL,
+      socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL,
+      googleMapsKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      osrmAddisUrl: process.env.EXPO_PUBLIC_OSRM_ADDIS_URL,
+      osrmBahirdarUrl: process.env.EXPO_PUBLIC_OSRM_BAHIRDAR_URL,
       eas: {
         projectId: "0e88c993-9f78-4d5e-86fa-face25d64343"
       }

@@ -7,9 +7,11 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://192.168.0.137:3000/api/v1",
-        "EXPO_PUBLIC_SOCKET_URL": "http://192.168.0.137:3000",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB2QAbjllEn-1S95xd5_LcrjeC2_-ugiRs"
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.8:3000/api/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "http://192.168.1.8:3000",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyBqFrKaruRpK5LTFYEXP8JtON22twHit6s",
+        "EXPO_PUBLIC_OSRM_ADDIS_URL": "http://192.168.1.8:5000",
+        "EXPO_PUBLIC_OSRM_BAHIRDAR_URL": "http://192.168.1.8:5001"
       }
     },
     "preview": {
@@ -20,7 +22,7 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://taxiapi.zmichael.click/api/v1",
         "EXPO_PUBLIC_SOCKET_URL": "https://taxiapi.zmichael.click",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB2QAbjllEn-1S95xd5_LcrjeC2_-ugiRs"
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyBqFrKaruRpK5LTFYEXP8JtON22twHit6s"
       }
     },
     "production": {
@@ -31,7 +33,7 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://taxiapi.zmichael.click/api/v1",
         "EXPO_PUBLIC_SOCKET_URL": "https://taxiapi.zmichael.click",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB2QAbjllEn-1S95xd5_LcrjeC2_-ugiRs"
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyBqFrKaruRpK5LTFYEXP8JtON22twHit6s"
       }
     }
   }

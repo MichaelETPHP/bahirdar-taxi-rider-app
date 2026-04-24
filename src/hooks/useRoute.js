@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { getRoadRoute } from '../services/routeService';
-import { getRoute as getGebetaRoute } from '../services/gebetaMaps';
+import { getRouteFromBackend } from '../services/routeServiceV2';
+import useAuthStore from '../store/authStore';
 
 /**
  * Fetches a road-following route.
@@ -58,22 +58,28 @@ export default function useRoute(origin, destination) {
 
     (async () => {
       try {
-        // 1 — Try OSRM (global road coverage including Bahirdar)
-        let result = await getRoadRoute(orig, dest);
+        // Get auth token from store
+        const authToken = useAuthStore.getState().token;
+
+        // Call backend API for routing (backend handles OSRM internally)
+        const result = await getRouteFromBackend(
+          orig.latitude,
+          orig.longitude,
+          dest.latitude,
+          dest.longitude,
+          authToken
+        );
 
         if (abortRef.current !== token) return;
 
-        // 2 — If OSRM returned no geometry, try Gebeta Direction API
-        if (result.coordinates.length < 3) {
-          result = await getGebetaRoute(orig, dest);
-        }
+        // Backend returns coordinates directly
+        const coords = result.coordinates || fallback;
 
-        if (abortRef.current !== token) return;
-
-        setCoordinates(result.coordinates.length > 2 ? result.coordinates : fallback);
-        setDistanceKm(result.distanceKm   ?? 0);
-        setDurationMin(result.durationMin ?? 0);
-      } catch {
+        setCoordinates(coords.length >= 2 ? coords : fallback);
+        setDistanceKm(result.distanceKm || 0);
+        setDurationMin(result.durationMin || 0);
+      } catch (err) {
+        console.error('useRoute error:', err);
         if (abortRef.current === token) setCoordinates(fallback);
       } finally {
         if (abortRef.current === token) setLoading(false);

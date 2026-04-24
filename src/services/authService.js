@@ -1,6 +1,6 @@
 import { API_BASE_URL } from '../config/api';
-
 import useAuthStore from '../store/authStore';
+import { showSessionExpiredAlert } from '../utils/logoutAlert';
 
 // Global flag: prevent multiple simultaneous refresh attempts
 let _isRefreshing = false;
@@ -79,7 +79,8 @@ async function request(method, path, body, accessToken, retryCount = 0) {
       } catch (refreshErr) {
         // Refresh itself failed — the session is truly expired or invalid
         console.error(`[Auth] Token refresh failed at ${path}:`, refreshErr.message, '→ Logging out.');
-        useAuthStore.getState().logout();
+        await useAuthStore.getState().logout();
+        await showSessionExpiredAlert();
         throw { status: 401, message: 'Session expired. Please log in again.' };
       } finally {
         _isRefreshing = false;
