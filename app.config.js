@@ -32,6 +32,13 @@ export default {
       },
       package: 'com.bahirdar.ride',
       usesCleartextTraffic: true,
+      minSdkVersion: 21,
+      targetSdkVersion: 34,
+      permissions: [
+        'android.permission.ACCESS_FINE_LOCATION',
+        'android.permission.ACCESS_COARSE_LOCATION',
+        'android.permission.INTERNET',
+      ],
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,

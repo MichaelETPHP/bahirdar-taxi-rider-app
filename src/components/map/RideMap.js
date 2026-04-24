@@ -20,6 +20,10 @@ function RideMap({
   onRegionChangeComplete,
   mapPadding,
 }) {
+  const handleMapError = (err) => {
+    console.error('🗺️  MapView Error:', err);
+  };
+
   return (
     <MapView
       ref={mapRef}
@@ -41,6 +45,7 @@ function RideMap({
       onPress={onPress}
       onRegionChange={onRegionChange}
       onRegionChangeComplete={onRegionChangeComplete}
+      onError={handleMapError}
       mapType="standard"
     >
       {children}
@@ -51,5 +56,9 @@ function RideMap({
 export default memo(RideMap);
 
 const styles = StyleSheet.create({
-  map: { flex: 1 },
+  map: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
 });

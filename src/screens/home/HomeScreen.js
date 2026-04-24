@@ -40,8 +40,6 @@ import { detectCity } from '../../services/locationServiceV2';
 import { extractNeighborhoodName } from '../../services/addressParserService';
 
 console.log('🚀 HomeScreen loaded, detectCity function available:', typeof detectCity);
-import { mockTrips } from '../../data/mockTrips';
-import { mockLocations } from '../../data/mockLocations';
 import { getNearbyDrivers } from '../../services/tripService';
 import { haversineDistance, formatDistance } from '../../utils/distanceUtils';
 import useRoute from '../../hooks/useRoute';
@@ -659,10 +657,6 @@ export default function HomeScreen({ navigation }) {
     return () => shimmer.stop();
   }, [destination, categoriesLoaded, selectBtnSkeletonOpacity]);
 
-  const getLocationFromTripDestination = useCallback((destName) => {
-    const found = mockLocations.find((l) => l.name === destName);
-    return found || { id: `trip-${destName}`, name: destName, address: destName, lat: 9.0192, lng: 38.7525 };
-  }, []);
 
   return (
     <View style={styles.container} collapsable={false}>
@@ -938,6 +932,8 @@ const styles = StyleSheet.create({
   mapWrapper: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 0,
+    width: '100%',
+    height: '100%',
   },
   sosButtonWrap: {
     ...StyleSheet.absoluteFillObject,

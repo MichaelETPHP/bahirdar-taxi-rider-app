@@ -17,7 +17,10 @@
     "preview": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradle": {
+          "androidApiLevel": 34
+        }
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://taxiapi.zmichael.click/api/v1",
