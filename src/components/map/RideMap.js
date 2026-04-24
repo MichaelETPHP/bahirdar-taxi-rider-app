@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { StyleSheet } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 
@@ -9,6 +9,45 @@ const ADDIS_ABABA = {
   latitudeDelta: 0.05,
   longitudeDelta: 0.05,
 };
+
+// Professional map styling (Uber/Yango aesthetic)
+const PROFESSIONAL_MAP_STYLE = [
+  {
+    featureType: 'poi',
+    elementType: 'labels',
+    stylers: [{ visibility: 'off' }],
+  },
+  {
+    featureType: 'transit',
+    elementType: 'labels',
+    stylers: [{ visibility: 'off' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry',
+    stylers: [{ color: '#f5f5f5' }],
+  },
+  {
+    featureType: 'road.arterial',
+    elementType: 'geometry',
+    stylers: [{ color: '#ffffff' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry',
+    stylers: [{ color: '#dadada' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'geometry',
+    stylers: [{ color: '#c9d8e8' }],
+  },
+  {
+    featureType: 'landscape',
+    elementType: 'geometry',
+    stylers: [{ color: '#f0f0f0' }],
+  },
+];
 
 function RideMap({
   children,
@@ -30,11 +69,14 @@ function RideMap({
       provider={PROVIDER_GOOGLE}
       style={[styles.map, style]}
       initialRegion={initialRegion || ADDIS_ABABA}
-      showsUserLocation={true}
-      followsUserLocation={true}
+      customMapStyle={PROFESSIONAL_MAP_STYLE}
+      showsUserLocation={false}
+      followsUserLocation={false}
       showsMyLocationButton={false}
       showsCompass={false}
       showsTraffic={false}
+      showsBuildings={false}
+      showsIndoors={false}
       toolbarEnabled={false}
       moveOnMarkerPress={false}
       scrollEnabled={true}
