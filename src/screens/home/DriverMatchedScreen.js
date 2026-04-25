@@ -326,7 +326,18 @@ export default function DriverMatchedScreen({ navigation }) {
   const carMake = driver?.vehicle?.make || '';
   const carModel = driver?.vehicle?.model || driver?.vehicle_model || driver?.vehicle_category || driver?.car_type || '';
   const carColor = driver?.vehicle?.color || '';
-  const carPlate = driver?.vehicle?.plateNumber || driver?.plate_number || driver?.plateNumber || '';
+    driver?.vehicle?.plateNumber || 
+    driver?.vehicle?.plate_number || 
+    driver?.vehicle?.plate || 
+    driver?.vehicle_plate ||
+    driver?.car_plate ||
+    driver?.plate_number || 
+    driver?.plateNumber || 
+    driver?.plate || 
+    driver?.license_plate ||
+    tripData?.driver?.plate_number ||
+    tripData?.driver?.vehicle?.plate_number ||
+    '';
   const carLine = [carMake, carModel, carColor, carPlate].filter(Boolean).join(' · ') || 'Vehicle';
   const fare = parseFloat(tripData?.estimated_fare_etb || 0).toFixed(2);
   const pickupName = tripData?.pickup_address || 'Your location';
@@ -400,14 +411,19 @@ export default function DriverMatchedScreen({ navigation }) {
           {/* Name + rating + vehicle */}
           <View style={styles.driverMeta}>
             <View style={styles.nameRow}>
-              <Text style={styles.driverName} numberOfLines={1}>{driverNameFull}</Text>
+              <Text style={styles.driverName} numberOfLines={1} ellipsizeMode="tail">{driverNameFull}</Text>
               <Text style={styles.nameSeparator}>·</Text>
-              <Text style={styles.vehicleHeader} numberOfLines={1}>{carMake} {carModel}</Text>
+              <Text style={styles.vehicleHeader} numberOfLines={1} ellipsizeMode="tail">{carMake} {carModel}</Text>
+              {carPlate ? (
+                <View style={styles.plateBadge}>
+                  <Text style={styles.plateBadgeText}>{carPlate}</Text>
+                </View>
+              ) : null}
             </View>
             <View style={styles.ratingRow}>
               <Star size={11} color="#F59E0B" />
               <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
-              <Text style={styles.vehiclePlate}>{carPlate}</Text>
+              <Text style={styles.ratingLabel}>Rating</Text>
             </View>
           </View>
 
@@ -554,22 +570,35 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: colors.white,
   },
   driverMeta: { flex: 1, gap: 2 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
   driverName: {
     fontSize: fontSize.md, fontWeight: fontWeight.bold, color: '#111827',
+    maxWidth: '40%',
   },
   nameSeparator: {
-    marginHorizontal: 6, fontSize: fontSize.lg, color: '#9CA3AF',
+    marginHorizontal: 4, fontSize: fontSize.md, color: '#9CA3AF',
   },
   vehicleHeader: {
     fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: '#4B5563',
+    maxWidth: '35%',
   },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   ratingText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: '#374151' },
-  vehiclePlate: {
+  ratingLabel: { fontSize: fontSize.xs, color: '#9CA3AF', marginLeft: 2 },
+  plateBadge: {
     marginLeft: 8,
-    fontSize: fontSize.xs, color: colors.primary,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  plateBadgeText: {
+    fontSize: 10,
+    color: '#111827',
     fontWeight: fontWeight.bold,
+    textTransform: 'uppercase',
   },
   callBtn: {
     width: 48, height: 48, borderRadius: 24,
