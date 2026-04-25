@@ -155,7 +155,7 @@ const useRideStore = create(
     }),
 }),
     {
-      name: 'bahirdar-ride-draft',
+      name: 'bahirdar-ride-v2',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         selectedCategoryId: state.selectedCategoryId,

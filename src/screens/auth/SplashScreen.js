@@ -2,11 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   Animated,
   Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { CarTaxiFront } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
@@ -18,6 +18,7 @@ export default function SplashScreen({ navigation }) {
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
   const barWidth = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     Animated.sequence([
       Animated.parallel([
@@ -50,39 +51,25 @@ export default function SplashScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Full-screen background image */}
+      {/* Premium expo-image with high priority and disk caching for zero lag */}
       <Image
         source={require('../../../assets/splash.png')}
         style={styles.backgroundImage}
-        resizeMode="cover"
+        contentFit="cover"
+        transition={300}
+        priority="high"
+        cachePolicy="disk"
       />
 
       <View style={styles.content}>
         <View style={styles.topHalf}>
-
-          {/* <Animated.View
-            style={[
-              styles.logoCircle,
-              { transform: [{ scale: logoScale }], opacity: logoOpacity },
-            ]}
-          >
-            <CarTaxiFront size={56} color="white" />
-          </Animated.View>
-
-        <Animated.View style={[styles.textBlock, { opacity: textOpacity }]}>
-          <Text style={styles.appName}>Welcome to Bahiran Ride</Text>
-          <Text style={styles.taglineAmharic}>ወደ መዳረሻዎ በፍጥነት</Text>
-          <Text style={styles.taglineEn}>Fast rides in Addis Ababa</Text>
-        </Animated.View> */}
-
-
         </View>
 
         <View style={styles.bottomHalf}>
           <View style={styles.barTrack}>
             <Animated.View style={[styles.barFill, { width: barWidth }]} />
           </View>
-          <Text style={styles.loadingText} style={{ color: 'white' }}>Preparing your ride...</Text>
+          <Text style={styles.loadingText} style={{ color: 'white', marginTop: 12 }}>Preparing your ride...</Text>
         </View>
       </View>
     </View>

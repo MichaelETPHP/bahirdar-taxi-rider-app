@@ -12,40 +12,118 @@ const ADDIS_ABABA = {
 
 // Professional map styling (Uber/Yango aesthetic)
 const PROFESSIONAL_MAP_STYLE = [
+  // Hide clutter
   {
     featureType: 'poi',
-    elementType: 'labels',
+    elementType: 'all',
+    stylers: [{ visibility: 'off' }],
+  },
+  {
+    featureType: 'poi.business',
+    elementType: 'all',
+    stylers: [{ visibility: 'off' }],
+  },
+  {
+    featureType: 'poi.park',
+    elementType: 'all',
     stylers: [{ visibility: 'off' }],
   },
   {
     featureType: 'transit',
+    elementType: 'all',
+    stylers: [{ visibility: 'off' }],
+  },
+  {
+    featureType: 'administrative.land_parcel',
     elementType: 'labels',
+    stylers: [{ visibility: 'off' }],
+  },
+  // Road styling
+  {
+    featureType: 'road.local',
+    elementType: 'geometry',
+    stylers: [
+      { color: '#fbfbfb' },
+      { lightness: 3 },
+    ],
+  },
+  {
+    featureType: 'road.local',
+    elementType: 'labels.text',
     stylers: [{ visibility: 'off' }],
   },
   {
     featureType: 'road',
     elementType: 'geometry',
-    stylers: [{ color: '#f5f5f5' }],
+    stylers: [
+      { color: '#ffffff' },
+      { lightness: 2 },
+    ],
   },
   {
     featureType: 'road.arterial',
     elementType: 'geometry',
-    stylers: [{ color: '#ffffff' }],
+    stylers: [
+      { color: '#f8f8f8' },
+      { lightness: 1 },
+    ],
   },
   {
     featureType: 'road.highway',
     elementType: 'geometry',
-    stylers: [{ color: '#dadada' }],
+    stylers: [
+      { color: '#efefef' },
+      { lightness: 0 },
+    ],
   },
+  // Water
   {
     featureType: 'water',
     elementType: 'geometry',
-    stylers: [{ color: '#c9d8e8' }],
+    stylers: [
+      { color: '#e8f4f8' },
+      { saturation: -20 },
+      { lightness: 5 },
+    ],
   },
+  {
+    featureType: 'water',
+    elementType: 'labels.text',
+    stylers: [{ visibility: 'off' }],
+  },
+  // Landscape
   {
     featureType: 'landscape',
     elementType: 'geometry',
-    stylers: [{ color: '#f0f0f0' }],
+    stylers: [
+      { color: '#f5f5f5' },
+      { saturation: -30 },
+    ],
+  },
+  {
+    featureType: 'landscape.natural',
+    elementType: 'geometry',
+    stylers: [
+      { color: '#f0f0f0' },
+      { saturation: -20 },
+    ],
+  },
+  // Administrative boundaries
+  {
+    featureType: 'administrative.country',
+    elementType: 'geometry.stroke',
+    stylers: [
+      { color: '#e5e5e5' },
+      { weight: 1.5 },
+    ],
+  },
+  {
+    featureType: 'administrative.province',
+    elementType: 'geometry.stroke',
+    stylers: [
+      { color: '#eeeeee' },
+      { weight: 0.8 },
+    ],
   },
 ];
 
@@ -81,6 +159,7 @@ function RideMap({
       moveOnMarkerPress={false}
       scrollEnabled={true}
       zoomEnabled={true}
+      panEnabled={true}
       pitchEnabled={false}
       rotateEnabled={false}
       mapPadding={mapPadding}
@@ -89,6 +168,9 @@ function RideMap({
       onRegionChangeComplete={onRegionChangeComplete}
       onError={handleMapError}
       mapType="standard"
+      cacheEnabled={true}
+      loadingEnabled={true}
+      loadingIndicatorColor="#00674F"
     >
       {children}
     </MapView>
@@ -99,8 +181,6 @@ export default memo(RideMap);
 
 const styles = StyleSheet.create({
   map: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFillObject,
   },
 });

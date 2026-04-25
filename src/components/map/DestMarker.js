@@ -7,7 +7,12 @@ import { colors } from '../../constants/colors';
 export default React.memo(function DestMarker({ coordinate, title = 'Destination', caption }) {
   if (!coordinate) return null;
   return (
-    <Marker coordinate={coordinate} tracksViewChanges={false} anchor={{ x: 0.5, y: 1 }}>
+    <Marker 
+      coordinate={coordinate} 
+      tracksViewChanges={false} 
+      anchor={{ x: 0.5, y: 1 }}
+      zIndex={100} // Top priority
+    >
       <View style={styles.pin}>
         <View style={styles.label}>
           {caption ? <Text style={styles.captionText}>{caption}</Text> : null}

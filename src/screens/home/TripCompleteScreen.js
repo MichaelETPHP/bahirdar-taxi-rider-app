@@ -4,7 +4,7 @@ import {
   TextInput, ActivityIndicator, Animated, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, Circle, MapPin, MapRoute, Clock, DollarSign, Star } from 'lucide-react-native';
+import { Check, Circle, MapPin, Route, Clock, DollarSign, Star } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -84,7 +84,7 @@ export default function TripCompleteScreen({ navigation }) {
         <View style={styles.receiptSeparator} />
         <View style={styles.statRow}>
           <View style={styles.stat}>
-            <MapRoute size={14} color={colors.textSecondary} />
+            <Route size={14} color={colors.textSecondary} />
             <Text style={styles.statValue}>{parseFloat(distKm).toFixed(1)} km</Text>
             <Text style={styles.statLabel}>Distance</Text>
           </View>

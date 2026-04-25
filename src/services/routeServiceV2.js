@@ -31,67 +31,70 @@ const FALLBACK_COORDS = [
  */
 export async function getRouteFromBackend(originLat, originLng, destLat, destLng, token) {
   try {
-    console.log('🛣️  Route request to backend API:', {
-      from: `${originLat.toFixed(4)}, ${originLng.toFixed(4)}`,
-      to: `${destLat.toFixed(4)}, ${destLng.toFixed(4)}`,
+    const logTag = `[🛣️ ROUTE]`;
+    console.log(`${logTag} Requesting road route:`, {
+      origin: `${originLat.toFixed(6)},${originLng.toFixed(6)}`,
+      destination: `${destLat.toFixed(6)},${destLng.toFixed(6)}`,
     });
 
-    // Call backend fare-estimate endpoint (which includes OSRM routing)
+    // Call backend fare-estimate endpoint
     const fareData = await getFareEstimate(originLat, originLng, destLat, destLng, token);
-
-    // Extract route data from backend response
     const routeData = fareData?.data;
 
     if (!routeData) {
+      console.warn(`${logTag} No route data returned from backend. Status:`, fareData?.status);
       throw new Error('No route data in backend response');
     }
 
-    // Backend returns route geometry as GeoJSON or polyline coordinates
     let coordinates = [];
 
-    // Check if backend returns geometry as GeoJSON coordinates
-    if (routeData.geometry?.coordinates) {
+    console.log(`${logTag} Available route data keys:`, Object.keys(routeData));
+    console.log(`${logTag} polyline type:`, typeof routeData.polyline, Array.isArray(routeData.polyline?.coordinates));
+
+    // Priority 1: GeoJSON geometry (backend returns this)
+    if (routeData.geometry?.coordinates && Array.isArray(routeData.geometry.coordinates) && routeData.geometry.coordinates.length > 0) {
+      console.log(`${logTag} ✅ Using geometry.coordinates (${routeData.geometry.coordinates.length} points)`);
       coordinates = routeData.geometry.coordinates.map(([lng, lat]) => ({
         latitude: lat,
         longitude: lng,
       }));
     }
-    // Check if polyline field itself is a GeoJSON object (backend osrm.service behavior)
-    else if (routeData.polyline && typeof routeData.polyline === 'object' && routeData.polyline.coordinates) {
+    // Priority 2: Polyline as GeoJSON object
+    else if (routeData.polyline && typeof routeData.polyline === 'object' && Array.isArray(routeData.polyline.coordinates) && routeData.polyline.coordinates.length > 0) {
+      console.log(`${logTag} ✅ Using polyline.coordinates (${routeData.polyline.coordinates.length} points)`);
       coordinates = routeData.polyline.coordinates.map(([lng, lat]) => ({
         latitude: lat,
         longitude: lng,
       }));
     }
-    // Check if backend returns coordinates directly
-    else if (routeData.coordinates && Array.isArray(routeData.coordinates)) {
-      coordinates = routeData.coordinates;
+    // Priority 3: Direct coordinates array
+    else if (Array.isArray(routeData.coordinates) && routeData.coordinates.length > 0) {
+      console.log(`${logTag} ✅ Using direct coordinates array (${routeData.coordinates.length} points)`);
+      coordinates = routeData.coordinates.map(c => ({
+        latitude: c.latitude ?? c.lat,
+        longitude: c.longitude ?? c.lng,
+      }));
     }
-    // Check if backend returns polyline as encoded string
-    else if (routeData.polyline && typeof routeData.polyline === 'string') {
-      console.log('📦 Decoding polyline string from backend...');
+    // Priority 4: Encoded polyline string
+    else if (typeof routeData.polyline === 'string' && routeData.polyline.length > 0) {
+      console.log(`${logTag} 🔄 Decoding polyline string...`);
       coordinates = decodePolyline(routeData.polyline);
+      console.log(`${logTag} ✅ Decoded to ${coordinates.length} points`);
     }
 
-    // Fallback to straight line if no coordinates
+    // Validation: Ensure we actually got road points
     if (!coordinates || coordinates.length < 2) {
-      console.warn('⚠️  No coordinates from backend, using fallback');
+      console.warn(`${logTag} Could not extract road-snapped points from backend response. Falling back to straight line.`);
       coordinates = [
         { latitude: originLat, longitude: originLng },
         { latitude: destLat, longitude: destLng },
       ];
+    } else {
+      console.log(`${logTag} Success! Received ${coordinates.length} road-snapped points.`);
     }
 
     const distanceKm = routeData.distance_km || routeData.distance || 0;
     const durationMin = routeData.duration_min || routeData.duration || 0;
-
-    console.log('✅ Route received from backend:', {
-      distance: `${distanceKm.toFixed(2)} km`,
-      duration: `${Math.round(durationMin)} min`,
-      waypoints: coordinates.length,
-    });
-
-    console.log('🛣️  Polyline will use', coordinates.length, 'points for smooth road routing');
 
     return {
       coordinates,

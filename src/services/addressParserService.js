@@ -8,15 +8,20 @@ const ADDIS_NEIGHBORHOODS = [
   'Bole', 'Kera', 'Piazza', 'Nifas Silk-Lafto', 'Gulale', 'Kazanchis',
   'Yeka', 'Arada', 'Addis Ketema', 'Kolfe Keranio', 'Lideta', 'Kirkos',
   'Akaki Kality', 'Gullele', 'Lemi Kura', 'Finfinne', 'Gerji', 'Belu',
-  'Lebu', 'Highland', 'CMC', 'Dembel Square', 'Medhanialem', 'Sarbet',
+  'Lebu', 'Highland', 'CMC', 'Dembel', 'Medhanialem', 'Sarbet',
   'Bamhauer', 'Ayat', 'Kebena', 'Nolawi', 'Olympia', 'Tulu Dimtu',
+  'Megenagna', 'Mexico', 'Haya Hulet', 'Summit', 'Gotera', 'Saris',
+  'Jemo', 'Lafto', 'Tuludimtu', 'Torhailoch', 'Wingate', 'Shiromeda',
+  'Ferensay', 'Shola', 'Piasa', 'Piassa', 'Urael', 'Atlas', 'Meskel Square',
 ];
 
 // Common neighborhoods in Bahir Dar
 const BAHIRDAR_NEIGHBORHOODS = [
   'Lake Tana', 'Piazza', 'Kebena', 'Sheger', 'Welelo', 'Bahir Dar Town',
-  'Tis Abay', 'Alatish', 'Belay Zeleke', 'Seid', 'Meshenti', 'Peda Campus',
+  'Tis Abay', 'Alatish', 'Belay Zeleke', 'Seid', 'Meshenti', 'Peda',
   'Addis Alem', 'Dega Damot', 'Sheger Square', 'Shore Road', 'Ginbot 20',
+  'Fasilo', 'Zenzelma', 'Tana', 'Biyem', 'Shimbit', 'Gidayer', 'St. George',
+  'Papyrus', 'Kuriftu', 'Avanti', 'Dib Anbessa', 'Main Campus',
 ];
 
 /**
@@ -29,13 +34,13 @@ export function extractNeighborhoodName(address, lat, lng) {
   }
 
   // If address is already formatted as fallback (e.g., "Addis Ababa (8.95°, 38.78°)"), return as is
-  if (address.includes('°')) {
+  if (address.includes('°') && address.includes('(')) {
     return address;
   }
 
   const addressLower = address.toLowerCase();
 
-  // Check for known neighborhoods
+  // 1. Check for specific neighborhood matches in the list
   const allNeighborhoods = [...ADDIS_NEIGHBORHOODS, ...BAHIRDAR_NEIGHBORHOODS];
   for (const neighborhood of allNeighborhoods) {
     if (addressLower.includes(neighborhood.toLowerCase())) {
@@ -43,19 +48,27 @@ export function extractNeighborhoodName(address, lat, lng) {
     }
   }
 
-  // Try to extract from address components
+  // 2. Extract from address components (comma separated)
   const parts = address.split(',').map(p => p.trim());
 
-  // Return first meaningful part (usually the street/neighborhood)
   if (parts.length > 0) {
-    const firstPart = parts[0];
-    // If first part looks like coordinates or code, try next part
-    if (firstPart.match(/[A-Z0-9]{3,}\+[A-Z0-9]{2,}/)) {
+    // If the first part is a plus code or generic, skip it
+    let candidate = parts[0];
+    
+    // Check if candidate is a Plus Code (e.g., "2PCX+V6 Addis Ababa")
+    if (candidate.match(/[A-Z0-9]{4,}\+[A-Z0-9]{2,}/)) {
       if (parts.length > 1) {
-        return parts[1];
+        candidate = parts[1];
       }
     }
-    return firstPart;
+
+    // If candidate is just "Addis Ababa" or "Bahir Dar", try to find something better in parts[1]
+    const genericNames = ['addis ababa', 'bahir dar', 'ethiopia', 'unnamed road'];
+    if (genericNames.includes(candidate.toLowerCase()) && parts.length > 1) {
+      candidate = parts[1];
+    }
+
+    return candidate;
   }
 
   // Final fallback

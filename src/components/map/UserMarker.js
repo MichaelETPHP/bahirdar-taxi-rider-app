@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { Image } from 'expo-image';
 import { Marker } from 'react-native-maps';
 import { colors } from '../../constants/colors';
@@ -7,16 +7,86 @@ import { colors } from '../../constants/colors';
 const LABEL_GAP = 6;
 const AVATAR_OUTER = 48;
 
-export default React.memo(function UserMarker({ coordinate, avatarUrl, name, label }) {
-  const [imageReady, setImageReady] = useState(false);
-  const [forceTrack, setForceTrack] = useState(true);
+/**
+ * Premium Pulse Ring Component
+ * Creates an expanding, fading circle effect.
+ */
+function PulseRing({ delay = 0 }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.6)).current;
 
-  // Stop tracking changes after 3 seconds or when image is ready to save performance
-  // But keep it true for at least a few frames on Android to ensure paint
-  React.useEffect(() => {
-    const timer = setTimeout(() => setForceTrack(false), 3000);
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.parallel([
+          Animated.timing(scale, {
+            toValue: 2.2,
+            duration: 2000,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: 2000,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.6, duration: 0, useNativeDriver: true }),
+        ]),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [delay, scale, opacity]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.pulseRing,
+        {
+          transform: [{ scale }],
+          opacity,
+        },
+      ]}
+    />
+  );
+}
+
+export default React.memo(function UserMarker({ coordinate, avatarUrl, name, label, onDragEnd }) {
+  const [imageReady, setImageReady] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragScale = useRef(new Animated.Value(1)).current;
+
+  // Stop tracking after image loads to save performance
+  useEffect(() => {
+    const timer = setTimeout(() => {}, 3000);
     return () => clearTimeout(timer);
   }, [imageReady]);
+
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true);
+    Animated.spring(dragScale, {
+      toValue: 1.3,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 6,
+    }).start();
+  }, [dragScale]);
+
+  const handleDragEnd = useCallback((e) => {
+    setIsDragging(false);
+    Animated.spring(dragScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 8,
+    }).start();
+    onDragEnd?.(e.nativeEvent.coordinate);
+  }, [dragScale, onDragEnd]);
 
   if (!coordinate) return null;
 
@@ -30,21 +100,24 @@ export default React.memo(function UserMarker({ coordinate, avatarUrl, name, lab
         .toUpperCase()
     : null;
 
-  // On Android, we MUST track view changes while the image loads, 
-  // otherwise it stays blank.
-  const tracks = forceTrack || (Boolean(avatarUrl) && !imageReady);
+  // On Android, we MUST track view changes while the image loads / animation plays
+  // We keep it true for animations to look smooth
+  const tracks = true; 
 
   // Anchor at center of avatar (below optional label) so lat/lng matches pickup point
   const anchor = label ? { x: 0.5, y: 0.72 } : { x: 0.5, y: 0.5 };
 
   return (
-    <Marker 
-      coordinate={coordinate} 
-      tracksViewChanges={tracks} 
+    <Marker
+      coordinate={coordinate}
+      tracksViewChanges={true}
       anchor={anchor}
-      zIndex={99} // Ensure user is always on top
+      zIndex={99}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
-      <View style={styles.column}>
+      <Animated.View style={[styles.column, { transform: [{ scale: dragScale }] }]}>
         {label ? (
           <View style={styles.labelPill}>
             <Text style={styles.labelText} numberOfLines={1}>
@@ -52,7 +125,12 @@ export default React.memo(function UserMarker({ coordinate, avatarUrl, name, lab
             </Text>
           </View>
         ) : null}
+
         <View style={styles.outer}>
+          {/* Animated Pulse Rings */}
+          <PulseRing delay={0} />
+          <PulseRing delay={1000} />
+
           <View style={styles.ring} />
           <View style={styles.shell}>
             {avatarUrl ? (
@@ -70,7 +148,7 @@ export default React.memo(function UserMarker({ coordinate, avatarUrl, name, lab
             )}
           </View>
         </View>
-      </View>
+      </Animated.View>
     </Marker>
   );
 });
@@ -100,6 +178,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  pulseRing: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
   ring: {
     position: 'absolute',
     width: 48,
@@ -107,7 +194,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 2.5,
     borderColor: colors.primary,
-    backgroundColor: `${colors.primary}14`,
+    backgroundColor: `${colors.primary}25`,
   },
   shell: {
     width: 34,
@@ -117,6 +204,11 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
     overflow: 'hidden',
     backgroundColor: colors.primary,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   avatar: {
     width: '100%',

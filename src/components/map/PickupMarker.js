@@ -1,9 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
-import { colors } from '../../constants/colors';
 
-const PICKUP_COLOR = '#FFFFFF';
+const GREEN = '#00674F';  // matches colors.primary
 
 export default React.memo(function PickupMarker({ coordinate, title = 'Pickup' }) {
   if (!coordinate) return null;
@@ -14,8 +13,9 @@ export default React.memo(function PickupMarker({ coordinate, title = 'Pickup' }
         <View style={styles.label}>
           <Text style={styles.labelText} numberOfLines={1}>{title}</Text>
         </View>
-        {/* White dot */}
+        {/* Green circle */}
         <View style={styles.circle} />
+        {/* Drop shadow tail */}
         <View style={styles.tail} />
       </View>
     </Marker>
@@ -27,47 +27,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    backgroundColor: colors.white,
+    backgroundColor: GREEN,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 4,
     marginBottom: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
+    maxWidth: 140,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.2,
     shadowRadius: 6,
-    elevation: 4,
-    maxWidth: 140,
+    elevation: 5,
   },
   labelText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   circle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: PICKUP_COLOR,
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.15)',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: GREEN,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
-    elevation: 4,
+    elevation: 5,
   },
   tail: {
     width: 0,
     height: 0,
     borderLeftWidth: 5,
     borderRightWidth: 5,
-    borderTopWidth: 6,
+    borderTopWidth: 7,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: 'rgba(0,0,0,0.1)',
+    borderTopColor: GREEN,
     marginTop: -1,
   },
 });

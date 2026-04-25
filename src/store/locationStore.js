@@ -61,12 +61,9 @@ const useLocationStore = create(
         }),
     }),
     {
-      name: 'bahirdar-location-draft',
+      name: 'bahirdar-location-v2',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
-        pickup: state.pickup,
-        destination: state.destination,
-        stops: state.stops,
         recentDestinations: state.recentDestinations,
       }),
     }

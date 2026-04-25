@@ -95,16 +95,37 @@ export async function reverseGeocode(lat, lng) {
       const data = await response.json();
       console.log('📍 Response status from API:', data.status);
 
-      // Check if API returned an error
       if (data.status !== 'OK') {
         console.warn('⚠️  Google Geocode API error:', data.status);
-        console.warn('    This usually means API key restrictions or permissions issue');
-        console.warn('    Falling back to coordinate-based address...');
-        // Don't return yet, use fallback below
       } else if (data.results?.length > 0) {
-        const address = data.results[0].formatted_address;
-        console.log('✅ Address found:', address);
-        return address;
+        const result = data.results[0];
+        const formatted = result.formatted_address;
+        
+        // Try to find the most specific name from address components
+        // (neighborhood > sublocality > point_of_interest)
+        let specificName = '';
+        const components = result.address_components || [];
+        
+        const preferredTypes = ['neighborhood', 'sublocality_level_1', 'sublocality', 'point_of_interest', 'premise'];
+        
+        for (const type of preferredTypes) {
+          const comp = components.find(c => c.types.includes(type));
+          if (comp) {
+            specificName = comp.long_name;
+            break;
+          }
+        }
+
+        // If we found a specific name, prefix it to the formatted address or use it as a hint
+        // For now, we return the formatted address, but the parser will handle extraction.
+        // We'll return a special format if we have a specific name.
+        if (specificName && !formatted.startsWith(specificName)) {
+          console.log(`✅ Specific location found: ${specificName}`);
+          return `${specificName}, ${formatted}`;
+        }
+
+        console.log('✅ Address found:', formatted);
+        return formatted;
       }
     } catch (error) {
       console.warn('⚠️  Google API call failed:', error.message);

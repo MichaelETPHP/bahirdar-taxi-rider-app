@@ -96,14 +96,9 @@ export default function BottomSheet({
 
   // Drive layout height (not translateY) so hit-testing matches the visible sheet.
   // A translated full-height view still occupies the full layout box and blocks the map.
-  const sheetHeight = useMemo(() => {
-    if (collapseOffset <= 0) return maxHeight;
-    return translateY.interpolate({
-      inputRange: [0, collapseOffset],
-      outputRange: [maxHeight, minHeight],
-      extrapolate: 'clamp',
-    });
-  }, [collapseOffset, maxHeight, minHeight, translateY]);
+  const sheetTransform = [
+    { translateY: translateY }
+  ];
 
   const panResponder = useRef(
     PanResponder.create({
@@ -142,11 +137,14 @@ export default function BottomSheet({
         const expanded = target === 0;
         setIsExpanded(expanded);
         onExpandedChange?.(expanded);
-        Animated.timing(translateY, {
+        Animated.spring(translateY, {
           toValue: target,
-          duration: 320,
-          useNativeDriver: false,
-          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+          tension: 80,
+          friction: 13,
+          velocity: 0.5,
+          restSpeedThreshold: 0.001,
+          restDisplacementThreshold: 0.001,
         }).start(() => {
           // Resume bounce hint when sheet is back in collapsed position
           if (target === offset) startBounce();
@@ -156,11 +154,12 @@ export default function BottomSheet({
   ).current;
 
   return (
-    <View style={styles.wrapper} collapsable={false}>
+    <View style={styles.wrapper} collapsable={false} pointerEvents="box-none">
       <Animated.View
+        pointerEvents="box-none"
         style={[
           styles.sheet,
-          { height: sheetHeight },
+          { height: maxHeight, transform: sheetTransform },
           style,
         ]}
       >
@@ -211,6 +210,10 @@ export default function BottomSheet({
 const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   sheet: {
     backgroundColor: colors.white,

@@ -31,6 +31,7 @@ export default function AppInput({
   placeholderTextColor,
   autoComplete = 'off',
   textContentType,
+  ...props
 }) {
   const [focused, setFocused] = useState(false);
 
@@ -89,6 +90,7 @@ export default function AppInput({
           selectionColor={colors.primary}
           autoComplete={autoComplete}
           textContentType={textContentType}
+          {...props}
         />
         {rightIcon && (
           <TouchableOpacity
@@ -131,7 +133,7 @@ const styles = StyleSheet.create({
   embeddedWrapper: {
     borderWidth: 0,
     backgroundColor: 'transparent',
-    paddingHorizontal: 16,
+    paddingHorizontal: 0, // Reduced from 16 to keep text close to prefix
     paddingVertical: 0,
     height: undefined,
     minHeight: undefined,

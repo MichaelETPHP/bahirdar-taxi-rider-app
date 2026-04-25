@@ -1,6 +1,6 @@
-import React, { useRef, useCallback, useState, useEffect } from 'react';
+import React, { useRef, useCallback, useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert,
+  View, Text, StyleSheet, Pressable, ActivityIndicator, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -10,7 +10,7 @@ import DestMarker from '../../components/map/DestMarker';
 import RoutePolyline from '../../components/map/RoutePolyline';
 import AppButton from '../../components/common/AppButton';
 import LocationPinButton from '../../components/ui/LocationPinButton';
-import { X } from 'lucide-react-native';
+import { X, MapPin, Clock, Flag } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -23,6 +23,7 @@ import { createTrip } from '../../services/tripService';
 import { connectSocket, joinRiderRoom } from '../../services/socketService';
 
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
+const formatDistance = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
 
 /**
  * Maps any vehicle category display name → valid backend enum value.
@@ -48,7 +49,8 @@ function toCategoryEnum(name = '') {
   return CATEGORY_ENUM_MAP[name.trim().toLowerCase()] || 'economy';
 }
 
-export default function ConfirmRideScreen({ navigation }) {
+export default function ConfirmRideScreen({ navigation, route }) {
+  const isRetry = route?.params?.retry === true;
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
   const [loading, setLoading] = useState(false);
@@ -74,13 +76,13 @@ export default function ConfirmRideScreen({ navigation }) {
   const fare = serverEstimate
     ? parseFloat(serverEstimate.estimated_fare_etb)
     : selectedCategory
-      ? parseFloat(
-          Math.max(
-            parseFloat(selectedCategory.minimum_fare) || 0,
-            parseFloat(selectedCategory.base_fare) +
-            distKm * parseFloat(selectedCategory.per_km_rate) +
-            durMin * parseFloat(selectedCategory.per_minute_rate)
-          ).toFixed(2)
+      ? Math.max(
+          parseFloat(selectedCategory.minimum_fare) || 0,
+          Math.round(
+            (parseFloat(selectedCategory.base_fare) || 0) +
+            distKm * (parseFloat(selectedCategory.per_km_rate) || 0) +
+            durMin * (parseFloat(selectedCategory.per_minute_rate) || 0)
+          )
         )
       : 0;
 
@@ -91,15 +93,21 @@ export default function ConfirmRideScreen({ navigation }) {
     destination ? { latitude: destination.lat, longitude: destination.lng } : null
   );
 
+  const arrivalTime = useMemo(() => {
+    if (!durMin || durMin <= 0) return null;
+    const eta = new Date(Date.now() + durMin * 60 * 1000);
+    return eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  }, [durMin]);
+
   const handleRecenter = useCallback(() => {
     if (mapRef.current && userCoords && destination) {
       mapRef.current.fitToCoordinates(
         [
           { latitude: userCoords.latitude, longitude: userCoords.longitude },
-          { latitude: destination.lat, longitude: destination.lng }
+          { latitude: destination.lat, longitude: destination.lng },
         ],
         {
-          edgePadding: { top: 100, right: 80, bottom: 350, left: 80 },
+          edgePadding: { top: 60, right: 30, bottom: 240, left: 30 },
           animated: true,
         }
       );
@@ -205,27 +213,55 @@ export default function ConfirmRideScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Map */}
+
+      {/* Map — fills most of screen */}
       <View style={styles.mapContainer}>
-        <RideMap mapRef={mapRef}>
-          {userCoords && <PickupMarker coordinate={userCoords} title={pickup?.name || 'Current Location'} />}
+        <RideMap mapRef={mapRef} style={StyleSheet.absoluteFillObject}>
+          {userCoords && (
+            <PickupMarker
+              coordinate={userCoords}
+              title={pickup?.name || 'Current Location'}
+            />
+          )}
           {destination && (
-            <DestMarker coordinate={{ latitude: destination.lat, longitude: destination.lng }} title={destination?.name || 'Destination'} />
+            <DestMarker
+              coordinate={{ latitude: destination.lat, longitude: destination.lng }}
+              title={destination?.name || 'Destination'}
+            />
           )}
           <RoutePolyline coordinates={routeCoords} />
         </RideMap>
 
-        <TouchableOpacity
+        {/* Back button */}
+        <Pressable
           style={[styles.backBtn, { top: insets.top + 12 }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation.goBack(); }}
+          android_ripple={{ color: 'rgba(0,0,0,0.1)', borderless: true }}
         >
           <X size={20} color={colors.textPrimary} />
-        </TouchableOpacity>
+        </Pressable>
 
+        {/* Recenter */}
         <LocationPinButton style={[styles.pinBtn, { top: insets.top + 12 }]} onPress={handleRecenter} />
+
+        {/* Route info chip at top */}
+        <View style={[styles.routeInfoChip, { top: insets.top + 70 }]} pointerEvents="none">
+          <MapPin size={11} color={colors.primary} />
+          <Text style={styles.routeDistanceText}>{formatDistance(distKm)}</Text>
+          <View style={styles.routeChipDivider} />
+          <Clock size={11} color={colors.primary} />
+          <Text style={styles.routeDistanceText}>{Math.round(durMin)} min</Text>
+          {arrivalTime && (
+            <>
+              <View style={styles.routeChipDivider} />
+              <Flag size={11} color={colors.primary} />
+              <Text style={styles.routeDistanceText}>{arrivalTime}</Text>
+            </>
+          )}
+        </View>
       </View>
 
-      {/* Footer */}
+      {/* Footer card — trip details + confirm button */}
       <View style={[styles.footerCard, { paddingBottom: Math.max(12, insets.bottom) + 6 }]}>
         <View style={styles.table}>
           <View style={styles.tableRow}>
@@ -261,7 +297,7 @@ export default function ConfirmRideScreen({ navigation }) {
         </View>
 
         <AppButton
-          title={loading ? 'Confirming…' : `Confirm ${selectedCategory?.name || 'Ride'}`}
+          title={loading ? 'Confirming…' : isRetry ? 'Find Again' : `Confirm ${selectedCategory?.name || 'Ride'}`}
           onPress={handleConfirm}
           disabled={loading || !destination || !selectedCategory}
           loading={loading}
@@ -269,13 +305,18 @@ export default function ConfirmRideScreen({ navigation }) {
           style={styles.confirmBtn}
         />
       </View>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.backgroundAlt },
-  mapContainer: { ...StyleSheet.absoluteFillObject },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+
+  mapContainer: {
+    flex: 1,
+  },
+
   backBtn: {
     position: 'absolute', left: 16,
     width: 44, height: 44, borderRadius: 22,
@@ -284,16 +325,15 @@ const styles = StyleSheet.create({
     zIndex: 10, ...shadow.md,
   },
   pinBtn: { position: 'absolute', right: 16, zIndex: 10 },
+
   footerCard: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 30,
     backgroundColor: colors.white,
-    borderTopLeftRadius: borderRadius['2xl'], borderTopRightRadius: borderRadius['2xl'],
-    paddingTop: 16, paddingHorizontal: 20,
-    borderTopWidth: 1, borderTopColor: colors.border,
+    borderTopLeftRadius: borderRadius['2xl'],
+    borderTopRightRadius: borderRadius['2xl'],
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderColor: colors.border,
     minHeight: '38%',
     ...shadow.lg,
     elevation: 18,
@@ -334,5 +374,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#16A34A',
     letterSpacing: 0.5,
+  },
+  routeInfoChip: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 6,
+    zIndex: 100,
+  },
+  routeDistanceText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginLeft: 6,
+  },
+  routeChipDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: colors.border,
+    marginHorizontal: 10,
   },
 });

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, Animated, Pressable, Dimensions, Image, Platform, InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -31,7 +31,7 @@ import RecentTrips from '../../components/ride/RecentTrips';
 import AppButton from '../../components/common/AppButton';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
-import { shadow, borderRadius } from '../../constants/layout';
+import { borderRadius } from '../../constants/layout';
 import useAuthStore from '../../store/authStore';
 import useLocationStore from '../../store/locationStore';
 import useRideStore from '../../store/rideStore';
@@ -167,7 +167,7 @@ export default function HomeScreen({ navigation }) {
   const mapRef = useRef(null);
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
-  const { destination, recentDestinations, setDestination, setPickup, pickup, userCoords, clearStops } = useLocationStore();
+  const { destination, recentDestinations, setDestination, setPickup, pickup, userCoords, setUserCoords, clearStops } = useLocationStore();
   const resetRideState = useRideStore((s) => s.reset);
   const displayCoords = userCoords ?? ADDIS_ABABA_COORDS;
   const selectedRideType = useRideStore((s) => s.selectedRideType);
@@ -251,6 +251,9 @@ export default function HomeScreen({ navigation }) {
       };
       checkCity();
 
+      // Sync userCoords in store for map centering
+      setUserCoords({ latitude: currentLocation.lat, longitude: currentLocation.lng });
+
       // Update pickup location with readable name
       if (readableLocationName && readableLocationName !== 'Getting location...') {
         setPickup({
@@ -261,7 +264,7 @@ export default function HomeScreen({ navigation }) {
         });
       }
     }
-  }, [currentLocation, readableLocationName, currentAddress, setPickup]);
+  }, [currentLocation, readableLocationName, currentAddress, setPickup, setUserCoords]);
   const lastDrawerCloseAt = useRef(0);
   const bannerMarqueeX = useRef(new Animated.Value(0)).current;
   const isLoggedInRef = useRef(!!user?.id);
@@ -525,10 +528,10 @@ export default function HomeScreen({ navigation }) {
   const PADDING = 0.001;
   useEffect(() => {
     if (userCoords && !hasRefitForUser.current) {
-      hasInitialRegion.current = false;
       hasRefitForUser.current = true;
+      hasInitialRegion.current = false; // Allow one initial center
     }
-  }, [userCoords]);
+  }, [!!userCoords]);
   useEffect(() => {
     if (!mapRef.current || hasInitialRegion.current) return;
     // Only center on user + destination — not on drivers array.
@@ -570,7 +573,28 @@ export default function HomeScreen({ navigation }) {
       edgePadding: { top: 88, right: 40, bottom: 220, left: 40 },
       animated: true,
     });
-  }, [destination, pickupCoordinate.latitude, pickupCoordinate.longitude, destination?.lat, destination?.lng, routeCoordinates]);
+  }, [destination?.id || destination?.placeId]);
+
+  // NEW: Re-center map dynamically when destination is cleared
+  useEffect(() => {
+    if (!destination && mapRef.current && hasInitialRegion.current) {
+      // Small delay to ensure state has settled and map is ready
+      const timer = setTimeout(() => {
+        if (mapRef.current && !destination) {
+          mapRef.current.animateToRegion(
+            {
+              latitude: displayCoords.latitude,
+              longitude: displayCoords.longitude,
+              latitudeDelta: 0.005,
+              longitudeDelta: 0.005,
+            },
+            600
+          );
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [!!destination, displayCoords.latitude, displayCoords.longitude]);
 
   const handleFindDrivers = useCallback(() => {
     navigation.navigate('ConfirmRide');
@@ -583,18 +607,31 @@ export default function HomeScreen({ navigation }) {
   }, [setDestination, clearStops, resetRideState]);
 
   const handleRecenter = useCallback(() => {
-    if (mapRef.current) {
-      mapRef.current.animateToRegion(
-        {
-          latitude: displayCoords.latitude,
-          longitude: displayCoords.longitude,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-        },
-        500
-      );
-    }
+    InteractionManager.runAfterInteractions(() => {
+      if (mapRef.current) {
+        mapRef.current.animateToRegion(
+          {
+            latitude: displayCoords.latitude,
+            longitude: displayCoords.longitude,
+            latitudeDelta: 0.005,
+            longitudeDelta: 0.005,
+          },
+          500
+        );
+      }
+    });
   }, [displayCoords.latitude, displayCoords.longitude]);
+
+  const handlePickupDrag = useCallback((coord) => {
+    // Update store with dragged position
+    setUserCoords({ latitude: coord.latitude, longitude: coord.longitude });
+    setPickup({
+      name: `${coord.latitude.toFixed(5)}, ${coord.longitude.toFixed(5)}`,
+      address: 'Custom pickup location',
+      lat: coord.latitude,
+      lng: coord.longitude,
+    });
+  }, [setUserCoords, setPickup]);
 
   const greeting = t(`home.${getGreeting()}`);
 
@@ -660,40 +697,45 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container} collapsable={false}>
-      {/* Map - full touch access for pan & zoom */}
-      <View style={styles.mapWrapper}>
-        <RideMap
-          mapRef={mapRef}
-          mapPadding={destination ? undefined : MAP_PADDING}
-        >
-          <UserMarker
-            coordinate={destination ? pickupCoordinate : displayCoords}
-            avatarUrl={avatarUrl}
-            name={user?.fullName}
-            label={destination ? t('home.currentLocation') : undefined}
-          />
-          {destination && (
-            <DestMarker
-              coordinate={{ latitude: destination.lat, longitude: destination.lng }}
-              caption={t('ride.destination')}
-              title={destination.name || destination.address || t('home.whereTo')}
-            />
-          )}
-          {destination && routeCoordinates.length >= 2 ? (
-            <RoutePolyline coordinates={routeCoordinates} />
-          ) : null}
-          {drivers.map((driver) => (
-            <DriverMarker key={driver.id} driver={driver} />
-          ))}
-        </RideMap>
+      <RideMap
+        mapRef={mapRef}
+        style={styles.mapWrapper}
+        mapPadding={destination ? undefined : MAP_PADDING}
+      >
+        {/* Draggable user/pickup marker — outside memo so callback is always fresh */}
+        <UserMarker
+          coordinate={destination ? pickupCoordinate : displayCoords}
+          avatarUrl={avatarUrl}
+          name={user?.fullName}
+          label={destination ? t('home.currentLocation') : undefined}
+          onDragEnd={handlePickupDrag}
+        />
+        {useMemo(() => (
+          <>
+            {destination && (
+              <DestMarker
+                coordinate={{ latitude: destination.lat, longitude: destination.lng }}
+                caption={t('ride.destination')}
+                title={destination.name || destination.address || t('home.whereTo')}
+              />
+            )}
+            {destination && routeCoordinates.length >= 2 && (
+              <RoutePolyline coordinates={routeCoordinates} />
+            )}
+            {drivers.map((driver) => (
+              <DriverMarker key={driver.id} driver={driver} />
+            ))}
+          </>
+        ), [destination, routeCoordinates, drivers, t])}
+      </RideMap>
 
-        {destination && routeDistanceKm != null ? (
-          <View style={[styles.routeInfoChip, { top: insets.top + 118 }]} pointerEvents="none">
-            {/* Distance */}
+      {/* Route info chip — pointerEvents none so it NEVER blocks map touch */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {destination && routeDistanceKm != null && (
+          <View style={[styles.routeInfoChip, { top: insets.top + 118 }]}>
             <MapPin size={11} color={colors.primary} />
             <Text style={styles.routeDistanceKm}>{formatDistance(routeDistanceKm)}</Text>
-            {/* Duration */}
-            {routeDurationMinFinal > 0 ? (
+            {routeDurationMinFinal > 0 && (
               <>
                 <View style={styles.routeChipDivider} />
                 <Clock size={11} color={colors.primary} />
@@ -703,44 +745,41 @@ export default function HomeScreen({ navigation }) {
                     : `${Math.floor(routeDurationMinFinal / 60)}h ${Math.round(routeDurationMinFinal % 60)}m`}
                 </Text>
               </>
-            ) : null}
-            {/* Arrival time */}
-            {arrivalTime ? (
+            )}
+            {arrivalTime && (
               <>
                 <View style={styles.routeChipDivider} />
                 <Flag size={11} color={colors.primary} />
                 <Text style={styles.routeDistanceKm}>{arrivalTime}</Text>
               </>
-            ) : null}
+            )}
           </View>
-        ) : null}
+        )}
       </View>
 
-      {/* SOS button - box-none lets map receive touches outside the button */}
-      <View style={styles.sosButtonWrap} pointerEvents="box-none">
-        <MovableCircleButton />
-      </View>
+      {/* SOS button - rendered directly to avoid full-screen touch blocking */}
+      <MovableCircleButton />
 
       {/* Location info at bottom - outside glass style */}
       {userCoords && (
-        <View style={[styles.locationBottomBar, { paddingBottom: insets.bottom + 12 }]}>
-          <TouchableOpacity
+        <View style={[styles.locationBottomBar, { paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
+          <Pressable
             style={styles.locationInfoButton}
             onPress={handleRecenter}
-            activeOpacity={0.8}
+            android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
           >
             <MapPin size={13} color={colors.primary} />
             <Text style={styles.locationBottomText} numberOfLines={1}>
               {pickup?.name || 'Current Location'}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </Pressable>
+          <Pressable
             style={styles.locationSyncButton}
             onPress={handleRecenter}
-            activeOpacity={0.7}
+            android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
           >
             <RefreshCw size={12} color={colors.primary} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
 
@@ -750,7 +789,10 @@ export default function HomeScreen({ navigation }) {
         <View className="flex-row items-center px-4" pointerEvents="box-none">
           <HamburgerButton isOpen={drawerOpen} onPress={handleToggleDrawer} />
           
-          <View className="flex-1 mx-3 h-10 rounded-full bg-black/40 flex-row items-center px-4 overflow-hidden border border-white/10">
+          <Pressable 
+            className="flex-1 mx-3 h-10 rounded-full bg-black/40 flex-row items-center px-4 overflow-hidden border border-white/10"
+            onPress={() => navigation.navigate('Search', { mode: 'destination' })}
+          >
             <Text className="text-white font-italic text-sm flex-1" numberOfLines={1}>
               {greeting}{userName}{' '}
             </Text>
@@ -761,7 +803,7 @@ export default function HomeScreen({ navigation }) {
                 <Hand size={14} color="#00674F" />
               )}
             </Animated.View>
-          </View>
+          </Pressable>
 
           <LocationPinButton onPress={handleRecenter} />
         </View>
@@ -791,23 +833,17 @@ export default function HomeScreen({ navigation }) {
         </Animated.View>
       </View>
 
-      {/* Bottom sheet:
-            • No destination  → opens at 50%, no expansion needed
-            • With destination → collapses to 50% by default (3 categories visible),
-                                  swipe up expands to 90% (all categories) */}
+      {/* Bottom sheet — self-positions at bottom, pointerEvents managed internally */}
       <View
-        style={[
-          styles.sheetWrapper,
-          { top: SCREEN_HEIGHT * (destination ? 0.1 : 0.5) },
-        ]}
+        style={styles.sheetWrapper}
         pointerEvents="box-none"
       >
         <BottomSheet
-          key={destination ? 'sheet-destination' : 'sheet-search'}
+          key="main-ride-sheet"
           style={styles.sheet}
-          minHeight={destination ? SCREEN_HEIGHT * 0.5 : undefined}
-          maxHeight={SCREEN_HEIGHT * (destination ? 0.9 : 0.5)}
-          initialExpanded={destination ? false : true}
+          minHeight={destination ? SCREEN_HEIGHT * 0.52 : 420}
+          maxHeight={SCREEN_HEIGHT * 0.85}
+          initialExpanded={false}
           onExpandedChange={setSheetExpanded}
           header={!destination ? (
             isInServiceArea ? (
@@ -825,10 +861,10 @@ export default function HomeScreen({ navigation }) {
             )
           ) : (
             <View style={styles.destinationOnlyInput}>
-              <TouchableOpacity
+              <Pressable
                 style={styles.destinationOnlyMain}
                 onPress={() => navigation.navigate('Search', { mode: 'destination' })}
-                activeOpacity={0.8}
+                android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
               >
                 <MapPin size={14} color={colors.primary} style={styles.destinationOnlyIcon} />
                 <View style={{ flex: 1 }}>
@@ -841,15 +877,15 @@ export default function HomeScreen({ navigation }) {
                     </Text>
                   )}
                 </View>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
                 style={styles.destinationOnlyAction}
                 onPress={handleClearDestinationFlow}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                activeOpacity={0.7}
+                android_ripple={{ color: 'rgba(239,68,68,0.1)', borderless: true }}
               >
                 <XCircle size={18} color="rgba(239,68,68,0.6)" />
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
         >
@@ -870,16 +906,19 @@ export default function HomeScreen({ navigation }) {
             </View>
           )}
           {destination && (
-            <>
+            <View style={styles.categorySection}>
               <RideTypeSelector showAll={sheetExpanded} />
-            </>
+            </View>
           )}
         </BottomSheet>
       </View>
 
       {/* Sticky Select button — fixed at bottom, never moves with sheet */}
       {destination && (
-        <View style={[styles.stickyButton, { paddingBottom: Math.max(16, insets.bottom) + 16 }]}>
+        <View 
+          style={[styles.stickyButton, { paddingBottom: Math.max(16, insets.bottom) + 16 }]}
+          pointerEvents="box-none"
+        >
           <Button
             label={selectedCategory ? `Select ${selectedCategory.name}` : 'Select a Category'}
             onPress={handleFindDrivers}
@@ -909,14 +948,14 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.locationGateBody}>
               BahirdarRide needs your location to show nearby drivers and set your pickup point.
             </Text>
-            <TouchableOpacity
+            <Pressable
               style={styles.locationGateBtn}
               onPress={openLocationSettings}
-              activeOpacity={0.85}
+              android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
             >
               <Settings size={14} color={colors.white} style={{ marginRight: 8 }} />
               <Text style={styles.locationGateBtnText}>Open Settings</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       )}
@@ -935,17 +974,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  sosButtonWrap: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 5,
-  },
   topBar: {
     position: 'absolute',
-    left: 16,
-    right: 16,
+    left: 12,
+    right: 12,
     flexDirection: 'column',
-    gap: 6,
-    zIndex: 1,
+    gap: 8,
+    zIndex: 2,
   },
   topBarRow: {
     flexDirection: 'row',
@@ -1026,15 +1061,19 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     borderRadius: borderRadius.pill,
-    backgroundColor: 'rgba(255,255,255,0.97)',
+    backgroundColor: 'rgba(255,255,255,0.98)',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(0,0,0,0.06)',
     zIndex: 2,
-    ...shadow.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
   },
   routeChipDivider: {
     width: 1,
@@ -1078,8 +1117,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   sheet: {
-    borderTopLeftRadius: 46,
-    borderTopRightRadius: 46,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 12,
   },
   destinationOnlyInput: {
     flexDirection: 'row',
@@ -1100,10 +1145,10 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   destinationOnlyText: {
-    flex: 1,
     fontSize: fontSize.md,
     color: colors.textPrimary,
-    fontWeight: fontWeight.medium,
+    fontWeight: fontWeight.bold,
+    lineHeight: 20,
   },
   destinationOnlyAction: {
     width: 34,
@@ -1137,6 +1182,10 @@ const styles = StyleSheet.create({
   bannerImage: {
     width: BANNER_WIDTH,
     height: 54,
+  },
+  categorySection: {
+    marginTop: 10,
+    paddingBottom: 20,
   },
   findBtn: {
     marginTop: 10,
@@ -1306,26 +1355,29 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: 14,
+    paddingTop: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    backgroundClor: 'rgba(0,0,0,0)',
   },
   locationInfoButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     backgroundColor: colors.white,
     borderRadius: borderRadius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
   },
   locationBottomText: {
     flex: 1,
@@ -1365,6 +1417,7 @@ const styles = StyleSheet.create({
   destinationSubText: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: -1,
+    lineHeight: 14,
   },
 });

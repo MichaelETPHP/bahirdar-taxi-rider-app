@@ -1,5 +1,5 @@
 import { Car, DollarSign } from 'lucide-react-native';
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated, Alert, Easing, Vibration,
@@ -22,6 +22,25 @@ import RoutePolyline from '../../components/map/RoutePolyline';
 import useRoute from '../../hooks/useRoute';
 import useSoundHaptics from '../../hooks/useSoundHaptics';
 import Button from '../../components/design-system/Button';
+import { haversineDistance, estimateDuration } from '../../utils/distanceUtils';
+import DriverMarker from '../../components/map/DriverMarker';
+import { useNearbyDrivers } from '../../hooks/useTripQueries';
+
+function normalizeDriverPoint(raw, idx) {
+  const rawLat = raw?.lat ?? raw?.latitude ?? raw?.driver_lat ?? raw?.current_lat ?? raw?.location?.lat ?? raw?.location?.latitude ?? raw?.coords?.lat ?? raw?.coords?.latitude;
+  const rawLng = raw?.lng ?? raw?.lon ?? raw?.longitude ?? raw?.driver_lng ?? raw?.current_lng ?? raw?.location?.lng ?? raw?.location?.longitude ?? raw?.coords?.lng ?? raw?.coords?.longitude;
+  const lat = Number(rawLat);
+  const lng = Number(rawLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return {
+    id: String(raw?.driver_id ?? raw?.id ?? raw?.driverId ?? raw?.user_id ?? `redis-${idx}`),
+    lat, lng,
+    heading: Number(raw?.heading ?? raw?.bearing ?? 0) || 0,
+    fullName: String(raw?.full_name ?? raw?.name ?? '').trim(),
+    carLabel: String(raw?.vehicle_category ?? raw?.car_type ?? '').trim(),
+    live: true,
+  };
+}
 
 const POLL_INTERVAL = 5000;
 
@@ -133,13 +152,79 @@ export default function SearchingScreen({ navigation }) {
 
   const {
     tripId, tripData, setDriver, setTripStatus, setFinalFare, resetTrip, mergeTripData,
-    fareEstimates, selectedCategoryId, categories,
+    fareEstimates, selectedCategoryId, categories, routeInfo
   } = useRideStore();
   const { token } = useAuthStore();
   const { userCoords, destination, clearAll: clearLocation } = useLocationStore();
 
   const pollRef = useRef(null);
   const handledRef = useRef(false);
+  const [countdown, setCountdown] = useState(60);
+  const [lockedFare, setLockedFare] = useState(null);
+  const [lockedCategory, setLockedCategory] = useState(null);
+  const [pingIndex, setPingIndex] = useState(0);
+
+  // Countdown timer
+  useEffect(() => {
+    if (countdown <= 0) {
+      goBackToConfirm();
+      return;
+    }
+    const timer = setInterval(() => {
+      setCountdown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  // ── Fare & Route Calculations ──────────────────────────
+  // Use distance from store or calculate if missing (Must match ConfirmRideScreen exactly)
+  const distKm = tripData?.distance_km 
+    || routeInfo?.distance_km
+    || (userCoords && destination
+      ? haversineDistance(userCoords.latitude, userCoords.longitude, destination.lat, destination.lng)
+      : 5.2);
+  
+  const durMin = tripData?.duration_min || routeInfo?.duration_min || estimateDuration(distKm);
+
+  // Find selected category details
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+
+  // Fare Calculation (Locked from confirmation)
+  // Priority: 1. tripData (confirmed) -> 2. Server Estimate -> 3. Local Calc
+  const serverEstimate = selectedCategory
+    ? fareEstimates.find((e) => e.vehicle_category?.toLowerCase() === selectedCategory.name?.toLowerCase())
+    : null;
+
+  const baseFare = parseFloat(tripData?.estimated_fare_etb ?? tripData?.total_fare_etb ?? 0);
+  
+  const fareValue = baseFare > 0 
+    ? baseFare 
+    : serverEstimate
+      ? parseFloat(serverEstimate.estimated_fare_etb)
+      : selectedCategory
+        ? Math.max(
+            parseFloat(selectedCategory.minimum_fare) || 0,
+            Math.round(
+              (parseFloat(selectedCategory.base_fare) || 0) +
+              distKm * (parseFloat(selectedCategory.per_km_rate) || 0) +
+              durMin * (parseFloat(selectedCategory.per_minute_rate) || 0)
+            )
+          )
+        : 0;
+
+  const fare = (lockedFare || fareValue) > 0 ? (lockedFare || fareValue).toFixed(2) : '—';
+  
+  const displayCategory = tripData?.vehicle_category
+    ? tripData.vehicle_category.charAt(0).toUpperCase() + tripData.vehicle_category.slice(1)
+    : selectedCategory?.name || 'Ride';
+
+  // Lock the values once they are available to prevent jumping during polling
+  useEffect(() => {
+    if (!lockedFare && fareValue > 0) setLockedFare(fareValue);
+    if (!lockedCategory && displayCategory) setLockedCategory(displayCategory);
+  }, [fareValue, displayCategory]);
+
+  const category = lockedCategory || displayCategory;
 
   // Route
   const pickupCoords = userCoords
@@ -150,16 +235,57 @@ export default function SearchingScreen({ navigation }) {
 
   const { coordinates: routeCoords } = useRoute(pickupCoords, dropoffCoords);
 
-  // Fit map to route once loaded
+  // Fetch nearby drivers to show on map and for "ping" animation
+  const { data: nearbyRes } = useNearbyDrivers(pickupCoords, 10);
+  const drivers = useMemo(() => {
+    const list = Array.isArray(nearbyRes?.data) ? nearbyRes.data : [];
+    return list.map((d, idx) => normalizeDriverPoint(d, idx)).filter(Boolean);
+  }, [nearbyRes]);
+
+  const fitOverview = useCallback(() => {
+    if (!mapRef.current || routeCoords.length < 2) return;
+    mapRef.current.fitToCoordinates(routeCoords, {
+      edgePadding: { top: 120, right: 60, bottom: 340, left: 60 },
+      animated: true,
+    });
+  }, [routeCoords]);
+
+  // Fit map to route initially
   useEffect(() => {
     if (routeCoords.length < 2 || !mapRef.current) return;
-    setTimeout(() => {
-      mapRef.current?.fitToCoordinates(routeCoords, {
-        edgePadding: { top: 100, right: 60, bottom: 340, left: 60 },
-        animated: true,
-      });
-    }, 600);
-  }, [routeCoords.length]);
+    setTimeout(fitOverview, 600);
+  }, [routeCoords.length, fitOverview]);
+
+  // "Ping" Animation Logic — cycle through nearby drivers to show active search
+  useEffect(() => {
+    if (drivers.length === 0 || !mapRef.current || handledRef.current) return;
+
+    let driverIdx = 0;
+    const interval = setInterval(() => {
+      if (handledRef.current || !mapRef.current) return;
+      
+      const idx = driverIdx % drivers.length;
+      const targetDriver = drivers[idx];
+      setPingIndex(idx + 1);
+      driverIdx++;
+
+      // 1. Zoom into a driver
+      mapRef.current.animateToRegion({
+        latitude: targetDriver.lat,
+        longitude: targetDriver.lng,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      }, 800);
+
+      // 2. Wait and zoom back out
+      setTimeout(() => {
+        if (!handledRef.current) fitOverview();
+      }, 2500);
+
+    }, 7000);
+
+    return () => clearInterval(interval);
+  }, [drivers, fitOverview]);
 
   const navigate = useCallback((screen) => {
     if (handledRef.current) return;
@@ -168,7 +294,15 @@ export default function SearchingScreen({ navigation }) {
     navigation.replace(screen);
   }, [navigation]);
 
-  const goBack = useCallback(() => {
+  const goBackToConfirm = useCallback(() => {
+    if (handledRef.current) return;
+    handledRef.current = true;
+    clearInterval(pollRef.current);
+    disconnectSocket();
+    navigation.replace('ConfirmRide', { retry: true });
+  }, [navigation]);
+
+  const goBackToHome = useCallback(() => {
     if (handledRef.current) return;
     handledRef.current = true;
     clearInterval(pollRef.current);
@@ -177,6 +311,15 @@ export default function SearchingScreen({ navigation }) {
     clearLocation();
     navigation.replace('Home');
   }, [navigation, resetTrip, clearLocation]);
+
+  const handleNoDrivers = useCallback(() => {
+    if (handledRef.current) return;
+    playErrorFeedback();
+    Alert.alert('No Drivers Found', 'No drivers available in your area right now. Would you like to try again?', [
+      { text: 'Cancel', style: 'cancel', onPress: goBackToHome },
+      { text: 'Try Again', onPress: goBackToConfirm },
+    ]);
+  }, [goBackToConfirm, goBackToHome, playErrorFeedback]);
 
   // ── Socket events ──────────────────────────────────────
   useEffect(() => {
@@ -190,14 +333,14 @@ export default function SearchingScreen({ navigation }) {
       navigate('DriverMatched');
     };
     const onNoDrivers = () => {
-      playErrorFeedback();
-      Alert.alert('No Drivers Found', 'No drivers available right now. Please try again.', [
-        { text: 'OK', onPress: goBack },
-      ]);
+      // We ignore early "no drivers" events from the server to allow the 
+      // full 60s countdown and "Ping Animation" to finish for user engagement.
+      console.log('ℹ️ Server reported no drivers, but waiting for timer to finish...');
     };
     const onCancelled = ({ reason }) => {
-      Alert.alert('Trip Cancelled', reason || 'This trip was cancelled.', [
-        { text: 'OK', onPress: goBack },
+      console.warn('❌ Trip Cancelled by Server/Socket:', reason);
+      Alert.alert('Trip Cancelled', reason || 'The request was cancelled by the system or driver.', [
+        { text: 'OK', onPress: goBackToHome },
       ]);
     };
 
@@ -210,11 +353,12 @@ export default function SearchingScreen({ navigation }) {
       socket.off('trip:no_drivers', onNoDrivers);
       socket.off('trip:cancelled', onCancelled);
     };
-  }, [navigate, goBack, setDriver, setTripStatus]);
+  }, [navigate, goBackToHome, handleNoDrivers, setDriver, setTripStatus]);
 
   // ── Fallback poll ──────────────────────────────────────
   useEffect(() => {
-    if (!tripId || !token) return;
+    // Only poll if we have a REAL trip ID (not the temporary "pending-" ID used for UI transition)
+    if (!tripId || tripId.toString().startsWith('pending-') || !token) return;
     pollRef.current = setInterval(async () => {
       try {
         const res = await getTrip(tripId, token);
@@ -244,16 +388,16 @@ export default function SearchingScreen({ navigation }) {
           setTripStatus('completed');
           navigate('TripComplete');
         } else if (s === 'cancelled') {
-          Alert.alert('Cancelled', 'Trip was cancelled.', [{ text: 'OK', onPress: goBack }]);
+          Alert.alert('Cancelled', 'Trip was cancelled.', [{ text: 'OK', onPress: goBackToHome }]);
         }
       } catch (_) {}
     }, POLL_INTERVAL);
     return () => clearInterval(pollRef.current);
-  }, [tripId, token, navigate, goBack, setDriver, setTripStatus, setFinalFare, mergeTripData]);
+  }, [tripId, token, navigate, goBackToHome, setDriver, setTripStatus, setFinalFare, mergeTripData]);
 
   const [cancelling, setCancelling] = useState(false);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setCancelling(true);
     triggerSpin();
     Alert.alert('Cancel Request', 'Are you sure you want to cancel?', [
@@ -262,27 +406,13 @@ export default function SearchingScreen({ navigation }) {
         text: 'Yes, Cancel', style: 'destructive',
         onPress: async () => {
           try { if (tripId) await cancelTrip(tripId, 'Changed my mind', token); } catch (_) {}
-          goBack();
+          goBackToHome();
         },
       },
     ]);
-  };
+  }, [tripId, token, goBackToHome]);
 
-  // ── Fare Logic (EXACT match to what user confirmed) ──
-  // We prioritize the fare recorded in the trip object to ensure zero discrepancy
-  const confirmedFare = tripData?.estimated_fare_etb || tripData?.total_fare_etb;
-  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
-  const matchedEstimate = fareEstimates.find(
-    (e) => e.vehicle_category?.toLowerCase() === (tripData?.vehicle_category || selectedCategory?.name || '').toLowerCase()
-  );
-
-  const fareRaw = parseFloat(confirmedFare) || parseFloat(matchedEstimate?.estimated_fare_etb) || 0;
-  // Ensure we use the exact same rounding (toFixed(2)) as the previous screen
-  const fare = fareRaw > 0 ? fareRaw.toFixed(2) : '—';
-
-  const category = tripData?.vehicle_category
-    ? tripData.vehicle_category.charAt(0).toUpperCase() + tripData.vehicle_category.slice(1)
-    : selectedCategory?.name || 'Ride';
+  // (Logic moved to top for clarity)
 
   return (
     <View style={styles.root}>
@@ -291,6 +421,9 @@ export default function SearchingScreen({ navigation }) {
         {pickupCoords && <PickupMarker coordinate={pickupCoords} title={tripData?.pickup_address || 'Your location'} />}
         {dropoffCoords && <DestMarker coordinate={dropoffCoords} title={tripData?.dropoff_address || destination?.name || 'Destination'} />}
         <RoutePolyline coordinates={routeCoords} />
+        {drivers.map(d => (
+          <DriverMarker key={d.id} driver={d} />
+        ))}
       </RideMap>
 
       {/* ── Emerald gradient overlay (bottom two-thirds) ── */}
@@ -311,8 +444,15 @@ export default function SearchingScreen({ navigation }) {
           </Animated.View>
         </View>
         <View>
-          <Text style={styles.badgeTitle}>Finding your driver</Text>
-          <SearchDots />
+          <Text style={styles.badgeTitle}>
+            {drivers.length > 0 
+              ? `Checking driver ${pingIndex || 1} of ${Math.min(drivers.length, 5)}...`
+              : 'Finding your driver...'}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <SearchDots />
+            <Text style={styles.countdownText}>{countdown}s</Text>
+          </View>
         </View>
       </View>
 
@@ -409,6 +549,13 @@ const styles = StyleSheet.create({
   badgeTitle: {
     fontSize: fontSize.sm, fontWeight: fontWeight.semibold,
     color: colors.white,
+  },
+  countdownText: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: fontWeight.bold,
+    marginLeft: 4,
+    marginTop: 6,
   },
 
   // Bottom sheet — sits on top of gradient

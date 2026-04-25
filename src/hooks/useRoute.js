@@ -48,7 +48,7 @@ export default function useRoute(origin, destination) {
       { latitude: dest.latitude, longitude: dest.longitude },
     ];
 
-    // Show straight line immediately while the real route loads
+    // Show straight line immediately while the real route loads (UX: something appears instantly)
     setCoordinates(fallback);
     setLoading(true);
 
@@ -61,7 +61,7 @@ export default function useRoute(origin, destination) {
         // Get auth token from store
         const authToken = useAuthStore.getState().token;
 
-        // Call backend API for routing (backend handles OSRM internally)
+        // Call backend API for routing (which uses OSRM internally)
         const result = await getRouteFromBackend(
           orig.latitude,
           orig.longitude,
@@ -72,14 +72,21 @@ export default function useRoute(origin, destination) {
 
         if (abortRef.current !== token) return;
 
-        // Backend returns coordinates directly
-        const coords = result.coordinates || fallback;
+        // We MUST have at least 3 points for a real road-following route
+        // (2 points is almost always just the straight line fallback)
+        const hasRoadPoints = Array.isArray(result.coordinates) && result.coordinates.length > 2;
+        
+        if (hasRoadPoints) {
+          setCoordinates(result.coordinates);
+        } else {
+          console.warn('[useRoute] Backend returned insufficient road points. Keeping straight line.');
+          setCoordinates(fallback);
+        }
 
-        setCoordinates(coords.length >= 2 ? coords : fallback);
         setDistanceKm(result.distanceKm || 0);
         setDurationMin(result.durationMin || 0);
       } catch (err) {
-        console.error('useRoute error:', err);
+        console.error('[useRoute] failed to fetch road route:', err.message);
         if (abortRef.current === token) setCoordinates(fallback);
       } finally {
         if (abortRef.current === token) setLoading(false);

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Image, Animated, Easing } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { colors } from '../../constants/colors';
 import { shadow } from '../../constants/layout';
@@ -15,6 +15,47 @@ function headingToDeg(deg) {
 // Show first name only — keeps bubble compact
 function firstName(fullName = '') {
   return fullName.trim().split(' ')[0] || '';
+}
+
+function ActivePulse() {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(scale, {
+            toValue: 2.5,
+            duration: 2000,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: 2000,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.4, duration: 0, useNativeDriver: true }),
+        ]),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  return (
+    <Animated.View 
+      style={[
+        styles.pulse, 
+        { transform: [{ scale }], opacity }
+      ]} 
+    />
+  );
 }
 
 export default React.memo(function DriverMarker({ driver, onPress }) {
@@ -35,10 +76,14 @@ export default React.memo(function DriverMarker({ driver, onPress }) {
     <Marker
       coordinate={{ latitude: driver.lat, longitude: driver.lng }}
       onPress={onPress}
-      tracksViewChanges={tracks}
+      tracksViewChanges={true} // Keep true for smooth pulse animation
       anchor={{ x: 0.5, y: 1 }}
+      zIndex={50} // Above route, below user
     >
       <View style={styles.root}>
+        {/* Active Pulse Animation */}
+        {isLive && <ActivePulse />}
+
         {/* Name bubble — only for live Redis drivers */}
         {isLive && !!name && (
           <View style={styles.nameWrap}>
@@ -116,7 +161,15 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
   },
-
+  pulse: {
+    position: 'absolute',
+    top: 15, // Adjust to center on car image
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.primary,
+    zIndex: -1,
+  },
   // Pointer tip below card
   tip: {
     marginTop: -1,

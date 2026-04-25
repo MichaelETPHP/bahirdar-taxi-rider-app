@@ -335,24 +335,26 @@ export default function DriverMatchedScreen({ navigation }) {
   return (
     <View style={styles.root}>
       {/* ── Full-screen map ── */}
-      <RideMap mapRef={mapRef} style={StyleSheet.absoluteFill}>
-        {userCoords && (
-          <PickupMarker coordinate={userCoords} title={tripData?.pickup_address || 'Your location'} />
-        )}
-        {driverCoord && driver && (
-          <DriverMarker
-            driver={{
-              id: driver.id,
-              lat: driverCoord.latitude,
-              lng: driverCoord.longitude,
-              heading: driverLocation?.heading ?? 0,
-              fullName: driver.name,
-              live: true,
-            }}
-          />
-        )}
-        <RoutePolyline coordinates={routeCoords} dashed />
-      </RideMap>
+      <View style={styles.mapWrapper}>
+        <RideMap mapRef={mapRef} style={StyleSheet.absoluteFill}>
+          {userCoords && (
+            <PickupMarker coordinate={userCoords} title={tripData?.pickup_address || 'Your location'} />
+          )}
+          {driverCoord && driver && (
+            <DriverMarker
+              driver={{
+                id: driver.id,
+                lat: driverCoord.latitude,
+                lng: driverCoord.longitude,
+                heading: driverLocation?.heading ?? 0,
+                fullName: driver.name,
+                live: true,
+              }}
+            />
+          )}
+          <RoutePolyline coordinates={routeCoords} dashed />
+        </RideMap>
+      </View>
 
       {/* ── Gradient overlay ── */}
       <LinearGradient
@@ -489,6 +491,10 @@ export default function DriverMatchedScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  mapWrapper: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: -1,
+  },
 
   gradient: {
     position: 'absolute', left: 0, right: 0, bottom: 0, height: '60%',

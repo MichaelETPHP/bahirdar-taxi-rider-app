@@ -22,6 +22,8 @@ import {
   LogOut,
   Globe,
   CircleCheck,
+  Car,
+  Phone,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { FacebookIcon, InstagramIcon, TiktokIcon, TelegramIcon } from '../common/BrandIcons';
@@ -30,6 +32,7 @@ import { colors } from '../../constants/colors';
 import { fontSize, fontWeight, fontFamilyBold, fontFamilySemiBold, fontFamilyRegular } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
 import useAuthStore from '../../store/authStore';
+import useLocationStore from '../../store/locationStore';
 import { changeLanguage } from '../../i18n';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -106,6 +109,28 @@ function CustomDrawer({ visible, onClose, navigation }) {
     ]).start();
   }, [slideAnim, fadeAnim]);
 
+  // Snap-close with spring (faster, no setTimeout needed)
+  const animateCloseSnap = useCallback(() => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+    Animated.parallel([
+      Animated.spring(slideAnim, {
+        toValue: -DRAWER_WIDTH,
+        tension: 90,
+        friction: 14,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      isClosingRef.current = false;
+      onClose?.();
+    });
+  }, [slideAnim, fadeAnim, onClose]);
+
   // Handle drawer open/close trigger
   useEffect(() => {
     if (visible) {
@@ -137,22 +162,15 @@ function CustomDrawer({ visible, onClose, navigation }) {
         slideAnim.setValue(nextX);
       },
       onPanResponderRelease: (_, { dx, vx }) => {
-        const shouldClose = dx < -70 || vx < -0.8;
+        const shouldClose = dx < -60 || vx < -0.5;
         if (shouldClose) {
-          if (!isClosingRef.current) {
-            isClosingRef.current = true;
-            animateClose();
-            setTimeout(() => {
-              onClose?.();
-              isClosingRef.current = false;
-            }, 220);
-          }
+          animateCloseSnap();
           return;
         }
         Animated.spring(slideAnim, {
           toValue: 0,
-          tension: 65,
-          friction: 11,
+          tension: 80,
+          friction: 13,
           useNativeDriver: true,
         }).start();
       },
@@ -161,32 +179,18 @@ function CustomDrawer({ visible, onClose, navigation }) {
 
   // Close drawer when overlay is tapped
   const handleOverlayPress = useCallback(() => {
-    if (isClosingRef.current) return;
-    isClosingRef.current = true;
-    animateClose();
-    setTimeout(() => {
-      onClose?.();
-      isClosingRef.current = false;
-    }, 220);
-  }, [animateClose, onClose]);
+    animateCloseSnap();
+  }, [animateCloseSnap]);
 
   // Navigate to screen and close drawer
   const handleNavigate = useCallback((screen) => {
-    if (isClosingRef.current) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    isClosingRef.current = true;
-    animateClose();
+    animateCloseSnap();
+    // Navigate after animation starts
     setTimeout(() => {
-      try {
-        navigation.navigate(screen);
-      } catch (e) {
-        console.warn('Navigation error:', e);
-      } finally {
-        onClose?.();
-        isClosingRef.current = false;
-      }
-    }, 220);
-  }, [animateClose, navigation, onClose]);
+      try { navigation.navigate(screen); } catch (e) { console.warn(e); }
+    }, 120);
+  }, [animateCloseSnap, navigation]);
 
   const handleLanguageToggle = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -209,10 +213,8 @@ function CustomDrawer({ visible, onClose, navigation }) {
     ]);
   }, [t, logout, handleOverlayPress]);
 
-  if (!visible) return null;
-
   return (
-    <View style={styles.container} pointerEvents="box-none">
+    <View style={[styles.container, { display: visible ? 'flex' : 'none' }]} pointerEvents={visible ? 'box-none' : 'none'}>
       {/* Overlay - tap to close entire drawer */}
       <Animated.View
         style={[
@@ -295,7 +297,7 @@ function CustomDrawer({ visible, onClose, navigation }) {
         </View>
 
         {/* Menu items */}
-        <View style={styles.menuContainer}>
+        <View style={styles.content}>
           {MENU_ITEMS.map((item) => {
             const IconComponent = ICON_MAP[item.key];
             return (
@@ -342,14 +344,14 @@ function CustomDrawer({ visible, onClose, navigation }) {
 
           <View style={styles.divider} />
 
-          {/* Logout */}
+          {/* Support Call Button */}
           <TouchableOpacity
-            style={styles.menuItem}
-            onPress={handleLogout}
+            style={[styles.menuItem, styles.supportCallItem]}
+            onPress={() => Linking.openURL('tel:9040')}
             activeOpacity={0.7}
           >
-            <LogOut size={20} color={colors.error} />
-            <Text style={styles.menuLogout}>{t('drawer.logout')}</Text>
+            <Phone size={20} color={colors.primary} />
+            <Text style={styles.supportCallLabel}>Call Support (9040)</Text>
           </TouchableOpacity>
         </View>
 
@@ -463,8 +465,9 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.regular,
     fontFamily: fontFamilyRegular,
   },
-  menuContainer: {
-    paddingVertical: 8,
+  content: {
+    flex: 1,
+    paddingVertical: 10,
   },
   menuItem: {
     flexDirection: 'row',
@@ -544,5 +547,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 2,
+  },
+  supportCallItem: {
+    marginTop: 10,
+    backgroundColor: colors.primaryLight,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  supportCallLabel: {
+    fontSize: fontSize.lg,
+    color: colors.primary,
+    fontWeight: fontWeight.bold,
   },
 });

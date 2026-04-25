@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  InputAccessoryView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
@@ -95,6 +96,7 @@ export default function PhoneEntryScreen({ navigation }) {
   const setUser = useAuthStore((s) => s.setUser);
   const storedPhone = useAuthStore((s) => s.phone);
   const bounceAnim = useRef(new Animated.Value(1)).current;
+  const focusAnim = useRef(new Animated.Value(0)).current; // 0 = blurred, 1 = focused
   const prevValid = useRef(false);
 
   useEffect(() => {
@@ -111,6 +113,42 @@ export default function PhoneEntryScreen({ navigation }) {
       }
     })();
   }, []);
+
+  const handleFocus = () => {
+    setInputFocused(true);
+    Animated.spring(focusAnim, {
+      toValue: 1,
+      tension: 40,
+      friction: 7,
+      useNativeDriver: false, // background color and width need false
+    }).start();
+  };
+
+  const handleBlur = () => {
+    setInputFocused(false);
+    Animated.spring(focusAnim, {
+      toValue: 0,
+      tension: 40,
+      friction: 7,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  // Liquid color interpolation
+  const inputBgColor = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.white, 'rgba(255, 255, 255, 0.95)'],
+  });
+
+  const inputScale = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.03],
+  });
+
+  const inputBorderColor = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.border, colors.primary],
+  });
 
   const handlePhoneChange = (text) => {
     let digits = text.replace(/\D/g, '');
@@ -242,35 +280,34 @@ export default function PhoneEntryScreen({ navigation }) {
         </View>
       </View>
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      {/* Language selector — top right, always below status bar */}
-      <TouchableOpacity
-        style={[styles.langBtn, { top: insets.top + 10 }]}
-        onPress={handleLanguageToggle}
-        activeOpacity={0.8}
-      >
-        <Globe size={12} color="rgba(255,255,255,0.9)" />
-        <Text style={styles.langBtnText}>{i18n.language === 'en' ? 'EN' : 'አማ'}</Text>
-        <ChevronDown size={9} color="rgba(255,255,255,0.7)" />
-      </TouchableOpacity>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} style={styles.flex} accessible={false}>
+        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+          {/* Language selector — top right, always below status bar */}
+          <TouchableOpacity
+            style={[styles.langBtn, { top: insets.top + 10 }]}
+            onPress={handleLanguageToggle}
+            activeOpacity={0.8}
+          >
+            <Globe size={12} color="rgba(255,255,255,0.9)" />
+            <Text style={styles.langBtnText}>{i18n.language === 'en' ? 'EN' : 'አማ'}</Text>
+            <ChevronDown size={9} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
 
-      <View style={styles.flex}>
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoid}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
-          enabled={Platform.OS === 'ios'}
-        >
-          <View style={styles.column}>
-            <ScrollView
-              style={styles.scrollFill}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
+          <View style={styles.flex}>
+            <KeyboardAvoidingView
+              style={styles.keyboardAvoid}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+              enabled={Platform.OS === 'ios'}
             >
-              <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-                <View style={styles.scrollInner}>
+              <View style={styles.column}>
+                <ScrollView
+                  style={styles.scrollFill}
+                  contentContainerStyle={styles.scrollContent}
+                  keyboardShouldPersistTaps="handled"
+                  scrollEnabled={false}
+                  showsVerticalScrollIndicator={false}
+                >
                   <View style={styles.centerWrapper}>
                     <View style={styles.container}>
                       <View style={styles.content}>
@@ -283,7 +320,17 @@ export default function PhoneEntryScreen({ navigation }) {
                         <Text style={styles.sub}>{t('auth.welcomeSub')}</Text>
 
                         <View style={styles.loginCard}>
-                          <View style={[styles.phoneInput, inputFocused && styles.phoneInputFocused, isValid && styles.phoneInputValid, hasPrefixError && styles.phoneInputError]}>
+                          <Animated.View 
+                            style={[
+                              styles.phoneInput, 
+                              { 
+                                backgroundColor: inputBgColor,
+                                borderColor: inputBorderColor,
+                                transform: [{ scale: inputScale }]
+                              },
+                              hasPrefixError && styles.phoneInputError
+                            ]}
+                          >
                             <TouchableOpacity
                               style={styles.countryCodeSection}
                               onPress={() => phoneInputRef.current?.focus()}
@@ -302,16 +349,19 @@ export default function PhoneEntryScreen({ navigation }) {
                               placeholderTextColor={colors.inputPlaceholder}
                               value={phone}
                               onChangeText={handlePhoneChange}
-                              keyboardType="phone-pad"
+                              keyboardType="number-pad"
+                              returnKeyType="done"
+                              onSubmitEditing={Keyboard.dismiss}
+                              inputAccessoryViewID="doneButton"
                               autoComplete="tel"
                               textContentType="telephoneNumber"
                               autoCapitalize="none"
                               embedded
                               style={styles.phoneInputInner}
-                              inputStyle={[styles.phoneInputText, isValid && styles.phoneInputTextValid]}
+                              inputStyle={[styles.phoneInputText, (isValid || inputFocused) && styles.phoneInputTextActive]}
                               inputRef={phoneInputRef}
-                              onFocus={() => setInputFocused(true)}
-                              onBlur={() => setInputFocused(false)}
+                              onFocus={handleFocus}
+                              onBlur={handleBlur}
                             />
                             <TouchableOpacity
                               onPress={handleCheckPress}
@@ -323,13 +373,13 @@ export default function PhoneEntryScreen({ navigation }) {
                                 {loading ? (
                                   <ActivityIndicator size={22} color={colors.primary} />
                                 ) : isValid ? (
-                                  <CheckCircle size={30} color={colors.primary} />
+                                  <CheckCircle size={32} color={colors.primary} />
                                 ) : (
                                   <View style={styles.emptyCircle} />
                                 )}
                               </Animated.View>
                             </TouchableOpacity>
-                          </View>
+                          </Animated.View>
 
                           {hasPrefixError && (
                             <Text style={styles.phoneError}>{`😠 ${t('auth.phonePrefixError')}`}</Text>
@@ -351,32 +401,6 @@ export default function PhoneEntryScreen({ navigation }) {
                             </View>
                           )}
 
-                          {/* Temporary Test API Button — COMMENTED OUT FOR PRODUCTION */}
-                          {/* <TouchableOpacity
-                      onPress={handleTestAPI}
-                      disabled={testApiLoading}
-                      style={[
-                        styles.testApiBtn,
-                        testApiLoading && styles.testApiBtnLoading,
-                        testApiSuccess === true && styles.testApiBtnSuccess,
-                        testApiSuccess === false && styles.testApiBtnError,
-                      ]}
-                      activeOpacity={testApiLoading ? 1 : 0.7}
-                    >
-                      {testApiLoading ? (
-                        <ActivityIndicator size={14} color={colors.white} />
-                      ) : testApiSuccess === true ? (
-                        <CheckCircle size={14} color={colors.white} />
-                      ) : testApiSuccess === false ? (
-                        <AlertCircle size={14} color={colors.white} />
-                      ) : (
-                        <Wifi size={14} color={colors.white} />
-                      )}
-                      <Text style={styles.testApiBtnText}>
-                        {testApiLoading ? 'Testing...' : testApiSuccess === true ? '✓ Connected' : testApiSuccess === false ? '✗ Failed' : 'Test API Connection'}
-                      </Text>
-                    </TouchableOpacity> */}
-
                           <View style={styles.dividerHorizontal} />
 
                           <AppButton 
@@ -385,16 +409,22 @@ export default function PhoneEntryScreen({ navigation }) {
                             disabled={!isValid || loading}
                             loading={loading}
                             shimmer={true}
-                            style={{ width: '100%', marginTop: 4 }}
+                            style={{ 
+                              width: '110%', // Make it wider than the container
+                              marginTop: 12, 
+                              height: 58,
+                              borderRadius: 16,
+                            }}
                           />
                         </View>
                       </View>
                     </View>
                   </View>
-                </View>
-              </TouchableWithoutFeedback>
-            </ScrollView>
+                </ScrollView>
+              </View>
+            </KeyboardAvoidingView>
 
+            {/* Footer moved OUTSIDE of KeyboardAvoidingView so it stays put */}
             <View style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}>
               <View style={styles.socialIcons}>
                 <TouchableOpacity onPress={() => Linking.openURL('https://facebook.com')} style={styles.socialBtn}>
@@ -415,13 +445,22 @@ export default function PhoneEntryScreen({ navigation }) {
               </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
-      </View>
-      <TermsConditionsModal
-        visible={termsModalVisible}
-        onClose={() => setTermsModalVisible(false)}
-      />
-      </SafeAreaView>
+          <TermsConditionsModal
+            visible={termsModalVisible}
+            onClose={() => setTermsModalVisible(false)}
+          />
+        </SafeAreaView>
+      </TouchableWithoutFeedback>
+
+      {Platform.OS === 'ios' && (
+        <InputAccessoryView nativeID="doneButton">
+          <View style={styles.accessory}>
+            <TouchableOpacity onPress={Keyboard.dismiss} style={styles.accessoryBtn}>
+              <Text style={styles.accessoryText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView>
+      )}
     </View>
   );
 }
@@ -471,62 +510,60 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   logoWrapper: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
   },
   heading: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: fontWeight.bold,
     color: colors.white,
-    marginBottom: 4,
+    marginBottom: 6,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   sub: {
-    fontSize: fontSize.sm,
-    color: colors.white,
-    marginBottom: 16,
+    fontSize: fontSize.md,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 24,
     lineHeight: 22,
     textAlign: 'center',
   },
   loginCard: {
     width: '100%',
     backgroundColor: colors.white,
-    borderRadius: 12,
-    paddingVertical: 18,
-    paddingHorizontal: 24,
+    borderRadius: 28,
+    paddingVertical: 28,
+    paddingHorizontal: 16, // Reduced from 24 to make internal elements wider
     alignItems: 'center',
-    ...shadow.sm,
+    ...shadow.lg,
   },
   phoneInput: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    height: 54,
-    borderWidth: 1.5,
+    height: 68,
+    borderWidth: 2,
     borderColor: colors.border,
-    borderRadius: 27,
+    borderRadius: 30, // Precise 30px as requested
     backgroundColor: colors.white,
-    paddingHorizontal: 12,
-  },
-  phoneInputFocused: {
-    borderColor: '#C0C0C0',
-    backgroundColor: '#F5F5F5',
-  },
-  phoneInputValid: {
-    borderColor: '#C0C0C0',
-    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   phoneInputError: {
     borderColor: colors.error,
@@ -538,64 +575,69 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     alignSelf: 'center',
+    fontWeight: fontWeight.medium,
   },
   countryCodeSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    gap: 5,
+    paddingLeft: 4, // Minimal left padding
+    gap: 4, // Reduced from 8
   },
   divider: {
     width: 1,
-    height: 20,
-    backgroundColor: colors.border,
+    height: 24,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    marginHorizontal: 6, // Slightly more space for the divider to breathe
   },
   ethiopiaFlagImage: {
-    width: 18,
-    height: 13,
+    width: 20, // Reduced from 22
+    height: 14,
     borderRadius: 2,
   },
   code: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
+    fontSize: 17, // Slightly smaller to save space
+    fontWeight: fontWeight.bold,
     color: colors.textPrimary,
+    marginLeft: 0,
   },
   phoneInputInner: {
     marginBottom: 0,
-    flex: 1,
-    height: 54,
-    marginLeft: 4,
+    flex: 2, // Give more flex weight to the input area
+    height: 68,
+    marginLeft: 0,
   },
   phoneInputText: {
-    fontSize: fontSize.md,
+    fontSize: 18,
     fontWeight: fontWeight.medium,
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    paddingLeft: 0, // Ensure text starts right after country code
   },
-  phoneInputTextValid: {
-    color: '#111111',
-    fontWeight: fontWeight.semibold,
+  phoneInputTextActive: {
+    color: colors.textPrimary,
+    fontWeight: fontWeight.bold,
   },
   dividerHorizontal: {
     width: '100%',
-    height: 1,
-    backgroundColor: '#E2E8F0',
+    height: 1.5,
+    backgroundColor: '#F1F5F9',
     marginTop: 24,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   checkButtonInline: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingLeft: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkCircle: {
-    width: 30,
-    height: 30,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
   emptyCircle: {
-    width: 30,
-    height: 30,
+    width: 36,
+    height: 36,
   },
   footer: {
     width: '100%',
@@ -612,14 +654,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   socialBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   terms: {
     fontSize: fontSize.xs,
@@ -627,41 +669,43 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     textDecorationLine: 'underline',
+    opacity: 0.8,
   },
   suspendedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    justifyContent: 'center', // Center content
+    marginTop: 12,
     backgroundColor: 'rgba(239,68,68,0.08)',
-    borderWidth: 1,
+    borderBottomWidth: 1, // Only bottom border for a flat look
+    borderTopWidth: 1,
     borderColor: 'rgba(239,68,68,0.25)',
-    borderRadius: 8,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     width: '100%',
   },
   recentPhoneChip: {
-    marginTop: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderRadius: 999,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: 'rgba(0,103,79,0.1)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    alignSelf: 'flex-start',
+    gap: 8,
+    alignSelf: 'center',
   },
   recentPhoneText: {
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
     color: colors.primary,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.bold,
   },
   suspendedText: {
     flex: 1,
     fontSize: fontSize.xs,
     color: colors.error,
     lineHeight: 18,
-    fontWeight: fontWeight.medium,
+    fontWeight: fontWeight.semibold,
   },
   langBtn: {
     position: 'absolute',
@@ -669,45 +713,38 @@ const styles = StyleSheet.create({
     zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    gap: 6,
+    backgroundColor: 'rgba(37, 99, 235, 0.8)', // Stronger Vibrant Blue
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
     borderRadius: borderRadius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   langBtnText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    color: colors.white,
-    letterSpacing: 0.4,
-  },
-  testApiBtn: {
-    marginTop: 15,
-    backgroundColor: colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-  },
-  testApiBtnLoading: {
-    backgroundColor: '#FFC107',
-    opacity: 0.8,
-  },
-  testApiBtnSuccess: {
-    backgroundColor: '#4CAF50',
-  },
-  testApiBtnError: {
-    backgroundColor: '#F44336',
-  },
-  testApiBtnText: {
-    color: colors.white,
-    fontWeight: fontWeight.bold,
     fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  accessory: {
+    width: '100%',
+    height: 44,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingHorizontal: 16,
+  },
+  accessoryBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  accessoryText: {
+    color: colors.primary,
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
