@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, ActivityIndicator, Animated, Alert,
+  TextInput, ActivityIndicator, Animated, Alert, BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, Circle, MapPin, Route, Clock, DollarSign, Star } from 'lucide-react-native';
@@ -23,6 +23,28 @@ export default function TripCompleteScreen({ navigation }) {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Disable back button and swipe
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      gestureEnabled: false,
+      headerLeft: () => null, // Remove back button if any
+    });
+  }, [navigation]);
+
+  useEffect(() => {
+    const backAction = () => {
+      // Return true to prevent default back behavior
+      return true;
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction,
+    );
+
+    return () => backHandler.remove();
+  }, []);
+
   const fare = finalFare?.amount || tripData?.estimated_fare_etb || 0;
   const distKm = finalFare?.distanceKm || tripData?.distance_km || 0;
   const durMin = finalFare?.durationMin || tripData?.duration_min || 0;
@@ -33,13 +55,20 @@ export default function TripCompleteScreen({ navigation }) {
     Animated.spring(scaleAnim, { toValue: 1, speed: 10, bounciness: 16, useNativeDriver: true }).start();
   }, []);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (selectedStars) => {
+    setStars(selectedStars);
     setSubmitting(true);
+    
+    // Small delay to allow user to see their selection (simulates "thinking")
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
     try {
       if (tripId) {
-        await submitRating(tripId, { rating: stars, comment: comment.trim() || undefined }, token);
+        await submitRating(tripId, { rating: selectedStars }, token);
       }
-    } catch (_) {}
+    } catch (_) {
+      // Mock success even if network fails
+    }
     finishFlow();
   };
 
@@ -64,43 +93,19 @@ export default function TripCompleteScreen({ navigation }) {
       <Text style={styles.title}>Trip Completed!</Text>
       <Text style={styles.subtitle}>Thanks for riding with BahirdarRide</Text>
 
-      {/* Receipt */}
-      <View style={styles.receipt}>
-        <View style={styles.receiptRow}>
-          <Circle size={12} color={colors.primary} />
-          <Text style={styles.receiptLabel}>From</Text>
-          <Text style={styles.receiptValue} numberOfLines={1}>
-            {tripData?.pickup_address || '—'}
-          </Text>
-        </View>
-        <View style={styles.receiptDivider} />
-        <View style={styles.receiptRow}>
-          <MapPin size={12} color="#EF4444" />
-          <Text style={styles.receiptLabel}>To</Text>
-          <Text style={styles.receiptValue} numberOfLines={1}>
-            {tripData?.dropoff_address || '—'}
-          </Text>
-        </View>
-        <View style={styles.receiptSeparator} />
+      {/* Trip Summary Stats */}
+      <View style={styles.statsCard}>
         <View style={styles.statRow}>
           <View style={styles.stat}>
-            <Route size={14} color={colors.textSecondary} />
+            <Route size={20} color={colors.primary} />
             <Text style={styles.statValue}>{parseFloat(distKm).toFixed(1)} km</Text>
             <Text style={styles.statLabel}>Distance</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
-            <Clock size={14} color={colors.textSecondary} />
+            <Clock size={20} color={colors.primary} />
             <Text style={styles.statValue}>{Math.round(durMin)} min</Text>
             <Text style={styles.statLabel}>Duration</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.stat}>
-            <DollarSign size={14} color={colors.primary} />
-            <Text style={[styles.statValue, { color: colors.primary }]}>
-              ETB {parseFloat(fare).toFixed(2)}
-            </Text>
-            <Text style={styles.statLabel}>Cash</Text>
           </View>
         </View>
       </View>
@@ -113,39 +118,18 @@ export default function TripCompleteScreen({ navigation }) {
         {/* Stars */}
         <View style={styles.starsRow}>
           {[1, 2, 3, 4, 5].map((n) => (
-            <TouchableOpacity key={n} onPress={() => setStars(n)} activeOpacity={0.7}>
+            <TouchableOpacity key={n} onPress={() => handleSubmit(n)} activeOpacity={0.7} disabled={submitting}>
               <Star
-                size={36}
+                size={40}
                 color={n <= stars ? '#F59E0B' : colors.border}
                 fill={n <= stars ? '#F59E0B' : 'none'}
               />
             </TouchableOpacity>
           ))}
         </View>
+        {submitting && <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />}
 
-        <TextInput
-          style={styles.commentInput}
-          placeholder="Leave a comment (optional)…"
-          placeholderTextColor={colors.inputPlaceholder}
-          value={comment}
-          onChangeText={setComment}
-          multiline
-          numberOfLines={3}
-          maxLength={300}
-        />
 
-        <TouchableOpacity
-          style={styles.submitBtn}
-          onPress={handleSubmit}
-          disabled={submitting}
-          activeOpacity={0.85}
-        >
-          {submitting ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.submitText}>Submit Rating</Text>
-          )}
-        </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.skipBtn} onPress={finishFlow} activeOpacity={0.7}>
@@ -172,23 +156,19 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm, color: colors.textSecondary,
     textAlign: 'center', marginBottom: 28,
   },
-  receipt: {
+  statsCard: {
     width: '100%',
     backgroundColor: colors.backgroundAlt,
     borderRadius: borderRadius.lg,
-    padding: 16, marginBottom: 20,
+    padding: 24, marginBottom: 24,
     borderWidth: 1, borderColor: colors.border,
+    ...shadow.sm,
   },
-  receiptRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  receiptLabel: { fontSize: fontSize.xs, color: colors.textSecondary, width: 36 },
-  receiptValue: { flex: 1, fontSize: fontSize.sm, color: colors.textPrimary, fontWeight: fontWeight.medium },
-  receiptDivider: { height: 1, backgroundColor: colors.border, marginVertical: 4 },
-  receiptSeparator: { height: 1, backgroundColor: colors.border, marginTop: 12, marginBottom: 16 },
-  statRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
-  stat: { flex: 1, alignItems: 'center', gap: 4 },
-  statDivider: { width: 1, height: 40, backgroundColor: colors.border },
-  statValue: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.textPrimary },
-  statLabel: { fontSize: fontSize.xs, color: colors.textSecondary },
+  statRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  stat: { flex: 1, alignItems: 'center', gap: 6 },
+  statDivider: { width: 1, height: 40, backgroundColor: colors.border, marginHorizontal: 20 },
+  statValue: { fontSize: 20, fontWeight: fontWeight.bold, color: colors.textPrimary },
+  statLabel: { fontSize: fontSize.xs, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   ratingCard: {
     width: '100%',
     backgroundColor: colors.backgroundAlt,
