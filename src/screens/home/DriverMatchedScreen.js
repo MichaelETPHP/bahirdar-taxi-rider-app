@@ -2,7 +2,7 @@ import { Car, Star, Phone, Clock, DollarSign, Share2, AlertTriangle } from 'luci
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  Animated, Alert, Linking, Share, Easing, Vibration,
+  Animated, Alert, Linking, Share, Easing, Vibration, BackHandler
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,6 +10,7 @@ import RideMap from '../../components/map/RideMap';
 import DriverMarker from '../../components/map/DriverMarker';
 import PickupMarker from '../../components/map/PickupMarker';
 import RoutePolyline from '../../components/map/RoutePolyline';
+import DriverProfileCard from '../../components/ride/DriverProfileCard';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -135,6 +136,21 @@ export default function DriverMatchedScreen({ navigation }) {
       bounciness: 8,
     }).start();
   }, []);
+
+  // ── Prevent accidental exit ───────────────────────────
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: false });
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (e.data.action.type === 'GO_BACK') {
+        e.preventDefault();
+      }
+    });
+    return () => {
+      backHandler.remove();
+      unsubscribe();
+    };
+  }, [navigation]);
 
   // Driver coord
   const driverCoord = driverLocation
@@ -326,7 +342,7 @@ export default function DriverMatchedScreen({ navigation }) {
   const carMake = driver?.vehicle?.make || '';
   const carModel = driver?.vehicle?.model || driver?.vehicle_model || driver?.vehicle_category || driver?.car_type || '';
   const carColor = driver?.vehicle?.color || '';
-    driver?.vehicle?.plateNumber || 
+  const carPlate = driver?.vehicle?.plateNumber || 
     driver?.vehicle?.plate_number || 
     driver?.vehicle?.plate || 
     driver?.vehicle_plate ||
@@ -389,49 +405,12 @@ export default function DriverMatchedScreen({ navigation }) {
         ]}
       >
         {/* ── Driver card ── */}
-        <View style={styles.driverCard}>
-          {/* Avatar */}
-          <View style={styles.avatarWrap}>
-            {avatarUrl ? (
-              <Image
-                source={{ uri: `${avatarUrl}?bust=${avatarBust}` }}
-                style={styles.avatar}
-                onError={() => {
-                  console.log('[Avatar] Failed to load:', avatarUrl);
-                }}
-              />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarEmoji}>👤</Text>
-              </View>
-            )}
-            <View style={styles.onlineDot} />
-          </View>
-
-          {/* Name + rating + vehicle */}
-          <View style={styles.driverMeta}>
-            <View style={styles.nameRow}>
-              <Text style={styles.driverName} numberOfLines={1} ellipsizeMode="tail">{driverNameFull}</Text>
-              <Text style={styles.nameSeparator}>·</Text>
-              <Text style={styles.vehicleHeader} numberOfLines={1} ellipsizeMode="tail">{carMake} {carModel}</Text>
-              {carPlate ? (
-                <View style={styles.plateBadge}>
-                  <Text style={styles.plateBadgeText}>{carPlate}</Text>
-                </View>
-              ) : null}
-            </View>
-            <View style={styles.ratingRow}>
-              <Star size={11} color="#F59E0B" />
-              <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
-              <Text style={styles.ratingLabel}>Rating</Text>
-            </View>
-          </View>
-
-          {/* Call button */}
-          <TouchableOpacity style={styles.callBtn} onPress={handleCall} activeOpacity={0.85}>
-            <Phone size={18} color="#22C55E" />
-          </TouchableOpacity>
-        </View>
+        <DriverProfileCard 
+          driver={driver} 
+          avatarUrl={`${avatarUrl}?bust=${avatarBust}`} 
+          rating={rating} 
+          onCall={handleCall} 
+        />
 
         {/* ── ETA + progress bar ── */}
         <View style={styles.etaCard}>
@@ -476,16 +455,11 @@ export default function DriverMatchedScreen({ navigation }) {
           )}
         </View>
 
-        {/* ── Share trip + SOS ── */}
+        {/* ── Share trip ── */}
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.actionBtn} onPress={handleShareTrip} activeOpacity={0.85}>
             <Share2 size={14} color={colors.white} />
-            <Text style={styles.actionBtnText}>Share Trip</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.actionBtn, styles.sosBtn]} onPress={handleSOS} activeOpacity={0.85}>
-            <Phone size={14} color={colors.white} />
-            <Text style={[styles.actionBtnText, styles.sosBtnText]}>9040</Text>
+            <Text style={styles.actionBtnText}>Share Trip Details</Text>
           </TouchableOpacity>
         </View>
 

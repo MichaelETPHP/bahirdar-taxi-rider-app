@@ -1,11 +1,11 @@
 import { Clock, Phone } from 'lucide-react-native';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, BackHandler } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RideMap from '../../components/map/RideMap';
 import DriverMarker from '../../components/map/DriverMarker';
 import DestMarker from '../../components/map/DestMarker';
-import RoutePolyline from '../../components/map/RoutePolyline';
+import ProfessionalRoutePolyline from '../../components/map/ProfessionalRoutePolyline';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -18,6 +18,7 @@ import { parseTripPollResponse, TRIP_STATUS_POLL_MS } from '../../utils/tripLife
 import useRoute from '../../hooks/useRoute';
 import { Image, LinearGradient } from 'react-native';
 import { API_BASE_URL } from '../../config/api';
+import DriverProfileCard from '../../components/ride/DriverProfileCard';
 
 /**
  * Resolve avatar URL to absolute URL with proper protocol
@@ -51,7 +52,7 @@ export default function TripActiveScreen({ navigation }) {
 
   const { tripId, tripData, driver, driverLocation, setDriverLocation, setTripStatus, setFinalFare, resetTrip, mergeTripData } = useRideStore();
   const { token } = useAuthStore();
-  const { destination } = useLocationStore();
+  const { userCoords, destination } = useLocationStore();
 
   const [elapsed, setElapsed] = useState(0); // seconds
 
@@ -69,6 +70,21 @@ export default function TripActiveScreen({ navigation }) {
     timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(timerRef.current);
   }, []);
+
+  // ── Prevent accidental exit ───────────────────────────
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: false });
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (e.data.action.type === 'GO_BACK') {
+        e.preventDefault();
+      }
+    });
+    return () => {
+      backHandler.remove();
+      unsubscribe();
+    };
+  }, [navigation]);
 
   // ── Driver location poll ────────────────────────────
   useEffect(() => {
@@ -184,16 +200,30 @@ export default function TripActiveScreen({ navigation }) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
+  // Fallback to userCoords if driverLocation is not available yet
   const driverCoord = driverLocation
     ? { latitude: driverLocation.lat, longitude: driverLocation.lng }
-    : null;
+    : userCoords ? { latitude: userCoords.latitude, longitude: userCoords.longitude } : null;
 
   const destCoord = destination
     ? { latitude: destination.lat, longitude: destination.lng }
     : null;
 
-  // Road-following route from driver's live position → destination
+  // Road-following route from current position → destination
   const { coordinates: routeCoords, distanceKm, durationMin } = useRoute(driverCoord, destCoord);
+
+  // ── Fit Map to Route ────────────────────────────────
+  const hasFitMap = useRef(false);
+  useEffect(() => {
+    if (hasFitMap.current || !driverCoord || !destCoord || !mapRef.current || routeCoords.length < 2) return;
+    hasFitMap.current = true; // Only fit once when the route first loads
+    setTimeout(() => {
+      mapRef.current?.fitToCoordinates(
+        [driverCoord, destCoord],
+        { edgePadding: { top: 180, right: 40, bottom: 280, left: 40 }, animated: true }
+      );
+    }, 800);
+  }, [driverCoord?.latitude, destCoord?.latitude, routeCoords.length]);
 
   const driverNameFull = driver?.name || driver?.full_name || driver?.fullName || 'Driver';
   const carMake = driver?.vehicle?.make || '';
@@ -221,41 +251,24 @@ export default function TripActiveScreen({ navigation }) {
             }} />
           )}
           {routeCoords.length >= 2 && (
-            <RoutePolyline coordinates={routeCoords} />
+            <ProfessionalRoutePolyline coordinates={routeCoords} />
           )}
         </RideMap>
       </View>
 
       {/* Top info card */}
-      <View style={[styles.topCard, { top: insets.top + 16 }]}>
-        <View style={styles.avatarWrap}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
-              <Text style={styles.avatarEmoji}>🙂</Text>
-            </View>
-          )}
-          <View style={styles.onlineDot} />
+      <View style={{ position: 'absolute', left: 16, right: 16, top: insets.top + 16, zIndex: 10 }}>
+        <DriverProfileCard 
+          driver={driver} 
+          avatarUrl={avatarUrl} 
+          rating={driver?.rating ? Number(driver.rating) : 5.0} 
+          onCall={() => driver?.phone && Linking.openURL(`tel:${driver.phone}`)}
+          hideCallButton={true}
+        />
+        <View style={{ alignSelf: 'center', backgroundColor: colors.white, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, ...shadow.sm }}>
+           <Clock size={14} color={colors.primary} />
+           <Text style={{ fontSize: 13, fontWeight: 'bold', color: colors.primary }}>Trip Time: {formatTime(elapsed)}</Text>
         </View>
-        <View style={styles.driverMeta}>
-          <View style={styles.nameRow}>
-            <Text style={styles.driverName} numberOfLines={1}>{driverNameFull}</Text>
-            <Text style={styles.nameSeparator}>·</Text>
-            <Text style={styles.vehicleHeader} numberOfLines={1}>{carMake} {carModel}</Text>
-          </View>
-          <View style={styles.timerRow}>
-            <Clock size={11} color={colors.textSecondary} />
-            <Text style={styles.timerText}>{formatTime(elapsed)} elapsed</Text>
-            <Text style={styles.plateText}>{carPlate}</Text>
-          </View>
-        </View>
-        <TouchableOpacity 
-          style={styles.callCircleBtn} 
-          onPress={() => driver?.phone && Linking.openURL(`tel:${driver.phone}`)}
-        >
-          <Phone size={16} color="#22C55E" />
-        </TouchableOpacity>
       </View>
 
       {/* Bottom info panel (Live OSRM Estimation) */}
@@ -284,10 +297,6 @@ export default function TripActiveScreen({ navigation }) {
           </Text>
         </View>
         
-        <View style={styles.fareRow}>
-           <Text style={styles.fareLabel}>Estimated Fare</Text>
-           <Text style={styles.fareValue}>ETB {parseFloat(tripData?.estimated_fare_etb || 0).toFixed(2)}</Text>
-        </View>
       </View>
     </View>
   );

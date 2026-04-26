@@ -1,7 +1,7 @@
 import { Check, Phone } from 'lucide-react-native';
 import React, { useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Animated, Linking, Alert,
+  View, Text, StyleSheet, TouchableOpacity, Animated, Linking, Alert, BackHandler
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
@@ -14,6 +14,7 @@ import { getTrip } from '../../services/tripService';
 import { parseTripPollResponse, TRIP_STATUS_POLL_MS } from '../../utils/tripLifecycle';
 import { Image } from 'react-native';
 import { API_BASE_URL } from '../../config/api';
+import DriverProfileCard from '../../components/ride/DriverProfileCard';
 
 /**
  * Resolve avatar URL to absolute URL with proper protocol
@@ -67,6 +68,24 @@ export default function DriverArrivedScreen({ navigation }) {
       toValue: 1, useNativeDriver: true, speed: 12, bounciness: 14,
     }).start();
   }, []);
+
+  // ── Prevent accidental exit ───────────────────────────
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: false });
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
+
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (e.data.action.type === 'GO_BACK') {
+        e.preventDefault();
+      }
+    });
+
+    return () => {
+      backHandler.remove();
+      unsubscribe();
+    };
+  }, [navigation]);
 
   // ── Socket: trip:started (after PATCH /trips/:id/start on server) ──
   useEffect(() => {
@@ -139,33 +158,14 @@ export default function DriverArrivedScreen({ navigation }) {
       </Text>
 
       {/* Vehicle card */}
-      <View style={styles.vehicleCard}>
-        <View style={styles.vehicleRow}>
-          <View style={styles.avatarWrap}>
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarEmoji}>🙂</Text>
-              </View>
-            )}
-            <View style={styles.onlineDot} />
-          </View>
-          <View style={styles.vehicleInfo}>
-            <View style={styles.nameRow}>
-              <Text style={styles.driverFullName} numberOfLines={1}>{driverName}</Text>
-              <Text style={styles.nameSeparator}>·</Text>
-              <Text style={styles.vehicleModelHeader} numberOfLines={1}>{carMake} {carModel}</Text>
-            </View>
-            <Text style={styles.vehiclePlate}>{carPlate}</Text>
-          </View>
-        </View>
+      <View style={{ width: '100%', marginBottom: 24 }}>
+        <DriverProfileCard 
+          driver={driver} 
+          avatarUrl={avatarUrl} 
+          rating={driver?.rating ? Number(driver.rating) : 5.0} 
+          onCall={handleCall} 
+        />
       </View>
-
-      <TouchableOpacity style={styles.callBtn} onPress={handleCall} activeOpacity={0.85}>
-        <Phone size={16} color={colors.white} />
-        <Text style={styles.callText}>Call {driverFirstName || 'Driver'}</Text>
-      </TouchableOpacity>
 
       <Text style={styles.hint}>Waiting for the driver to start the trip…</Text>
     </View>
