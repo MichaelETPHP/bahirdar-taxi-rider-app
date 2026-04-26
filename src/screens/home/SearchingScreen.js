@@ -15,10 +15,10 @@ import useLocationStore from '../../store/locationStore';
 import { getSocket, disconnectSocket } from '../../services/socketService';
 import { cancelTrip, getTrip } from '../../services/tripService';
 import { parseTripPollResponse } from '../../utils/tripLifecycle';
-import RideMap from '../../components/map/RideMap';
-import PickupMarker from '../../components/map/PickupMarker';
-import DestMarker from '../../components/map/DestMarker';
-import RoutePolyline from '../../components/map/RoutePolyline';
+import ProfessionalRideMap from '../../components/map/ProfessionalRideMap';
+import UberPickupMarker from '../../components/map/UberPickupMarker';
+import UberDestinationMarker from '../../components/map/UberDestinationMarker';
+import ProfessionalRoutePolyline from '../../components/map/ProfessionalRoutePolyline';
 import useRoute from '../../hooks/useRoute';
 import useSoundHaptics from '../../hooks/useSoundHaptics';
 import Button from '../../components/design-system/Button';
@@ -417,14 +417,14 @@ export default function SearchingScreen({ navigation }) {
   return (
     <View style={styles.root}>
       {/* ── Full-screen map ── */}
-      <RideMap mapRef={mapRef} style={StyleSheet.absoluteFill}>
-        {pickupCoords && <PickupMarker coordinate={pickupCoords} title={tripData?.pickup_address || 'Your location'} />}
-        {dropoffCoords && <DestMarker coordinate={dropoffCoords} title={tripData?.dropoff_address || destination?.name || 'Destination'} />}
-        <RoutePolyline coordinates={routeCoords} />
+      <ProfessionalRideMap mapRef={mapRef} style={StyleSheet.absoluteFill} showStreetNames={true} showRoadLines={true}>
+        {pickupCoords && <UberPickupMarker coordinate={pickupCoords} title={tripData?.pickup_address || 'Your location'} animated={true} />}
+        {dropoffCoords && <UberDestinationMarker coordinate={dropoffCoords} title={tripData?.dropoff_address || destination?.name || 'Destination'} />}
+        <ProfessionalRoutePolyline coordinates={routeCoords} />
         {drivers.map(d => (
           <DriverMarker key={d.id} driver={d} />
         ))}
-      </RideMap>
+      </ProfessionalRideMap>
 
       {/* ── Emerald gradient overlay (bottom two-thirds) ── */}
       <LinearGradient

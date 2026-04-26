@@ -3,12 +3,12 @@ import { View, Text, StyleSheet, Animated, Pressable, Dimensions, Image, Platfor
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import RideMap from '../../components/map/RideMap';
+import ProfessionalRideMap from '../../components/map/ProfessionalRideMap';
 import MovableCircleButton from '../../components/map/MovableCircleButton';
 import DriverMarker from '../../components/map/DriverMarker';
-import DestMarker from '../../components/map/DestMarker';
-import UserMarker from '../../components/map/UserMarker';
-import RoutePolyline from '../../components/map/RoutePolyline';
+import UberDestinationMarker from '../../components/map/UberDestinationMarker';
+import UberUserLocationMarker from '../../components/map/UberUserLocationMarker';
+import ProfessionalRoutePolyline from '../../components/map/ProfessionalRoutePolyline';
 import {
   MapPin,
   Clock,
@@ -352,6 +352,8 @@ export default function HomeScreen({ navigation }) {
 
   const [drivers, setDrivers] = useState([]);
   const driversRef = useRef([]);
+  const lastDriverUpdateRef = useRef(0);
+  const throttleMs = 800; // Throttle location updates to 800ms (from constant 500ms)
 
   const { data: nearbyDriversRes } = useNearbyDrivers(displayCoords, 10);
 
@@ -374,7 +376,7 @@ export default function HomeScreen({ navigation }) {
     if (!socket) return undefined;
     const riderTag = `[RIDER_SOCKET user:${user.id}]`;
 
-    const throttleLocationUpdates = createThrottle(500);
+    const throttleLocationUpdates = createThrottle(throttleMs);
 
     const mergeDrivers = (incoming) => {
       const list = Array.isArray(incoming) ? incoming : [];
@@ -606,6 +608,7 @@ export default function HomeScreen({ navigation }) {
     resetRideState();
   }, [setDestination, clearStops, resetRideState]);
 
+
   const handleRecenter = useCallback(() => {
     InteractionManager.runAfterInteractions(() => {
       if (mapRef.current) {
@@ -697,37 +700,37 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container} collapsable={false}>
-      <RideMap
+      <ProfessionalRideMap
         mapRef={mapRef}
         style={styles.mapWrapper}
         mapPadding={destination ? undefined : MAP_PADDING}
+        showStreetNames={true}
+        showRoadLines={true}
       >
-        {/* Draggable user/pickup marker — outside memo so callback is always fresh */}
-        <UserMarker
+        {/* User location marker with professional styling */}
+        <UberUserLocationMarker
           coordinate={destination ? pickupCoordinate : displayCoords}
           avatarUrl={avatarUrl}
-          name={user?.fullName}
-          label={destination ? t('home.currentLocation') : undefined}
-          onDragEnd={handlePickupDrag}
+          heading={0}
+          animated={true}
         />
         {useMemo(() => (
           <>
             {destination && (
-              <DestMarker
+              <UberDestinationMarker
                 coordinate={{ latitude: destination.lat, longitude: destination.lng }}
-                caption={t('ride.destination')}
                 title={destination.name || destination.address || t('home.whereTo')}
               />
             )}
             {destination && routeCoordinates.length >= 2 && (
-              <RoutePolyline coordinates={routeCoordinates} />
+              <ProfessionalRoutePolyline coordinates={routeCoordinates} />
             )}
             {drivers.map((driver) => (
               <DriverMarker key={driver.id} driver={driver} />
             ))}
           </>
         ), [destination, routeCoordinates, drivers, t])}
-      </RideMap>
+      </ProfessionalRideMap>
 
       {/* Route info chip — pointerEvents none so it NEVER blocks map touch */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">

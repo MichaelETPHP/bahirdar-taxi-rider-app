@@ -273,7 +273,7 @@ function CustomDrawer({ visible, onClose, navigation }) {
               style={styles.avatar}
               contentFit="cover"
               transition={200}
-              cachePolicy="disk"
+              cachePolicy="none"
             />
           ) : (
             <Avatar

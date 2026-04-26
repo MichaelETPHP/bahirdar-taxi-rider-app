@@ -4,10 +4,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import RideMap from '../../components/map/RideMap';
-import PickupMarker from '../../components/map/PickupMarker';
-import DestMarker from '../../components/map/DestMarker';
-import RoutePolyline from '../../components/map/RoutePolyline';
+import ProfessionalRideMap from '../../components/map/ProfessionalRideMap';
+import UberPickupMarker from '../../components/map/UberPickupMarker';
+import UberDestinationMarker from '../../components/map/UberDestinationMarker';
+import ProfessionalRoutePolyline from '../../components/map/ProfessionalRoutePolyline';
 import AppButton from '../../components/common/AppButton';
 import LocationPinButton from '../../components/ui/LocationPinButton';
 import { X, MapPin, Clock, Flag } from 'lucide-react-native';
@@ -216,21 +216,22 @@ export default function ConfirmRideScreen({ navigation, route }) {
 
       {/* Map — fills most of screen */}
       <View style={styles.mapContainer}>
-        <RideMap mapRef={mapRef} style={StyleSheet.absoluteFillObject}>
+        <ProfessionalRideMap mapRef={mapRef} style={StyleSheet.absoluteFillObject} showStreetNames={true} showRoadLines={true}>
           {userCoords && (
-            <PickupMarker
+            <UberPickupMarker
               coordinate={userCoords}
               title={pickup?.name || 'Current Location'}
+              animated={true}
             />
           )}
           {destination && (
-            <DestMarker
+            <UberDestinationMarker
               coordinate={{ latitude: destination.lat, longitude: destination.lng }}
               title={destination?.name || 'Destination'}
             />
           )}
-          <RoutePolyline coordinates={routeCoords} />
-        </RideMap>
+          <ProfessionalRoutePolyline coordinates={routeCoords} />
+        </ProfessionalRideMap>
 
         {/* Back button */}
         <Pressable
