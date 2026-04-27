@@ -97,6 +97,9 @@ export async function reverseGeocode(lat, lng) {
 
       if (data.status !== 'OK') {
         console.warn('⚠️  Google Geocode API error:', data.status);
+        if (data.error_message) {
+          console.warn('📝 Google Error Message:', data.error_message);
+        }
       } else if (data.results?.length > 0) {
         const result = data.results[0];
         const formatted = result.formatted_address;
@@ -196,7 +199,12 @@ export async function searchPlaces(query, lat, lng) {
     }
 
     const data = await response.json();
-    console.log('🔍 Search API status:', data.status);
+    if (data.status !== 'OK') {
+      console.warn('🔍 Search API status:', data.status);
+      if (data.error_message) {
+        console.warn('🔍 Google Search Error:', data.error_message);
+      }
+    }
 
     if (data.status === 'OK' && data.predictions?.length > 0) {
       const results = data.predictions.map((p) => ({
