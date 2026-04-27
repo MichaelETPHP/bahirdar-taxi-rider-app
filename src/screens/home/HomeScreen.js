@@ -46,6 +46,7 @@ import useRoute from '../../hooks/useRoute';
 import { useNearbyDrivers } from '../../hooks/useTripQueries';
 import Button from '../../components/design-system/Button';
 import { connectSocket, getSocket, joinRiderRoom } from '../../services/socketService';
+import { diagnosticCheckApiKey } from '../../utils/diagnostics';
 
 // Addis Ababa city center — default when GPS not yet available
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
@@ -238,6 +239,15 @@ export default function HomeScreen({ navigation }) {
     if (!currentAddress || !currentLocation) return 'Getting location...';
     return extractNeighborhoodName(currentAddress, currentLocation.lat, currentLocation.lng);
   }, [currentAddress, currentLocation]);
+
+  // Diagnostic check: verify API key loads correctly in production APK
+  useEffect(() => {
+    const diag = diagnosticCheckApiKey();
+    if (!diag.isLoaded) {
+      console.error('🚨 API Key not loaded! Check .env file and Google Cloud configuration.');
+      console.error('   Expected key in Constants.expoConfig?.extra?.googleMapsKey or process.env');
+    }
+  }, []);
 
   useEffect(() => {
     if (currentLocation) {

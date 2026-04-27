@@ -1,10 +1,11 @@
 /**
- * Google Maps API service — Geocoding, Directions, and Search.
+ * Google Maps API service — Places Search and Geocoding only.
+ * Routing is handled by backend OSRM (see routeServiceV2.js)
+ *
  * REQUIRED APIs in Google Cloud:
- * - Places API
- * - Maps JavaScript API
- * - Geocoding API
- * - Directions API
+ * - Places API (for location search/autocomplete)
+ * - Geocoding API (for reverse geocoding)
+ * - Maps SDK for Android (for displaying map)
  */
 import { GOOGLE_MAPS_KEY } from '../config/api';
 
@@ -192,113 +193,6 @@ export async function reverseGeocode(coords) {
   }
 }
 
-/**
- * Get driving route polyline between two points using Google Directions API.
- */
-export async function getRoute(origin, destination) {
-  const fallback = {
-    coordinates: [
-      { latitude: origin.latitude,      longitude: origin.longitude },
-      { latitude: destination.latitude, longitude: destination.longitude },
-    ],
-    distanceKm:  0,
-    durationMin: 0,
-  };
-
-  if (!origin || !destination) {
-    console.warn('getRoute: Missing origin or destination');
-    return fallback;
-  }
-
-  if (!GOOGLE_MAPS_KEY) {
-    console.warn('getRoute: API key not configured');
-    return fallback;
-  }
-
-  try {
-    const params = new URLSearchParams({
-      origin: `${origin.latitude},${origin.longitude}`,
-      destination: `${destination.latitude},${destination.longitude}`,
-      key: GOOGLE_MAPS_KEY,
-      mode: 'driving',
-    });
-
-    console.log('🛣️ Requesting route:', {
-      origin: `${origin.latitude.toFixed(4)}, ${origin.longitude.toFixed(4)}`,
-      destination: `${destination.latitude.toFixed(4)}, ${destination.longitude.toFixed(4)}`,
-    });
-
-    const res = await fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`);
-    const data = await res.json();
-
-    if (data.status === 'REQUEST_DENIED') {
-      console.error('🚨 REQUEST_DENIED in getRoute - Directions API not configured');
-      return fallback;
-    }
-
-    if (data.status !== 'OK' || !data.routes?.length) {
-      console.warn('⚠️ getRoute error:', data.status);
-      return fallback;
-    }
-
-    const route = data.routes[0];
-    const leg = route.legs[0];
-
-    // Decode polyline
-    const points = decodePolyline(route.overview_polyline.points);
-
-    console.log('✓ Route found:', {
-      distanceKm: (leg.distance.value / 1000).toFixed(2),
-      durationMin: (leg.duration.value / 60).toFixed(0),
-      pointsCount: points.length,
-    });
-
-    return {
-      coordinates: points,
-      distanceKm:  (leg.distance.value / 1000) || 0,
-      durationMin: (leg.duration.value / 60) || 0,
-    };
-  } catch (err) {
-    console.error('❌ Google Directions error:', err.message);
-    return fallback;
-  }
-}
-
-/**
- * Decodes a Google Maps polyline.
- */
-function decodePolyline(encoded) {
-  if (!encoded) return [];
-  const poly = [];
-  let index = 0, len = encoded.length;
-  let lat = 0, lng = 0;
-
-  while (index < len) {
-    let b, shift = 0, result = 0;
-    do {
-      b = encoded.charCodeAt(index++) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
-    lat += dlat;
-
-    shift = 0;
-    result = 0;
-    do {
-      b = encoded.charCodeAt(index++) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-    let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
-    lng += dlng;
-
-    poly.push({ latitude: (lat / 1e5), longitude: (lng / 1e5) });
-  }
-  return poly;
-}
-
-// Fallback for tile URL if needed, though we moved to native Google Maps
-export function gebetaTileUrl() {
-  return '';
-}
+// Routing is handled by backend OSRM via routeServiceV2.js
+// Do NOT use Google Directions API - use getRouteFromBackend() instead
+// See: src/services/routeServiceV2.js
