@@ -211,7 +211,7 @@ function ProfessionalRideMap({
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         initialRegion={initialRegion || ADDIS_ABABA}
-        customMapStyle={PROFESSIONAL_MAP_STYLE}
+        customMapStyle={[]}
         // Interaction settings
         scrollEnabled={true}
         zoomEnabled={true}
