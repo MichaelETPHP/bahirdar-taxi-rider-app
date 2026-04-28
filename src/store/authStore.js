@@ -4,8 +4,9 @@ import { getSessionStatus, updateLastActivity } from '../utils/sessionManager';
 import { fetchProfile, refreshTokens } from '../services/authService';
 import useLocationStore from './locationStore';
 import useRideStore from './rideStore';
+import { initApiClient } from '../lib/apiClient';
+import { showSessionExpiredAlert } from '../utils/logoutAlert';
 
-// Don't use persist middleware for auth - session is managed via sessionManager
 const useAuthStore = create((set, get) => ({
   user: null,
   phone: '',
@@ -16,13 +17,8 @@ const useAuthStore = create((set, get) => ({
   sessionExpiresAt: null,
 
   setPhone: (phone) => set({ phone }),
-
   setUser: (user) => set({ user }),
 
-  /**
-   * Persist both tokens to AsyncStorage with 30-day session expiration.
-   * Optionally takes a user object to ensure latest profile data is saved immediately.
-   */
   setTokens: async (accessToken, refreshToken, expiresIn = 3600, user = null) => {
     const currentPhone = get().phone;
     const currentUser = user || get().user;
@@ -30,7 +26,7 @@ const useAuthStore = create((set, get) => ({
     set({
       token: accessToken,
       refreshToken,
-      user: currentUser, // Ensure in-memory user is also updated if provided
+      user: currentUser,
       sessionExpiresAt: new Date(session.expiresAt),
     });
   },
@@ -41,20 +37,9 @@ const useAuthStore = create((set, get) => ({
   updateUser: (updates) =>
     set((state) => ({ user: { ...state.user, ...updates } })),
 
-  /**
-   * Fetch full profile from API and merge into user state.
-   * Call this right after login or on app resume when already authenticated.
-   */
   loadProfile: async () => {
     const token = get().token;
-    if (!token) return;
-
-    // Skip API call for locally-generated mock tokens — they are not real JWTs
-    // Real RS256 JWTs always start with 'eyJ' (base64 for '{"alg"')
-    if (!token.startsWith('eyJ')) {
-      console.log('[loadProfile] Skipping API call: local mock token detected.');
-      return;
-    }
+    if (!token || !token.startsWith('eyJ')) return;
 
     try {
       const res = await fetchProfile(token);
@@ -70,14 +55,7 @@ const useAuthStore = create((set, get) => ({
           email:       u.email        ?? state.user?.email,
           gender:      u.gender       ?? state.user?.gender,
           dateOfBirth: u.date_of_birth ?? state.user?.dateOfBirth,
-          avatarUrl:   (() => {
-            const serverUrl = u.avatar_url || u.avatarUrl || u.profileImage;
-            if (!serverUrl) return state.user?.avatarUrl;
-            // If the server URL is the same as our base URL, keep our current local URL 
-            // (which likely has a cache-busting ?t= timestamp for instant display)
-            if (state.user?.avatarUrl?.startsWith(serverUrl)) return state.user.avatarUrl;
-            return serverUrl;
-          })(),
+          avatarUrl:   u.avatar_url   || u.avatarUrl || u.profileImage || state.user?.avatarUrl,
           preferredLang: u.preferred_lang || state.user?.preferredLang,
           isVerified:  u.is_verified  ?? state.user?.isVerified,
         },
@@ -85,147 +63,62 @@ const useAuthStore = create((set, get) => ({
     } catch (_) {}
   },
 
-  /**
-   * Called on app launch — restores 30-day session from storage.
-   * Returns true if valid session was found and restored.
-   */
   loadTokens: async () => {
     try {
       const status = await getSessionStatus();
 
-      // No session or session has expired
       if (status.status === 'no_session' || status.status === 'error') {
-        console.log('[loadTokens] No valid session:', status.status);
-        // Ensure clean state
-        set({
-          token: null,
-          refreshToken: null,
-          isAuthenticated: false,
-          sessionExpiresAt: null,
-          phone: '',
-        });
+        get().logout();
         return false;
       }
 
-      // Session is active - restore phone number first
-      console.log('[loadTokens] Session found, expires in', status.daysRemaining, 'days');
       const storedPhone = await getStoredPhone();
-      if (storedPhone) {
-        set({ phone: storedPhone });
-        console.log('[loadTokens] Phone number restored:', storedPhone);
-      }
+      if (storedPhone) set({ phone: storedPhone });
 
-      // Check if tokens need refresh before using them
       if (status.needsRefresh && status.refreshToken) {
         try {
-          console.log('[loadTokens] Token needs refresh, attempting refresh...');
           const refreshed = await refreshTokens(status.refreshToken);
           if (refreshed?.data?.accessToken) {
-            await updateTokensOnly(
-              refreshed.data.accessToken,
-              refreshed.data.refreshToken,
-              3600
-            );
-              set({
-                token: refreshed.data.accessToken,
-                refreshToken: refreshed.data.refreshToken,
-                user: status.user, // Restore user info immediately
-                isAuthenticated: true,
-                sessionExpiresAt: new Date(status.expiresAt),
-              });
-              console.log('[loadTokens] Token refreshed successfully');
-            }
-          } catch (err) {
-            console.warn('[loadTokens] Token refresh failed, using existing tokens:', err.message);
-            // If refresh fails, continue with existing valid tokens
+            await updateTokensOnly(refreshed.data.accessToken, refreshed.data.refreshToken, 3600);
             set({
-              token: status.accessToken,
-              refreshToken: status.refreshToken,
-              user: status.user, // Restore user info immediately
+              token: refreshed.data.accessToken,
+              refreshToken: refreshed.data.refreshToken,
+              user: status.user,
               isAuthenticated: true,
               sessionExpiresAt: new Date(status.expiresAt),
             });
           }
-        } else {
-          // Tokens are still fresh, use them directly
+        } catch (err) {
           set({
             token: status.accessToken,
             refreshToken: status.refreshToken,
-            user: status.user, // Restore user info immediately
+            user: status.user,
             isAuthenticated: true,
             sessionExpiresAt: new Date(status.expiresAt),
           });
         }
+      } else {
+        set({
+          token: status.accessToken,
+          refreshToken: status.refreshToken,
+          user: status.user,
+          isAuthenticated: true,
+          sessionExpiresAt: new Date(status.expiresAt),
+        });
+      }
 
-      // Load user profile in background (non-blocking)
-      get().loadProfile().catch((err) => {
-        console.warn('[loadTokens] Failed to load profile:', err.message);
-      });
-
+      get().loadProfile().catch(() => {});
       return true;
     } catch (err) {
-      console.error('[loadTokens] Fatal error:', err);
-      // Ensure clean state on error
-      set({
-        token: null,
-        refreshToken: null,
-        isAuthenticated: false,
-        sessionExpiresAt: null,
-        phone: '',
-      });
+      get().logout();
       return false;
     }
-  },
-
-  /**
-   * Update last activity timestamp (call when app comes to foreground)
-   */
-  updateActivity: async () => {
-    await updateLastActivity();
-  },
-
-  /**
-   * Check session validity and auto-logout if expired
-   */
-  validateSession: async () => {
-    const status = await getSessionStatus();
-
-    if (status.status === 'no_session' || status.status === 'error') {
-      // Session expired or invalid - logout
-      if (get().isAuthenticated) {
-        await get().logout();
-      }
-      return false;
-    }
-
-    return true;
   },
 
   logout: async () => {
     await clearTokens();
     useLocationStore.getState().clearAll();
     useRideStore.getState().reset();
-    useRideStore.setState((s) => ({
-      selectedCategoryId: s.categories[0]?.id ?? null,
-    }));
-    set({
-      user: null,
-      phone: '',
-      token: null,
-      refreshToken: null,
-      isAuthenticated: false,
-      isNewUser: false,
-      sessionExpiresAt: null,
-    });
-  },
-
-  deleteAccount: async () => {
-    await clearTokens();
-    useLocationStore.getState().clearAll();
-    useRideStore.getState().reset();
-    useRideStore.setState((s) => ({
-      selectedCategoryId: s.categories[0]?.id ?? null,
-    }));
     set({
       user: null,
       phone: '',
@@ -237,5 +130,19 @@ const useAuthStore = create((set, get) => ({
     });
   },
 }));
+
+// ── Initialize API Client with Store Callbacks ──────────────────────
+initApiClient({
+  getToken: () => useAuthStore.getState().token,
+  getRefreshToken: () => useAuthStore.getState().refreshToken,
+  onRefreshed: async (newToken, newRefresh) => {
+    await useAuthStore.getState().setTokens(newToken, newRefresh);
+  },
+  onExpired: async () => {
+    await showSessionExpiredAlert(async () => {
+      await useAuthStore.getState().logout();
+    });
+  }
+});
 
 export default useAuthStore;

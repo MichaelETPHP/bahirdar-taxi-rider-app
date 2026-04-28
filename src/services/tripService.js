@@ -1,114 +1,13 @@
-import { API_BASE_URL } from '../config/api';
-
-import useAuthStore from '../store/authStore';
-
-// Global lock to prevent multiple simultaneous token refreshes
-let _isTripRefreshing = false;
-
-async function request(method, path, body, token, retryCount = 0) {
-  const url = `${API_BASE_URL}${path}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    'Connection': 'keep-alive',
-  };
-
-  // Use provided token or fall back to store token
-  const activeToken = token || useAuthStore.getState().token;
-  if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-  try {
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-      keepalive: true,
-    });
-
-    clearTimeout(timeoutId);
-
-    // ── Token Refresh Interceptor ──────────────────────────────────────
-    // Only retry ONCE. Skip if already refreshing or token is a local mock.
-    if (res.status === 401 && retryCount === 0 && !_isTripRefreshing) {
-      const currentToken = useAuthStore.getState().token;
-      // Mock tokens (not real JWTs) cannot be refreshed — skip silently
-      if (!currentToken || !currentToken.startsWith('eyJ')) {
-        console.warn(`[Trip] 401 with mock token at ${path} — skipping refresh.`);
-        throw { status: 401, message: 'Invalid token' };
-      }
-
-      console.warn(`[Trip] 401 at ${path}. Attempting one-time token refresh...`);
-      _isTripRefreshing = true;
-      try {
-        const currentRefreshToken = useAuthStore.getState().refreshToken;
-        if (!currentRefreshToken) throw new Error('No refresh token');
-
-        const refreshRes = await fetch(`${API_BASE_URL}/auth/rider/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: currentRefreshToken }),
-        });
-
-        if (!refreshRes.ok) throw new Error(`Refresh failed: ${refreshRes.status}`);
-
-        const refreshData = await refreshRes.json();
-        const newToken = refreshData?.data?.accessToken;
-        const newRefresh = refreshData?.data?.refreshToken;
-        if (!newToken) throw new Error('No token in refresh response');
-
-        await useAuthStore.getState().setTokens(newToken, newRefresh || currentRefreshToken, 3600);
-        console.log(`[Trip] Token refreshed. Retrying ${path}...`);
-        return request(method, path, body, newToken, 1);
-      } catch (refreshErr) {
-        console.error(`[Trip] Refresh failed at ${path}:`, refreshErr.message, '→ Logging out.');
-        useAuthStore.getState().logout();
-        throw { status: 401, message: 'Session expired. Please log in again.' };
-      } finally {
-        _isTripRefreshing = false;
-      }
-    }
-    // ──────────────────────────────────────────────────────────────────
-
-    const text = await res.text();
-    let data = {};
-
-    if (text) {
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { message: text };
-      }
-    }
-
-    if (!res.ok) {
-      throw {
-        status: res.status,
-        message: data?.error?.message || data?.message || 'Request failed',
-        code: data?.error?.code,
-      };
-    }
-    return data;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    const isAbort = err.name === 'AbortError' || err.message?.toLowerCase().includes('aborted');
-    
-    if (!isAbort) {
-      console.error(`[Trip] ${method} ${url} ERROR:`, err.message || err.code || err);
-    }
-
-    if (isAbort) {
-      throw { status: 499, message: 'Request cancelled', code: 'ABORTED', silent: true };
-    }
-    throw err;
-  }
-}
+import { apiRequest } from '../lib/apiClient';
 
 /**
- * Normalize trip status strings from the API for client comparisons.
+ * Trip Service — Refactored to use decoupled apiClient.
  */
+
+const get   = (path, token)       => apiRequest('GET',   path, undefined, { customToken: token });
+const post  = (path, body, token) => apiRequest('POST',  path, body, { customToken: token });
+const patch = (path, body, token) => apiRequest('PATCH', path, body, { customToken: token });
+
 export function normalizeTripStatus(status) {
   if (status == null) return null;
   const s = String(status).toLowerCase();
@@ -116,93 +15,52 @@ export function normalizeTripStatus(status) {
   return s;
 }
 
-/**
- * POST /trips — confirm and create a new trip
- */
 export function createTrip(body, token) {
-  return request('POST', '/trips', body, token);
+  return post('/trips', body, token);
 }
 
-/**
- * GET /trips/:tripId — poll trip status as fallback
- */
 export function getTrip(tripId, token) {
-  return request('GET', `/trips/${tripId}`, undefined, token);
+  return get(`/trips/${tripId}`, token);
 }
 
-/**
- * PATCH /trips/:tripId/arrived — driver marked at pickup (rider app: usually driven by backend/socket; exposed for parity / tests).
- * @param {object} [extra] — optional JSON body fields accepted by your API
- */
 export function patchTripArrived(tripId, token, extra = {}) {
-  return request('PATCH', `/trips/${tripId}/arrived`, Object.keys(extra).length ? extra : {}, token);
+  return patch(`/trips/${tripId}/arrived`, Object.keys(extra).length ? extra : {}, token);
 }
 
-/**
- * PATCH /trips/:tripId/start — trip started (pickup complete).
- */
 export function patchTripStart(tripId, token, extra = {}) {
-  return request('PATCH', `/trips/${tripId}/start`, Object.keys(extra).length ? extra : {}, token);
+  return patch(`/trips/${tripId}/start`, Object.keys(extra).length ? extra : {}, token);
 }
 
-/**
- * PATCH /trips/:tripId/complete — trip ended, fare finalized server-side.
- */
 export function patchTripComplete(tripId, token, extra = {}) {
-  return request('PATCH', `/trips/${tripId}/complete`, Object.keys(extra).length ? extra : {}, token);
+  return patch(`/trips/${tripId}/complete`, Object.keys(extra).length ? extra : {}, token);
 }
 
-/**
- * PATCH /trips/:tripId/cancel — rider, driver, or system cancellation.
- * @param {string} [reason]
- * @param {object} [meta] — e.g. { cancelled_by: 'rider' } if your API requires it
- */
 export function cancelTrip(tripId, reason, token, meta = {}) {
-  if (!tripId || typeof tripId !== 'string' || tripId.trim() === '') {
-    const err = new Error(`cancelTrip: tripId is required but got "${tripId}"`);
-    err.code = 'MISSING_TRIP_ID';
-    throw err;
-  }
+  if (!tripId) throw new Error('tripId is required');
   
-  // If we're still in "optimistic/pending" state, don't ping server
   if (tripId.startsWith('pending-')) {
-    console.log('[Trip] Skipping server cancel for optimistic tripId:', tripId);
-    return Promise.resolve({ success: true, message: 'Optimistic trip cleared locally' });
+    return Promise.resolve({ success: true, message: 'Optimistic trip cleared' });
   }
 
   const body = { ...meta };
-  if (reason !== undefined && reason !== null) body.reason = reason;
-  return request('PATCH', `/trips/${tripId}/cancel`, body, token);
+  if (reason) body.reason = reason;
+  return patch(`/trips/${tripId}/cancel`, body, token);
 }
 
-/**
- * GET /users/drivers/:driverId/location — poll every 3s during trip
- */
 export function getDriverLocation(driverId, token) {
-  return request('GET', `/users/drivers/${driverId}/location`, undefined, token);
+  return get(`/users/drivers/${driverId}/location`, token);
 }
 
-/**
- * GET /users/drivers/nearby?lat&lng&radius_km
- * Returns online/active drivers from Redis around rider location.
- */
 export function getNearbyDrivers(lat, lng, radiusKm = 5, token) {
   const q = `lat=${lat}&lng=${lng}&radius_km=${radiusKm}`;
-  return request('GET', `/users/drivers/nearby?${q}`, undefined, token);
+  return get(`/users/drivers/nearby?${q}`, token);
 }
 
-/**
- * POST /trips/:tripId/ratings
- */
 export function submitRating(tripId, { rating, comment, tip }, token) {
-  return request('POST', `/trips/${tripId}/ratings`, { rating, comment, tip }, token);
+  return post(`/trips/${tripId}/ratings`, { rating, comment, tip }, token);
 }
 
-/**
- * GET /geo/fare-estimate?from_lat&from_lng&to_lat&to_lng
- * Returns real OSRM distance + fare per vehicle category.
- */
 export function getFareEstimate(fromLat, fromLng, toLat, toLng, token) {
   const q = `from_lat=${fromLat}&from_lng=${fromLng}&to_lat=${toLat}&to_lng=${toLng}`;
-  return request('GET', `/geo/fare-estimate?${q}`, undefined, token);
+  return get(`/geo/fare-estimate?${q}`, token);
 }

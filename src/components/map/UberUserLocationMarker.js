@@ -150,19 +150,23 @@ function UberUserLocationMarker({
 
         {/* Profile picture container - main element */}
         <View style={styles.profileContainer}>
-          <View style={styles.profileRing}>
-            {avatarUrl ? (
-              <Image
-                source={{ uri: avatarUrl }}
-                style={styles.profileImage}
-                contentFit="cover"
-                transition={200}
-                cachePolicy="none"
-              />
-            ) : (
-              <View style={styles.profilePlaceholder} />
-            )}
+          <View style={styles.profileShadow}>
+            <View style={styles.profileRing}>
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.profileImage}
+                  contentFit="cover"
+                  transition={200}
+                  cachePolicy="disk"
+                />
+              ) : (
+                <View style={styles.profilePlaceholder} />
+              )}
+            </View>
           </View>
+          {/* Precise center dot 'mark' */}
+          <View style={styles.centerDot} />
         </View>
 
         {/* Subtle accuracy indicator */}
@@ -178,8 +182,8 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 120,
-    height: 120,
+    width: 160,
+    height: 160,
   },
 
   // ── Wave rings - elegant ripple effect
@@ -190,8 +194,9 @@ const styles = StyleSheet.create({
     borderRadius: 44,
     borderWidth: 2,
     borderColor: colors.primary,
-    top: 16,
-    left: 16,
+    // Centered in 160x160 container: (160-88)/2 = 36
+    top: 36,
+    left: 36,
   },
 
   // ── Profile picture container - minimalist luxury
@@ -208,18 +213,25 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
+    overflow: 'hidden',
+    backgroundColor: colors.white,
+  },
+
+  profileShadow: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     borderWidth: 2,
     borderColor: colors.white,
     backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-    // Elegant shadow
+    // Elegant shadow - separated from overflow:hidden
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
 
   profileImage: {
@@ -243,7 +255,23 @@ const styles = StyleSheet.create({
     borderRadius: 52,
     borderWidth: 1,
     borderColor: `${colors.primary}15`,
-    top: 8,
-    left: 8,
+    // Centered in 160x160 container: (160-104)/2 = 28
+    top: 28,
+    left: 28,
+  },
+  centerDot: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.white,
+    zIndex: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
 });

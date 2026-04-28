@@ -1,10 +1,11 @@
 import { Alert } from 'react-native';
-import useAuthStore from '../store/authStore';
 
 /**
- * Show logout alert when session expires or auth fails
+ * Decoupled Logout Alert.
+ * Does NOT import authStore.
  */
-export async function showSessionExpiredAlert() {
+
+export async function showSessionExpiredAlert(onLogout) {
   return new Promise((resolve) => {
     Alert.alert(
       'Session Expired',
@@ -13,7 +14,7 @@ export async function showSessionExpiredAlert() {
         {
           text: 'Log In',
           onPress: async () => {
-            await useAuthStore.getState().logout();
+            if (onLogout) await onLogout();
             resolve(true);
           },
         },
@@ -23,24 +24,19 @@ export async function showSessionExpiredAlert() {
   });
 }
 
-/**
- * Show error alert for auth failures
- */
-export function showAuthErrorAlert(message = 'Authentication failed') {
+export function showAuthErrorAlert(message = 'Authentication failed', onLogout) {
   Alert.alert(
     'Authentication Error',
     message,
     [
       {
         text: 'Try Again',
-        onPress: () => {
-          // User can retry login
-        },
+        onPress: () => {},
       },
       {
         text: 'Log Out',
         onPress: async () => {
-          await useAuthStore.getState().logout();
+          if (onLogout) await onLogout();
         },
         style: 'destructive',
       },

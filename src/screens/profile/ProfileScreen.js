@@ -362,7 +362,7 @@ export default function ProfileScreen({ navigation }) {
                   style={styles.avatarImg}
                   contentFit="cover"
                   transition={200}
-                  cachePolicy="none"
+                  cachePolicy="disk"
                 />
               ) : (
                 <Avatar initials={user?.fullName?.slice(0, 2)?.toUpperCase() || '?'} size={80} />

@@ -168,7 +168,7 @@ function RideMap({
       onRegionChangeComplete={onRegionChangeComplete}
       onError={handleMapError}
       mapType="standard"
-      cacheEnabled={true}
+      cacheEnabled={false}
       loadingEnabled={true}
       loadingIndicatorColor="#00674F"
     >

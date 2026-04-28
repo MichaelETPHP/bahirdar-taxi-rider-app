@@ -132,21 +132,23 @@ export default React.memo(function UserMarker({ coordinate, avatarUrl, name, lab
           <PulseRing delay={1000} />
 
           <View style={styles.ring} />
-          <View style={styles.shell}>
-            {avatarUrl ? (
-              <Image
-                source={{ uri: avatarUrl }}
-                style={styles.avatar}
-                onLoad={() => setImageReady(true)}
-                cachePolicy="none"
-              />
-            ) : initials ? (
-              <View style={styles.initialsCircle}>
-                <Text style={styles.initialsText}>{initials}</Text>
-              </View>
-            ) : (
-              <View style={styles.dot} />
-            )}
+          <View style={styles.shellShadow}>
+            <View style={styles.shell}>
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.avatar}
+                  onLoad={() => setImageReady(true)}
+                  cachePolicy="disk"
+                />
+              ) : initials ? (
+                <View style={styles.initialsCircle}>
+                  <Text style={styles.initialsText}>{initials}</Text>
+                </View>
+              ) : (
+                <View style={styles.dot} />
+              )}
+            </View>
           </View>
         </View>
       </Animated.View>
@@ -201,15 +203,23 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    borderWidth: 3,
-    borderColor: colors.white,
     overflow: 'hidden',
     backgroundColor: colors.primary,
+  },
+  shellShadow: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 3,
+    borderColor: colors.white,
+    backgroundColor: colors.white,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatar: {
     width: '100%',

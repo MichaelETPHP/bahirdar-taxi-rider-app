@@ -22,15 +22,17 @@ const PROFESSIONAL_MAP_STYLE = [
   // Hide unnecessary clutter
   {
     elementType: 'labels.icon',
-    stylers: [{ visibility: 'off' }],
+    stylers: [{ visibility: 'on' }],
   },
   {
-    featureType: 'poi.business',
-    stylers: [{ visibility: 'off' }],
+    featureType: 'poi',
+    elementType: 'labels.text',
+    stylers: [{ visibility: 'on' }],
   },
   {
     featureType: 'poi.park',
-    stylers: [{ visibility: 'off' }],
+    elementType: 'labels.text',
+    stylers: [{ visibility: 'on' }],
   },
   {
     featureType: 'administrative.land_parcel',
@@ -144,7 +146,7 @@ const PROFESSIONAL_MAP_STYLE = [
   // Transit
   {
     featureType: 'transit',
-    stylers: [{ visibility: 'off' }],
+    stylers: [{ visibility: 'on' }],
   },
 
   // Administrative boundaries
@@ -211,7 +213,7 @@ function ProfessionalRideMap({
         provider={PROVIDER_GOOGLE}
         style={StyleSheet.absoluteFillObject}
         initialRegion={initialRegion || ADDIS_ABABA}
-        customMapStyle={[]}
+        customMapStyle={PROFESSIONAL_MAP_STYLE}
         // Interaction settings — all gestures enabled for production APK
         scrollEnabled={true}
         zoomEnabled={true}
@@ -221,12 +223,12 @@ function ProfessionalRideMap({
         pitchEnabled={false}
         moveOnMarkerPress={false}
         // Performance
-        cacheEnabled={true}
+        cacheEnabled={false}
         loadingEnabled={true}
         loadingIndicatorColor="#00674F"
         // Styling
         toolbarEnabled={false}
-        showsUserLocation={false}
+        showsUserLocation={true}
         showsMyLocationButton={false}
         showsCompass={false}
         showsTraffic={false}

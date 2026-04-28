@@ -38,21 +38,22 @@ export async function searchPlaces(query, location) {
       language: 'en',
     });
 
-    // Add location bias if current location is available
     if (location?.latitude && location?.longitude) {
       params.append('locationbias', `circle:50000@${location.latitude},${location.longitude}`);
     } else {
-      // Default bias to Addis Ababa/Bahir Dar area
       params.append('locationbias', 'circle:100000@11.5936,37.3906');
     }
 
-    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`;
-    console.log('🔍 Searching places:', { query, location, url: url.split('key=')[0] + 'key=***' });
+    console.log('[Places] Calling with key:', GOOGLE_MAPS_KEY.substring(0, 10) + '...');
+    console.log('[Places] Query:', query);
 
-    const res = await fetch(url);
+    const res = await fetch(`https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`);
     const data = await res.json();
 
-    console.log('🔍 Search response status:', data.status);
+    console.log('[Places] Response status:', data.status);
+    if (data.error_message) {
+      console.warn('[Places] Error message:', data.error_message);
+    }
 
     if (data.status === 'REQUEST_DENIED') {
       console.error('🚨 REQUEST_DENIED - Possible causes:');
@@ -159,18 +160,24 @@ export async function reverseGeocode(coords) {
       language: 'en',
     });
 
-    console.log('🔄 Reverse geocoding:', { lat: coords.latitude, lng: coords.longitude });
+    console.log('[Geocod] Calling with key:', GOOGLE_MAPS_KEY.substring(0, 10) + '...');
+    console.log('[Geocod] Coords:', coords.latitude.toFixed(6), coords.longitude.toFixed(6));
 
     const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params}`);
     const data = await res.json();
 
+    console.log('[Geocod] Response status:', data.status);
+    if (data.error_message) {
+      console.warn('[Geocod] Error message:', data.error_message);
+    }
+
     if (data.status === 'REQUEST_DENIED') {
-      console.error('🚨 REQUEST_DENIED in reverseGeocode - Geocoding API not configured');
+      console.error('[Geocod] REQUEST_DENIED - check API key and billing');
       return `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`;
     }
 
     if (data.status !== 'OK' || !data.results?.length) {
-      console.warn('⚠️ reverseGeocode no results:', data.status);
+      console.warn('[Geocod] No results. Status:', data.status);
       return `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`;
     }
 

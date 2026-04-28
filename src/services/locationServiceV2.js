@@ -70,7 +70,8 @@ export async function reverseGeocode(lat, lng) {
   // Try Google Geocode API first
   if (GOOGLE_MAPS_KEY) {
     try {
-      console.log('📍 [5/5] Reverse geocoding:', { lat: lat.toFixed(4), lng: lng.toFixed(4) });
+      console.log('[Geocod] Calling with key:', GOOGLE_MAPS_KEY.substring(0, 10) + '...');
+      console.log('[Geocod] Coords:', lat.toFixed(6), lng.toFixed(6));
 
       const url = 'https://maps.googleapis.com/maps/api/geocode/json';
       const params = new URLSearchParams({
@@ -79,27 +80,21 @@ export async function reverseGeocode(lat, lng) {
         language: 'en',
       });
 
-      const fullUrl = `${url}?${params}`;
-      console.log('📍 Calling Google Geocode API...');
-
-      const response = await fetch(fullUrl, {
-        method: 'GET',
-      });
-
-      console.log('📍 Response status:', response.status);
+      const response = await fetch(`${url}?${params}`, { method: 'GET' });
+      console.log('[Geocod] HTTP status:', response.status);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('📍 Response status from API:', data.status);
+      console.log('[Geocod] Response status:', data.status);
+      if (data.error_message) {
+        console.warn('[Geocod] Error message:', data.error_message);
+      }
 
       if (data.status !== 'OK') {
-        console.warn('⚠️  Google Geocode API error:', data.status);
-        if (data.error_message) {
-          console.warn('📝 Google Error Message:', data.error_message);
-        }
+        console.warn('[Geocod] Non-OK status:', data.status);
       } else if (data.results?.length > 0) {
         const result = data.results[0];
         const formatted = result.formatted_address;
@@ -173,7 +168,8 @@ export async function searchPlaces(query, lat, lng) {
   }
 
   try {
-    console.log('🔍 Searching places:', { query, lat: lat?.toFixed(2), lng: lng?.toFixed(2) });
+    console.log('[Places] Calling with key:', GOOGLE_MAPS_KEY.substring(0, 10) + '...');
+    console.log('[Places] Query:', query, '| lat:', lat?.toFixed(4), 'lng:', lng?.toFixed(4));
 
     const url = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
     const params = new URLSearchParams({
@@ -183,45 +179,38 @@ export async function searchPlaces(query, lat, lng) {
       components: 'country:ET',
     });
 
-    // Add location bias if available
     if (lat && lng) {
       params.append('location', `${lat},${lng}`);
       params.append('radius', '50000');
     }
 
-    const fullUrl = `${url}?${params}`;
-    const response = await fetch(fullUrl, { timeout: TIMEOUT_MS });
-
-    console.log('🔍 Search response status:', response.status);
+    const response = await fetch(`${url}?${params}`);
+    console.log('[Places] HTTP status:', response.status);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
     const data = await response.json();
-    if (data.status !== 'OK') {
-      console.warn('🔍 Search API status:', data.status);
-      if (data.error_message) {
-        console.warn('🔍 Google Search Error:', data.error_message);
-      }
+    console.log('[Places] Response status:', data.status);
+    if (data.error_message) {
+      console.warn('[Places] Error message:', data.error_message);
     }
 
     if (data.status === 'OK' && data.predictions?.length > 0) {
-      const results = data.predictions.map((p) => ({
+      console.log('[Places] Found', data.predictions.length, 'predictions');
+      return data.predictions.map((p) => ({
         placeId: p.place_id,
         mainText: p.structured_formatting?.main_text || p.description,
         secondaryText: p.structured_formatting?.secondary_text || '',
         description: p.description,
       }));
-
-      console.log('✅ Found', results.length, 'places');
-      return results;
     }
 
-    console.warn('⚠️  No predictions found');
+    console.warn('[Places] No predictions. Status was:', data.status);
     return [];
   } catch (error) {
-    console.error('❌ Search failed:', error.message);
+    console.error('[Places] Search failed:', error.message);
     return [];
   }
 }
@@ -237,7 +226,8 @@ export async function getPlaceDetails(placeId) {
   }
 
   try {
-    console.log('📍 Getting place details for:', placeId);
+    console.log('[Places] Details for placeId:', placeId?.substring(0, 20));
+    console.log('[Places] Using key:', GOOGLE_MAPS_KEY.substring(0, 10) + '...');
 
     const url = 'https://maps.googleapis.com/maps/api/place/details/json';
     const params = new URLSearchParams({
@@ -247,42 +237,40 @@ export async function getPlaceDetails(placeId) {
       language: 'en',
     });
 
-    const fullUrl = `${url}?${params}`;
-    const response = await fetch(fullUrl, { timeout: TIMEOUT_MS });
-
-    console.log('📍 Details response status:', response.status);
+    const response = await fetch(`${url}?${params}`);
+    console.log('[Places] Details HTTP status:', response.status);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('📍 Details API status:', data.status);
+    console.log('[Places] Details response status:', data.status);
+    if (data.error_message) {
+      console.warn('[Places] Details error message:', data.error_message);
+    }
 
     if (data.status === 'OK' && data.result) {
       const { geometry, formatted_address, name } = data.result;
 
       if (!geometry?.location) {
-        console.error('❌ No geometry in response');
+        console.error('[Places] No geometry in response');
         return null;
       }
 
-      const result = {
+      return {
         lat: geometry.location.lat,
         lng: geometry.location.lng,
         address: formatted_address,
-        name: name,
+        name,
         placeId,
       };
-
-      console.log('✅ Place details:', result);
-      return result;
     }
 
-    console.error('❌ API returned:', data.status);
+    console.error('[Places] Details API returned:', data.status);
     return null;
   } catch (error) {
-    console.error('❌ Getting place details failed:', error.message);
+    console.error('[Places] Details failed:', error.message);
     return null;
   }
 }
