@@ -209,12 +209,13 @@ function ProfessionalRideMap({
       <MapView
         ref={mapViewRef}
         provider={PROVIDER_GOOGLE}
-        style={styles.map}
+        style={StyleSheet.absoluteFillObject}
         initialRegion={initialRegion || ADDIS_ABABA}
         customMapStyle={[]}
-        // Interaction settings
+        // Interaction settings — all gestures enabled for production APK
         scrollEnabled={true}
         zoomEnabled={true}
+        zoomTapEnabled={true}
         panEnabled={true}
         rotateEnabled={false}
         pitchEnabled={false}
@@ -267,11 +268,6 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
-  },
-  map: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
   },
   overlayContainer: {
     position: 'absolute',
