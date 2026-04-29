@@ -1,30 +1,69 @@
-import { memo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { memo, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { Marker } from 'react-native-maps';
-import { Flag } from 'lucide-react-native';
+import { MapPin } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 
 /**
- * Uber-Style Destination Marker
- * - Red/Coral circular marker
- * - Clean design
- * - Location label above
- * - Professional appearance
+ * Uber-Style Destination Marker with 'Red Light' Pulse
  */
 function UberDestinationMarker({ coordinate, title, onPress }) {
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 2000,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [pulseAnim]);
+
+  const scale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.8],
+  });
+
+  const opacity = pulseAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.5, 0.3, 0],
+  });
+
   return (
     <Marker
       coordinate={coordinate}
       onPress={onPress}
-      tracksViewChanges={false}
-      zIndex={99}
+      tracksViewChanges={true}
+      zIndex={499} // Above polyline
       anchor={{ x: 0.5, y: 0.5 }}
     >
       <View style={styles.container}>
+        {/* Pulsing light ring */}
+        <Animated.View
+          style={[
+            styles.pulseRing,
+            {
+              transform: [{ scale }],
+              opacity,
+            },
+          ]}
+        />
+
         {/* Main marker - red circle */}
         <View style={styles.markerBody}>
-          <Flag size={18} color={colors.white} strokeWidth={2.5} />
+          <MapPin size={22} color={colors.white} strokeWidth={2.5} />
         </View>
 
         {/* Location label */}
@@ -45,43 +84,46 @@ export default memo(UberDestinationMarker);
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+    height: 60,
   },
 
-  markerBody: {
+  pulseRing: {
+    position: 'absolute',
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#EF4444',
+    backgroundColor: colors.mapDestination,
+  },
+
+  markerBody: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.mapDestination,
     borderWidth: 2,
     borderColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
 
   labelContainer: {
-    marginTop: 12,
-    backgroundColor: colors.white,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 0.5,
-    borderColor: '#e5e5e5',
-    maxWidth: 180,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
+    position: 'absolute',
+    top: -25,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#eee',
+    minWidth: 60,
   },
 
   labelText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    color: colors.textPrimary,
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#000',
+    textAlign: 'center',
   },
 });

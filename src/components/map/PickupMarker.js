@@ -2,12 +2,13 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
 
-const GREEN = '#00674F';  // matches colors.primary
+// colors.mapCurrentLocation is #10B981 (Bright Green)
+import { colors } from '../../constants/colors';
 
 export default React.memo(function PickupMarker({ coordinate, title = 'Pickup' }) {
   if (!coordinate) return null;
   return (
-    <Marker coordinate={coordinate} tracksViewChanges={false} anchor={{ x: 0.5, y: 1 }}>
+    <Marker coordinate={coordinate} tracksViewChanges={true} anchor={{ x: 0.5, y: 1 }}>
       <View style={styles.pin}>
         {/* Label */}
         <View style={styles.label}>
@@ -27,7 +28,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    backgroundColor: GREEN,
+    backgroundColor: colors.mapCurrentLocation,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -48,7 +49,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: GREEN,
+    backgroundColor: colors.mapCurrentLocation,
     borderWidth: 2.5,
     borderColor: '#FFFFFF',
     shadowColor: '#000',
@@ -65,7 +66,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 7,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: GREEN,
+    borderTopColor: colors.mapCurrentLocation,
     marginTop: -1,
   },
 });

@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useRef, useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 
@@ -127,9 +127,11 @@ const PROFESSIONAL_MAP_STYLE = [
   },
 ];
 
+import useRideStore from '../../store/rideStore';
+
 function RideMap({
   children,
-  mapRef,
+  mapRef: providedRef,
   initialRegion,
   style,
   onPress,
@@ -137,17 +139,37 @@ function RideMap({
   onRegionChangeComplete,
   mapPadding,
 }) {
+  const internalRef = useRef(null);
+  const mapViewRef  = providedRef || internalRef;
+
+  useEffect(() => {
+    const apply = (enabled) => {
+      mapViewRef.current?.setNativeProps({
+        scrollEnabled: enabled,
+      });
+    };
+    let prev = useRideStore.getState().isMapScrollEnabled;
+    apply(prev);
+    return useRideStore.subscribe((state) => {
+      if (state.isMapScrollEnabled !== prev) {
+        prev = state.isMapScrollEnabled;
+        apply(prev);
+      }
+    });
+  }, [mapViewRef]);
+
   const handleMapError = (err) => {
     console.error('🗺️  MapView Error:', err);
   };
 
   return (
     <MapView
-      ref={mapRef}
+      ref={mapViewRef}
       provider={PROVIDER_GOOGLE}
       style={[styles.map, style]}
       initialRegion={initialRegion || ADDIS_ABABA}
-      customMapStyle={PROFESSIONAL_MAP_STYLE}
+      // Use default Google Maps standard style
+      customMapStyle={[]}
       showsUserLocation={false}
       followsUserLocation={false}
       showsMyLocationButton={false}

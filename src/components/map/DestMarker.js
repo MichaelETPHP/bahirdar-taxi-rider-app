@@ -9,7 +9,7 @@ export default React.memo(function DestMarker({ coordinate, title = 'Destination
   return (
     <Marker 
       coordinate={coordinate} 
-      tracksViewChanges={false} 
+      tracksViewChanges={true} 
       anchor={{ x: 0.5, y: 1 }}
       zIndex={100} // Top priority
     >
@@ -22,7 +22,7 @@ export default React.memo(function DestMarker({ coordinate, title = 'Destination
         </View>
         {/* Pin body */}
         <View style={styles.body}>
-          <MapPin size={32} color="#EF4444" />
+          <MapPin size={32} color={colors.mapDestination} />
         </View>
       </View>
     </Marker>
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   captionText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#EF4444',
+    color: colors.mapDestination,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 2,
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   body: {
-    shadowColor: '#EF4444',
+    shadowColor: colors.mapDestination,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 6,

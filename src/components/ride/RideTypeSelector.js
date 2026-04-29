@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, memo } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { FlatList } from 'react-native-gesture-handler';
 import { useTranslation } from 'react-i18next';
 import RideTypeCard from './RideTypeCard';
 import RideTypeCardSkeleton from './RideTypeCardSkeleton';
@@ -9,26 +10,38 @@ import useLocationStore from '../../store/locationStore';
 import { colors } from '../../constants/colors';
 import { fontSize } from '../../constants/typography';
 
+const CARD_WIDTH = 300;
+const CARD_GAP = 12;
+const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
+
 function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) {
   const { i18n } = useTranslation();
-  const {
-    categories, categoriesLoaded, selectedCategoryId,
-    loadCategories, selectCategory,
-    fareEstimates, fareEstimateLoading, routeInfo, loadFareEstimates,
-  } = useRideStore();
-  const { token } = useAuthStore();
-  const { userCoords, destination } = useLocationStore();
+
+  // Narrow slice selectors: unrelated store updates (e.g. driverLocation
+  // ticking during a trip) won't re-render this list.
+  const categories = useRideStore((s) => s.categories);
+  const categoriesLoaded = useRideStore((s) => s.categoriesLoaded);
+  const selectedCategoryId = useRideStore((s) => s.selectedCategoryId);
+  const fareEstimates = useRideStore((s) => s.fareEstimates);
+  const fareEstimateLoading = useRideStore((s) => s.fareEstimateLoading);
+  const routeInfo = useRideStore((s) => s.routeInfo);
+  const loadCategories = useRideStore((s) => s.loadCategories);
+  const selectCategory = useRideStore((s) => s.selectCategory);
+  const loadFareEstimates = useRideStore((s) => s.loadFareEstimates);
+  const setMapScrollEnabled = useRideStore((s) => s.setMapScrollEnabled);
+
+  const token = useAuthStore((s) => s.token);
+  const userCoords = useLocationStore((s) => s.userCoords);
+  const destination = useLocationStore((s) => s.destination);
 
   const lastEstimateKey = useRef(null);
 
   useEffect(() => {
     loadCategories();
-    // Background heartbeat: Silently check for admin price updates every 30 seconds
     const interval = setInterval(loadCategories, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadCategories]);
 
-  // Call fare-estimate whenever pickup + destination are available
   useEffect(() => {
     if (!userCoords || !destination) return;
     const key = `${userCoords.latitude},${userCoords.longitude}|${destination.lat},${destination.lng}`;
@@ -37,22 +50,37 @@ function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) 
     loadFareEstimates(
       userCoords.latitude, userCoords.longitude,
       destination.lat, destination.lng,
-      token
+      token,
     );
-  }, [userCoords?.latitude, userCoords?.longitude, destination?.lat, destination?.lng]);
+  }, [userCoords?.latitude, userCoords?.longitude, destination?.lat, destination?.lng, token, loadFareEstimates]);
+
+  // Preemptive lock: while the carousel is mounted, the map is locked.
+  // This eliminates race conditions during horizontal swiping on Android.
+  useEffect(() => {
+    setMapScrollEnabled(false);
+    return () => setMapScrollEnabled(true);
+  }, [setMapScrollEnabled]);
 
   const lang = i18n.language === 'am' ? 'am' : 'en';
 
-  // Build a map: category_name_lower → estimated_fare_etb
-  const fareMap = {};
-  fareEstimates.forEach((e) => {
-    fareMap[e.vehicle_category?.toLowerCase()] = e.estimated_fare_etb;
-  });
+  const fareMap = useMemo(() => {
+    const m = {};
+    fareEstimates.forEach((e) => {
+      m[e.vehicle_category?.toLowerCase()] = e.estimated_fare_etb;
+    });
+    return m;
+  }, [fareEstimates]);
 
-  // Use OSRM distance/duration if available, fall back to props
-  const realDistKm  = routeInfo?.distance_km  || distanceKm;
-  const realDurMin  = routeInfo?.duration_min  || durationMin;
-  const surge       = routeInfo?.surge_multiplier ?? 1;
+  const realDistKm = routeInfo?.distance_km || distanceKm;
+  const realDurMin = routeInfo?.duration_min || durationMin;
+  const surge = routeInfo?.surge_multiplier ?? 1;
+
+  const visibleCategories = useMemo(
+    () => (showAll ? categories : categories.slice(0, 3)),
+    [categories, showAll],
+  );
+
+  const handleSelect = useCallback((id) => selectCategory(id), [selectCategory]);
 
   if (!categoriesLoaded) {
     return (
@@ -72,12 +100,7 @@ function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) 
     );
   }
 
-  const visibleCategories = showAll ? categories : categories.slice(0, 3);
-
-  // One full-card skeleton pass for fares+route ONLY if it's the very first time.
-  // Otherwise, we allow the cards to stay visible and just show a loading state on the price if needed.
   const farePending = Boolean(destination && fareEstimateLoading && fareEstimates.length === 0);
-
   if (farePending) {
     return (
       <View style={styles.cardList}>
@@ -95,22 +118,34 @@ function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) 
           <Text style={styles.surgeText}>⚡ {surge}× surge pricing active</Text>
         </View>
       )}
-      {visibleCategories.map((cat) => {
-        const serverFare = fareMap[cat.name?.toLowerCase()];
-        return (
+
+      <FlatList
+        data={visibleCategories}
+        keyExtractor={(item) => item.id.toString()}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={SNAP_INTERVAL}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        scrollEventThrottle={16}
+        disableIntervalMomentum={true}
+        nestedScrollEnabled={true}
+        disallowInterruption={true}
+
+        renderItem={({ item: cat }) => (
           <RideTypeCard
-            key={cat.id}
             category={cat}
             selected={selectedCategoryId === cat.id}
-            onPress={() => selectCategory(cat.id)}
+            onPress={() => handleSelect(cat.id)}
             distanceKm={realDistKm}
             durationMin={realDurMin}
-            serverFare={serverFare}
+            serverFare={fareMap[cat.name?.toLowerCase()]}
             fareLoading={false}
             lang={lang}
           />
-        );
-      })}
+        )}
+        contentContainerStyle={styles.horizontalScroll}
+      />
     </View>
   );
 }
@@ -132,5 +167,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: '#92400E',
     fontWeight: '600',
+  },
+  horizontalScroll: {
+    paddingRight: 20,
+    paddingVertical: 10,
   },
 });

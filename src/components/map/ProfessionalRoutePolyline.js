@@ -51,6 +51,12 @@ function ProfessionalRoutePolyline({
     return null;
   }
 
+  // Debug check: road-following routes should have many points
+  if (validCoordinates.length < 5) {
+    console.warn(`[Route] Only ${validCoordinates.length} points — may look like straight line`);
+    console.warn('[Route] Check OSRM is using overview=full');
+  }
+
   return (
     <>
       {/* Main route line - thin professional blue */}

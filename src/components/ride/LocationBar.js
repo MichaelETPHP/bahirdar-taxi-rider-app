@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, memo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from 'react-native';
+import React, { useEffect, useRef, memo, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Pressable } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MapPin, XCircle, Plus } from 'lucide-react-native';
+import Svg, { Line } from 'react-native-svg';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
@@ -15,6 +16,40 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
   const canAddStop = stops.length < MAX_STOPS;
   const whereToPulse = useRef(new Animated.Value(0)).current;
   const cursorBlink = useRef(new Animated.Value(1)).current;
+  const liquidAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(liquidAnim, {
+        toValue: 1,
+        duration: 400,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 0.98,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [liquidAnim, scaleAnim]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(liquidAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [liquidAnim, scaleAnim]);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -78,19 +113,45 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
       {/* Connector column - dynamic pins and vertical lines */}
       <View style={styles.connectorColumn}>
         <View style={styles.pinWrapper}>
-          <MapPin size={18} color={colors.primary} />
+          <MapPin size={18} color={colors.mapCurrentLocation} />
         </View>
         {stops.map((stop, i) => (
-          <React.Fragment key={`stop-${stop.placeId || stop.id || i}`}>
-            <View style={styles.dottedLine} />
+          <React.Fragment key={`stop-${stop?.placeId || stop?.id || i}`}>
+            <View style={styles.dottedLineContainer}>
+              <Svg height="100%" width="2">
+                <Line
+                  x1="1"
+                  y1="0"
+                  x2="1"
+                  y2="100%"
+                  stroke={colors.mapDestination}
+                  strokeWidth="2"
+                  strokeDasharray="0.1, 6"
+                  strokeLinecap="round"
+                />
+              </Svg>
+            </View>
             <View style={styles.pinWrapper}>
               <MapPin size={16} color={colors.mapCurrentLocation} />
             </View>
           </React.Fragment>
         ))}
-        <View style={styles.dottedLine} />
+        <View style={styles.dottedLineContainer}>
+          <Svg height="100%" width="2">
+            <Line
+              x1="1"
+              y1="0"
+              x2="1"
+              y2="100%"
+              stroke={colors.mapDestination}
+              strokeWidth="2"
+              strokeDasharray="0.1, 6"
+              strokeLinecap="round"
+            />
+          </Svg>
+        </View>
         <View style={styles.pinWrapper}>
-          <MapPin size={18} color={colors.mapCurrentLocation} />
+          <MapPin size={18} color={colors.mapDestination} />
         </View>
       </View>
 
@@ -107,7 +168,7 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
 
         {/* Dynamic stops */}
         {stops.map((stop, index) => (
-          <React.Fragment key={`stop-input-${stop.placeId || stop.id || index}`}>
+          <React.Fragment key={`stop-input-${stop?.placeId || stop?.id || index}`}>
             <View style={styles.divider} />
             <View style={styles.inputRow}>
               <TouchableOpacity
@@ -153,15 +214,39 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
         <View style={styles.divider} />
 
         {/* Destination */}
-        <Animated.View style={[styles.inputRow, !destination && whereToAnimatedStyle]}>
-          <TouchableOpacity style={styles.input} onPress={onToPress} activeOpacity={0.85}>
-            <View style={styles.whereToInline}>
-              <Text style={destination ? styles.inputText : styles.inputPlaceholder} numberOfLines={1}>
-                {destination?.name || t('home.whereTo')}
-              </Text>
-              {!destination && <Animated.View style={[styles.fakeCursor, { opacity: cursorBlink }]} />}
-            </View>
-          </TouchableOpacity>
+        <Animated.View 
+          style={[
+            styles.inputRow, 
+            !destination && whereToAnimatedStyle,
+            { transform: [...(!destination ? whereToAnimatedStyle.transform : []), { scale: scaleAnim }] }
+          ]}
+        >
+          <Pressable 
+            style={styles.input} 
+            onPress={onToPress} 
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+          >
+            {({ pressed }) => (
+              <>
+                <Animated.View 
+                  style={[
+                    styles.liquidFill,
+                    {
+                      transform: [{ scale: liquidAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 2.5] }) }],
+                      opacity: liquidAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.45] }),
+                    }
+                  ]} 
+                />
+                <View style={styles.whereToInline}>
+                  <Text style={destination ? styles.inputText : styles.inputPlaceholder} numberOfLines={1}>
+                    {destination?.name || t('home.whereTo')}
+                  </Text>
+                  {!destination && <Animated.View style={[styles.fakeCursor, { opacity: cursorBlink }]} />}
+                </View>
+              </>
+            )}
+          </Pressable>
           {destination ? (
             <TouchableOpacity
               style={styles.inputAction}
@@ -199,13 +284,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundAlt,
     gap: 2,
   },
-  dottedLine: {
+  dottedLineContainer: {
     width: 2,
     flex: 1,
     marginVertical: 4,
-    borderLeftWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(239, 68, 68, 0.5)',
+    alignItems: 'center',
   },
   pinWrapper: {
     width: 24,
@@ -276,5 +359,15 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 1,
     backgroundColor: colors.primary,
+  },
+  liquidFill: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.primaryLight,
+    top: -30,
+    left: '10%',
+    zIndex: -1,
   },
 });

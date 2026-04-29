@@ -7,7 +7,7 @@ import { shadow } from '../../constants/layout';
 export default function LocationPinButton({ onPress, style }) {
   return (
     <TouchableOpacity style={[styles.button, style]} onPress={onPress} activeOpacity={0.8}>
-      <MapPin size={20} color={colors.primary} />
+      <MapPin size={20} color="#000000" />
     </TouchableOpacity>
   );
 }

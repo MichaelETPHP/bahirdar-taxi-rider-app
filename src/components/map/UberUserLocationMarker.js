@@ -1,8 +1,9 @@
 import { memo, useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Easing } from 'react-native';
+import { View, StyleSheet, Animated, Easing, Text } from 'react-native';
 import { Image } from 'expo-image';
 import { Marker } from 'react-native-maps';
 import { colors } from '../../constants/colors';
+import { fontWeight } from '../../constants/typography';
 
 /**
  * Elegant User Location Marker with Wave Animation
@@ -103,7 +104,7 @@ function UberUserLocationMarker({
     }),
     opacity: animValue.interpolate({
       inputRange: [0, 0.3, 1],
-      outputRange: [0.8, 0.4, 0],
+      outputRange: [0.4, 0.2, 0],
     }),
   });
 
@@ -115,7 +116,7 @@ function UberUserLocationMarker({
     <Marker
       coordinate={coordinate}
       tracksViewChanges={true}
-      zIndex={101}
+      zIndex={1000} // Bring to front
       anchor={{ x: 0.5, y: 0.5 }}
     >
       <View style={styles.container}>
@@ -150,6 +151,14 @@ function UberUserLocationMarker({
 
         {/* Profile picture container - main element */}
         <View style={styles.profileContainer}>
+          {/* "Location is here" Sign / Label */}
+          <View style={styles.labelContainer}>
+            <View style={styles.labelPill}>
+              <Text style={styles.labelText}>You are here</Text>
+            </View>
+            <View style={styles.labelPointer} />
+          </View>
+
           <View style={styles.profileShadow}>
             <View style={styles.profileRing}>
               {avatarUrl ? (
@@ -178,12 +187,14 @@ function UberUserLocationMarker({
 
 export default memo(UberUserLocationMarker);
 
+const CONTAINER_SIZE = 220;
+
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 160,
-    height: 160,
+    width: CONTAINER_SIZE,
+    height: CONTAINER_SIZE,
   },
 
   // ── Wave rings - elegant ripple effect
@@ -192,11 +203,10 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    // Centered in 160x160 container: (160-88)/2 = 36
-    top: 36,
-    left: 36,
+    backgroundColor: colors.mapCurrentLocation,
+    // Center: (220 - 88) / 2 = 66
+    top: 66,
+    left: 66,
   },
 
   // ── Profile picture container - minimalist luxury
@@ -227,11 +237,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     // Elegant shadow - separated from overflow:hidden
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowColor: colors.mapCurrentLocation,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 12,
+    elevation: 12,
   },
 
   profileImage: {
@@ -247,6 +257,45 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F4F0',
   },
 
+  // ── Label Sign Styles
+  labelContainer: {
+    position: 'absolute',
+    top: -30, // Position above the profile picture
+    alignItems: 'center',
+    zIndex: 30,
+  },
+  labelPill: {
+    backgroundColor: colors.mapCurrentLocation,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  labelText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    letterSpacing: 0.2,
+  },
+  labelPointer: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderBottomWidth: 0,
+    borderTopWidth: 6,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: colors.mapCurrentLocation,
+    marginTop: -1,
+  },
+
   // ── Subtle accuracy indicator
   accuracyRing: {
     position: 'absolute',
@@ -254,17 +303,17 @@ const styles = StyleSheet.create({
     height: 104,
     borderRadius: 52,
     borderWidth: 1,
-    borderColor: `${colors.primary}15`,
-    // Centered in 160x160 container: (160-104)/2 = 28
-    top: 28,
-    left: 28,
+    borderColor: `${colors.mapCurrentLocation}15`,
+    // Center: (220 - 104) / 2 = 58
+    top: 58,
+    left: 58,
   },
   centerDot: {
     position: 'absolute',
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.mapCurrentLocation,
     borderWidth: 2,
     borderColor: colors.white,
     zIndex: 20,

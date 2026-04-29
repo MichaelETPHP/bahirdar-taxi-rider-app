@@ -41,7 +41,7 @@
   "search": {
     "placeholder": "Where to go?",
     "recent": "Recent",
-    "popular": "Popular in Bahir Dar",
+    "popular": "Popular near you",
     "typeToSearch": "Type to search for a destination",
     "noResults": "No results found",
     "loading": "Getting location...",

@@ -55,8 +55,8 @@ const BANNER_WIDTH = Dimensions.get('window').width - 40;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 // Bottom sheet starts at 45% from top — this padding tells MapView to treat bottom 55% as obstructed
 // so animateToRegion / onRegionChangeComplete centers within the visible 45% map area
-const MAP_BOTTOM_PADDING = Math.round(SCREEN_HEIGHT * 0.55);
-const MAP_PADDING = { top: 0, right: 0, bottom: MAP_BOTTOM_PADDING, left: 0 };
+// Bottom sheet padding - set to 0 to prevent map from shifting up when sheet expands
+const MAP_PADDING = { top: 0, right: 0, bottom: 0, left: 0 };
 
 // Throttle socket updates to 500ms to prevent constant re-renders
 function createThrottle(intervalMs) {
@@ -231,6 +231,15 @@ export default function HomeScreen({ navigation }) {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(true);
+  // `sheetDragging` = the BottomSheet is being dragged up/down right now.
+  // The carousel-level lock (per-touch) is NOT read here on purpose: subscribing
+  // to it would re-render this entire screen every time a finger touches a
+  // card, killing scroll smoothness. That lock is applied imperatively to the
+  // native MapView via setNativeProps inside ProfessionalRideMap, which never
+  // triggers a React re-render.
+  const [sheetDragging, setSheetDragging] = useState(false);
+  const isMapScrollEnabledStore = useRideStore((state) => state.isMapScrollEnabled);
+  const mapScrollEnabled = !sheetDragging && isMapScrollEnabledStore;
   const [isInServiceArea, setIsInServiceArea] = useState(true);
   const { currentLocation, currentAddress, loading: locLoading, permissionDenied } = useLocationV2();
 
@@ -254,7 +263,8 @@ export default function HomeScreen({ navigation }) {
       const checkCity = async () => {
         try {
           const res = await detectCity(currentLocation.lat, currentLocation.lng);
-          setIsInServiceArea(res?.city !== 'unknown');
+          const SUPPORTED_AREAS = ['addis', 'bahirdar'];
+          setIsInServiceArea(res?.area && SUPPORTED_AREAS.includes(res.area));
         } catch (err) {
           console.error('City check failed:', err);
         }
@@ -710,43 +720,48 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container} collapsable={false}>
-      <ProfessionalRideMap
-        mapRef={mapRef}
-        style={styles.mapWrapper}
-        mapPadding={destination ? undefined : MAP_PADDING}
-        showStreetNames={true}
-        showRoadLines={true}
-      >
-        {/* User location marker with professional styling */}
-        <UberUserLocationMarker
-          coordinate={destination ? pickupCoordinate : displayCoords}
-          avatarUrl={avatarUrl}
-          heading={0}
-          animated={true}
-        />
-        {useMemo(() => (
-          <>
-            {destination && (
-              <UberDestinationMarker
-                coordinate={{ latitude: destination.lat, longitude: destination.lng }}
-                title={destination.name || destination.address || t('home.whereTo')}
-              />
-            )}
-            {destination && routeCoordinates.length >= 2 && (
-              <ProfessionalRoutePolyline coordinates={routeCoordinates} />
-            )}
-            {drivers.map((driver) => (
-              <DriverMarker key={driver.id} driver={driver} />
-            ))}
-          </>
-        ), [destination, routeCoordinates, drivers, t])}
-      </ProfessionalRideMap>
+      {/* Fixed Map Layer — pan is disabled via scrollEnabled below.
+          Touches stay enabled so pinch-to-zoom and double-tap-zoom keep working. */}
+      <View style={styles.mapWrapper}>
+        <ProfessionalRideMap
+          mapRef={mapRef}
+          style={StyleSheet.absoluteFill}
+          mapPadding={destination ? undefined : MAP_PADDING}
+          showStreetNames={true}
+          showRoadLines={true}
+          scrollEnabled={mapScrollEnabled}
+        >
+          {/* User location marker with professional styling */}
+          <UberUserLocationMarker
+            coordinate={destination ? pickupCoordinate : displayCoords}
+            avatarUrl={avatarUrl}
+            heading={0}
+            animated={true}
+          />
+          {useMemo(() => (
+            <>
+              {destination && (
+                <UberDestinationMarker
+                  coordinate={{ latitude: destination.lat, longitude: destination.lng }}
+                  title={destination.name || destination.address || t('home.whereTo')}
+                />
+              )}
+              {destination && routeCoordinates.length >= 2 && (
+                <ProfessionalRoutePolyline coordinates={routeCoordinates} />
+              )}
+              {drivers.map((driver) => (
+                <DriverMarker key={driver.id} driver={driver} />
+              ))}
+            </>
+          ), [destination, routeCoordinates, drivers, t])}
+        </ProfessionalRideMap>
+      </View>
 
       {/* Route info chip — pointerEvents none so it NEVER blocks map touch */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {destination && routeDistanceKm != null && (
           <View style={[styles.routeInfoChip, { top: insets.top + 118 }]}>
-            <MapPin size={11} color={colors.primary} />
+            <MapPin size={11} color={colors.mapCurrentLocation} />
             <Text style={styles.routeDistanceKm}>{formatDistance(routeDistanceKm)}</Text>
             {routeDurationMinFinal > 0 && (
               <>
@@ -781,7 +796,7 @@ export default function HomeScreen({ navigation }) {
             onPress={handleRecenter}
             android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
           >
-            <MapPin size={13} color={colors.primary} />
+            <MapPin size={13} color={colors.mapCurrentLocation} />
             <Text style={styles.locationBottomText} numberOfLines={1}>
               {pickup?.name || 'Current Location'}
             </Text>
@@ -829,7 +844,7 @@ export default function HomeScreen({ navigation }) {
         >
           <View className="bg-white/90 self-center px-3 py-1 rounded-full flex-row items-center border border-gray-100 shadow-sm">
             <View className="mr-2">
-              <MapPin size={9} color="#FF0000" />
+              <MapPin size={9} color={colors.mapDestination} />
             </View>
             <Text 
               className="font-italic text-[10px] font-semibold" 
@@ -858,6 +873,9 @@ export default function HomeScreen({ navigation }) {
           maxHeight={SCREEN_HEIGHT * 0.85}
           initialExpanded={false}
           onExpandedChange={setSheetExpanded}
+          scrollEnabled={!destination}
+          onDragStart={() => setSheetDragging(true)}
+          onDragEnd={() => setSheetDragging(false)}
           header={!destination ? (
             isInServiceArea ? (
               <LocationBar
@@ -869,7 +887,7 @@ export default function HomeScreen({ navigation }) {
             ) : (
               <View style={styles.outOfAreaBanner}>
                 <MapPin size={20} color={colors.textSecondary} />
-                <Text style={styles.outOfAreaText}>Bahirdar is not available in your area yet</Text>
+                <Text style={styles.outOfAreaText}>Service not available in your area yet</Text>
               </View>
             )
           ) : (
@@ -879,7 +897,7 @@ export default function HomeScreen({ navigation }) {
                 onPress={() => navigation.navigate('Search', { mode: 'destination' })}
                 android_ripple={{ color: 'rgba(0,0,0,0.05)' }}
               >
-                <MapPin size={14} color={colors.primary} style={styles.destinationOnlyIcon} />
+                <MapPin size={14} color={colors.mapDestination} style={styles.destinationOnlyIcon} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.destinationOnlyText} numberOfLines={1}>
                     {destination?.name || destination?.address || t('home.whereTo')}

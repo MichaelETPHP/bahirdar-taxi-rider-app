@@ -19,159 +19,33 @@ import { borderRadius } from '../../constants/layout';
 
 // Google Maps Professional Styling - Shows road lines and street names
 const PROFESSIONAL_MAP_STYLE = [
-  // Hide unnecessary clutter
   {
-    elementType: 'labels.icon',
-    stylers: [{ visibility: 'on' }],
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#f5f5f5" }
+    ]
   },
   {
-    featureType: 'poi',
-    elementType: 'labels.text',
-    stylers: [{ visibility: 'on' }],
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#ffffff" }
+    ]
   },
   {
-    featureType: 'poi.park',
-    elementType: 'labels.text',
-    stylers: [{ visibility: 'on' }],
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#c9c9c9" }
+    ]
   },
   {
-    featureType: 'administrative.land_parcel',
-    elementType: 'labels',
-    stylers: [{ visibility: 'off' }],
-  },
-
-  // Road styling - Make roads clearly visible with proper hierarchy
-  {
-    featureType: 'road',
-    elementType: 'geometry.fill',
-    stylers: [
-      { color: '#ffffff' },
-      { weight: 1 },
-    ],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry.stroke',
-    stylers: [
-      { color: '#e5e5e5' },
-      { weight: 0.5 },
-    ],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'geometry.fill',
-    stylers: [
-      { color: '#f8f8f8' },
-    ],
-  },
-  {
-    featureType: 'road.arterial',
-    elementType: 'geometry.fill',
-    stylers: [
-      { color: '#fafafa' },
-    ],
-  },
-  {
-    featureType: 'road.local',
-    elementType: 'geometry.fill',
-    stylers: [
-      { color: '#ffffff' },
-    ],
-  },
-
-  // Road labels - Show street names clearly
-  {
-    featureType: 'road',
-    elementType: 'labels.text.fill',
-    stylers: [
-      { color: '#616161' },
-      { weight: 0.5 },
-    ],
-  },
-  {
-    featureType: 'road',
-    elementType: 'labels.text.stroke',
-    stylers: [
-      { color: '#ffffff' },
-      { weight: 3 },
-    ],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'labels.text',
-    stylers: [
-      { visibility: 'on' },
-    ],
-  },
-  {
-    featureType: 'road.arterial',
-    elementType: 'labels.text',
-    stylers: [
-      { visibility: 'on' },
-    ],
-  },
-
-  // Water
-  {
-    featureType: 'water',
-    elementType: 'geometry.fill',
-    stylers: [
-      { color: '#e8f4f8' },
-    ],
-  },
-  {
-    featureType: 'water',
-    elementType: 'labels.text.fill',
-    stylers: [
-      { color: '#70a8d8' },
-    ],
-  },
-
-  // Landscape
-  {
-    featureType: 'landscape',
-    elementType: 'geometry.fill',
-    stylers: [
-      { color: '#f3f3f3' },
-    ],
-  },
-  {
-    featureType: 'landscape.man_made',
-    elementType: 'geometry.fill',
-    stylers: [
-      { color: '#efefef' },
-    ],
-  },
-
-  // Transit
-  {
-    featureType: 'transit',
-    stylers: [{ visibility: 'on' }],
-  },
-
-  // Administrative boundaries
-  {
-    featureType: 'administrative',
-    elementType: 'geometry.stroke',
-    stylers: [
-      { color: '#e5e5e5' },
-      { weight: 1 },
-    ],
-  },
-  {
-    featureType: 'administrative.country',
-    elementType: 'labels.text.fill',
-    stylers: [
-      { color: '#999999' },
-    ],
-  },
-  {
-    featureType: 'administrative.province',
-    elementType: 'labels.text.fill',
-    stylers: [
-      { color: '#aaaaaa' },
-    ],
-  },
+    "featureType": "landscape",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#f5f5f5" }
+    ]
+  }
 ];
 
 const ADDIS_ABABA = {
@@ -180,6 +54,8 @@ const ADDIS_ABABA = {
   latitudeDelta: 0.08,
   longitudeDelta: 0.08,
 };
+
+import useRideStore from '../../store/rideStore';
 
 function ProfessionalRideMap({
   children,
@@ -192,13 +68,37 @@ function ProfessionalRideMap({
   mapPadding,
   showStreetNames = true,
   showRoadLines = true,
+  scrollEnabled = true,
 }) {
-  const mapViewRef = mapRef || useRef(null);
+  // Always call useRef; only fall back to it when no external ref was passed.
+  // Previous code did `mapRef || useRef(null)` — a Rules-of-Hooks violation.
+  const internalRef = useRef(null);
+  const mapViewRef  = mapRef || internalRef;
   const [mapReady, setMapReady] = useState(false);
-  const [centerLabel, setCenterLabel] = useState('');
+
+  // Push the map's scroll-enabled state directly to the native view via
+  // setNativeProps, bypassing React's render cycle. Going through props
+  // adds 2–4 frames of latency on Android; by the time the prop reaches
+  // the SurfaceView the gesture recogniser has already accepted the touch.
+  // setNativeProps takes effect on the next bridge flush, fast enough that
+  // the lock applies before the MapView starts panning.
+  useEffect(() => {
+    const apply = (enabled) => {
+      mapViewRef.current?.setNativeProps({
+        scrollEnabled: scrollEnabled && enabled,
+      });
+    };
+    let prev = useRideStore.getState().isMapScrollEnabled;
+    apply(prev);
+    return useRideStore.subscribe((state) => {
+      if (state.isMapScrollEnabled !== prev) {
+        prev = state.isMapScrollEnabled;
+        apply(prev);
+      }
+    });
+  }, [scrollEnabled, mapReady]);
 
   const handleMapPress = (event) => {
-    const { coordinate } = event.nativeEvent;
     onPress?.(event);
   };
 
@@ -213,9 +113,10 @@ function ProfessionalRideMap({
         provider={PROVIDER_GOOGLE}
         style={StyleSheet.absoluteFillObject}
         initialRegion={initialRegion || ADDIS_ABABA}
-        customMapStyle={PROFESSIONAL_MAP_STYLE}
-        // Interaction settings — all gestures enabled for production APK
-        scrollEnabled={true}
+        // Using standard Google Maps style with all location names visible
+        customMapStyle={[]} 
+        // Managed via setNativeProps for performance; default to provided prop
+        scrollEnabled={scrollEnabled}
         zoomEnabled={true}
         zoomTapEnabled={true}
         panEnabled={true}

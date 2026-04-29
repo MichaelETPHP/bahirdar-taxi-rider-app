@@ -19,7 +19,9 @@ const useRideStore = create(
   fareEstimates: [],
   fareEstimateLoading: false,
   routeInfo: null, // { distance_km, duration_min, surge_multiplier }
+  isMapScrollEnabled: true,
 
+  setMapScrollEnabled: (enabled) => set({ isMapScrollEnabled: enabled }),
   selectRideType: (rideType) => set({ selectedRideType: rideType }),
   selectCategory: (categoryId) => set({ selectedCategoryId: categoryId }),
 

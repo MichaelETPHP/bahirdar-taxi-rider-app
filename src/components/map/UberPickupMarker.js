@@ -40,20 +40,21 @@ function UberPickupMarker({ coordinate, title, onPress, animated = true }) {
 
   const scale = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.3],
+    outputRange: [1, 1.8],
   });
 
   const opacity = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.8, 0],
+    outputRange: [0.6, 0],
   });
 
   return (
     <Marker
       coordinate={coordinate}
       onPress={onPress}
-      tracksViewChanges={false}
-      zIndex={100}
+      tracksViewChanges={true}
+      zIndex={500} // Above polyline
+      anchor={{ x: 0.5, y: 0.5 }}
     >
       <View style={styles.container}>
         {/* Pulse ring - animated */}
@@ -69,7 +70,7 @@ function UberPickupMarker({ coordinate, title, onPress, animated = true }) {
 
         {/* Main marker - green circle */}
         <View style={styles.markerBody}>
-          <MapPin size={20} color={colors.white} strokeWidth={2.5} />
+          <MapPin size={22} color={colors.white} strokeWidth={2.5} />
         </View>
 
         {/* Location label */}
@@ -90,6 +91,9 @@ export default memo(UberPickupMarker);
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+    height: 60,
   },
 
   pulseRing: {
@@ -97,46 +101,36 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#00674F',
-    top: -22,
-    left: -22,
+    backgroundColor: colors.mapCurrentLocation,
   },
 
   markerBody: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#00674F',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.mapCurrentLocation,
     borderWidth: 2,
     borderColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
   },
 
   labelContainer: {
-    marginTop: 8,
-    backgroundColor: colors.white,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 0.5,
-    borderColor: '#e5e5e5',
-    maxWidth: 180,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
+    position: 'absolute',
+    top: -25,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#eee',
+    minWidth: 60,
   },
 
   labelText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-    color: colors.textPrimary,
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#000',
+    textAlign: 'center',
   },
 });

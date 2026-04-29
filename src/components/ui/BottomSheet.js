@@ -7,8 +7,9 @@ import {
   Easing,
   PanResponder,
   Dimensions,
-  ScrollView,
+  Pressable,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
@@ -26,30 +27,37 @@ export default function BottomSheet({
   initialExpanded = false,
   lockExpanded = false,
   onExpandedChange,
+  onDragStart,
+  onDragEnd,
   style,
+  scrollEnabled = true,
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const initialHeight = initialExpanded || lockExpanded ? maxHeight : minHeight;
-  const sheetHeight = useRef(new Animated.Value(initialHeight)).current;
-  const lastHeight = useRef(initialHeight);
-  const [isExpanded, setIsExpanded] = useState(initialHeight === maxHeight);
+
+  // The sheet will be fixed at maxHeight. We use translateY to hide/show it.
+  // translateY = 0 means fully expanded (maxHeight).
+  // translateY = maxHeight - minHeight means collapsed (minHeight).
+  const COLLAPSED_Y = maxHeight - minHeight;
+  const initialY = initialExpanded || lockExpanded ? 0 : COLLAPSED_Y;
+
+  const sheetAnim = useRef(new Animated.Value(initialY)).current;
+  const lastY = useRef(initialY);
+  const [isExpanded, setIsExpanded] = useState(initialY === 0);
 
   useEffect(() => {
     if (lockExpanded) {
-      lastHeight.current = maxHeight;
-      sheetHeight.setValue(maxHeight);
+      lastY.current = 0;
+      sheetAnim.setValue(0);
       setIsExpanded(true);
       onExpandedChange?.(true);
       return;
     }
-    const clamped = Math.min(lastHeight.current, maxHeight);
-    lastHeight.current = clamped;
-    sheetHeight.setValue(clamped);
-    const expanded = clamped === maxHeight;
-    setIsExpanded(expanded);
-    onExpandedChange?.(expanded);
-  }, [maxHeight, lockExpanded, sheetHeight, onExpandedChange]);
+    const target = initialExpanded ? 0 : COLLAPSED_Y;
+    lastY.current = target;
+    sheetAnim.setValue(target);
+    setIsExpanded(initialExpanded);
+  }, [maxHeight, minHeight, lockExpanded, initialExpanded]);
 
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const bounceLoop = useRef(null);
@@ -86,14 +94,9 @@ export default function BottomSheet({
 
   useEffect(() => {
     if (lockExpanded) return undefined;
-    startBounce();
+    if (!isExpanded) startBounce();
     return () => bounceLoop.current?.stop();
-  }, [lockExpanded, startBounce]);
-
-  const minHeightRef = useRef(minHeight);
-  const maxHeightRef = useRef(maxHeight);
-  minHeightRef.current = minHeight;
-  maxHeightRef.current = maxHeight;
+  }, [lockExpanded, isExpanded, startBounce]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -101,118 +104,127 @@ export default function BottomSheet({
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (evt, { dx, dy }) => {
         if (lockExpanded) return false;
-        if (evt.nativeEvent.touches.length > 1) return false;
-        return Math.abs(dy) > Math.abs(dx) * 1.5 && Math.abs(dy) > 10;
+        // Increase ratio to 3.0 to ensure horizontal swipes (like the car selector)
+        // are not intercepted by the vertical sheet.
+        return Math.abs(dy) > Math.abs(dx) * 3.0 && Math.abs(dy) > 10;
       },
       onMoveShouldSetPanResponderCapture: (evt, { dx, dy }) => {
         if (lockExpanded) return false;
-        if (evt.nativeEvent.touches.length > 1) return false;
-        return Math.abs(dy) > Math.abs(dx) * 1.5 && Math.abs(dy) > 10;
+        return Math.abs(dy) > Math.abs(dx) * 3.0 && Math.abs(dy) > 10;
       },
       onPanResponderTerminationRequest: () => true,
       onPanResponderGrant: () => {
         stopBounce();
-        sheetHeight.stopAnimation((v) => {
-          lastHeight.current = v;
+        onDragStart?.();
+        sheetAnim.stopAnimation((v) => {
+          lastY.current = v;
         });
       },
       onPanResponderMove: (_, { dy }) => {
-        // Dragging DOWN (positive dy) reduces height (collapses)
-        let newHeight = lastHeight.current - dy;
-        newHeight = Math.max(minHeightRef.current, Math.min(maxHeightRef.current, newHeight));
-        sheetHeight.setValue(newHeight);
+        // Dragging UP (negative dy) decreases translateY (expanded)
+        // Dragging DOWN (positive dy) increases translateY (collapsed)
+        let newY = lastY.current + dy;
+        newY = Math.max(0, Math.min(COLLAPSED_Y, newY));
+        sheetAnim.setValue(newY);
       },
       onPanResponderRelease: (_, { dy }) => {
-        let current = lastHeight.current - dy;
-        current = Math.max(minHeightRef.current, Math.min(maxHeightRef.current, current));
-        const midpoint = minHeightRef.current + (maxHeightRef.current - minHeightRef.current) * 0.5;
-        const shouldExpand = current > midpoint;
-        const target = shouldExpand ? maxHeightRef.current : minHeightRef.current;
-        lastHeight.current = target;
-        const expanded = target === maxHeightRef.current;
-        setIsExpanded(expanded);
-        onExpandedChange?.(expanded);
-        Animated.spring(sheetHeight, {
+        onDragEnd?.();
+        let currentY = lastY.current + dy;
+        currentY = Math.max(0, Math.min(COLLAPSED_Y, currentY));
+
+        const midpoint = COLLAPSED_Y * 0.5;
+        const shouldExpand = currentY < midpoint;
+        const target = shouldExpand ? 0 : COLLAPSED_Y;
+
+        lastY.current = target;
+        setIsExpanded(shouldExpand);
+        onExpandedChange?.(shouldExpand);
+
+        Animated.spring(sheetAnim, {
           toValue: target,
-          useNativeDriver: false, // height cannot use native driver
+          useNativeDriver: true, // MUCH smoother and doesn't affect map
           tension: 80,
           friction: 13,
-          velocity: 0.5,
-          restSpeedThreshold: 0.001,
-          restDisplacementThreshold: 0.001,
         }).start(() => {
-          if (target === minHeightRef.current) startBounce();
+          if (!shouldExpand) startBounce();
         });
       },
     })
   ).current;
 
   return (
-    // Animated.View occupies ONLY the visible height.
-    // No translateY = Android touch areas always match what is visible on screen.
-    <Animated.View
-      style={[styles.sheet, { height: sheetHeight }, style]}
-      pointerEvents="box-none"
-      collapsable={false}
-    >
-      <View pointerEvents="none" style={styles.topShadowGlow} />
-      <View
-        {...(!lockExpanded ? panResponder.panHandlers : undefined)}
-        style={styles.dragArea}
-        collapsable={false}
+    <View style={styles.overlay} pointerEvents="box-none">
+      <Animated.View
+        style={[
+          styles.sheet,
+          {
+            height: maxHeight,
+            transform: [{ translateY: sheetAnim }],
+          },
+          style,
+        ]}
+        pointerEvents="auto"
       >
-        <Animated.View
-          style={{
-            alignItems: 'center',
-            transform: [{ translateY: lockExpanded ? 0 : bounceAnim }],
-          }}
-        >
-          <View style={styles.handle} />
-          {!lockExpanded && (
-            <View style={styles.swipeHintWrap}>
-              <Text style={styles.swipeHint}>
-                {isExpanded
-                  ? t('home.swipeDownToHide', 'Swipe down')
-                  : t('home.swipeUpToViewMore')}
-              </Text>
-            </View>
-          )}
-        </Animated.View>
-      </View>
-      {header ? (
-        <View style={styles.header} {...(!lockExpanded ? panResponder.panHandlers : undefined)}>
-          {header}
-        </View>
-      ) : null}
-      <ScrollView
-        style={styles.scrollContent}
-        contentContainerStyle={styles.scrollContentInner}
-        showsVerticalScrollIndicator={false}
-        nestedScrollEnabled
-        directionalLockEnabled
-        scrollEventThrottle={16}
-        removeClippedSubviews
-      >
-        {children}
-      </ScrollView>
-      {footer ? (
+        <View pointerEvents="none" style={styles.topShadowGlow} />
         <View
-          style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}
-          pointerEvents="box-none"
+          {...(!lockExpanded ? panResponder.panHandlers : undefined)}
+          style={styles.dragArea}
+          collapsable={false}
         >
-          {footer}
+          <Animated.View
+            style={{
+              alignItems: 'center',
+              transform: [{ translateY: lockExpanded ? 0 : bounceAnim }],
+            }}
+          >
+            <View style={styles.handle} />
+            {!lockExpanded && (
+              <View style={styles.swipeHintWrap}>
+                <Text style={styles.swipeHint}>
+                  {isExpanded
+                    ? t('home.swipeDownToHide', 'Swipe down')
+                    : t('home.swipeUpToViewMore')}
+                </Text>
+              </View>
+            )}
+          </Animated.View>
         </View>
-      ) : null}
-    </Animated.View>
+        {header ? (
+          <View style={styles.header} {...(!lockExpanded ? panResponder.panHandlers : undefined)}>
+            {header}
+          </View>
+        ) : null}
+        <ScrollView
+          style={styles.scrollContent}
+          contentContainerStyle={styles.scrollContentInner}
+          showsVerticalScrollIndicator={false}
+          nestedScrollEnabled
+          scrollEventThrottle={16}
+          removeClippedSubviews
+          scrollEnabled={scrollEnabled}
+        >
+          {children}
+        </ScrollView>
+        {footer ? (
+          <View
+            style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}
+            pointerEvents="box-none"
+          >
+            {footer}
+          </View>
+        ) : null}
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    zIndex: 10,
+  },
   sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: colors.white,
     borderTopLeftRadius: 40,
     borderTopRightRadius: 40,
@@ -224,10 +236,10 @@ const styles = StyleSheet.create({
     borderRightWidth: 1.2,
     borderColor: '#D1D5DB',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 16,
   },
   topShadowGlow: {
     position: 'absolute',
@@ -264,6 +276,9 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingTop: 4,
     paddingBottom: 8,
+  },
+  scrollWrapper: {
+    flex: 1,
   },
   scrollContent: {
     flex: 1,

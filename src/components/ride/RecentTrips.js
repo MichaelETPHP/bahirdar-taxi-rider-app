@@ -73,7 +73,7 @@ export default function RecentTrips({ onSelectPlace, limit = 5 }) {
       <FlatList
         data={history}
         renderItem={renderTrip}
-        keyExtractor={(item) => item.placeId}
+        keyExtractor={(item, index) => item?.placeId ?? item?.id ?? `trip-${index}`}
         scrollEnabled={false}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />

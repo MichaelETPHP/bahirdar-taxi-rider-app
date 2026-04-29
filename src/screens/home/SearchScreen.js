@@ -261,7 +261,7 @@ export default function SearchScreen({ navigation, route }) {
               <View style={styles.noResults}>
                 <Search size={32} color={colors.border} />
                 <Text style={styles.noResultsText}>No results for "{query}"</Text>
-                <Text style={styles.noResultsSub}>Try a neighbourhood, landmark or street in Bahir Dar</Text>
+                <Text style={styles.noResultsSub}>Try a neighbourhood, landmark or street in your city</Text>
               </View>
             ) : null
           }

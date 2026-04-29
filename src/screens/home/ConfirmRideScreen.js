@@ -197,8 +197,8 @@ export default function ConfirmRideScreen({ navigation, route }) {
         title = 'Active Trip';
         msg = 'You already have an active trip. Please complete or cancel it first.';
       } else if (status === 422 && code === 'OUTSIDE_SERVICE_AREA') {
-        title = 'Outside Service Area';
-        msg = 'Your pickup location is outside the Addis Ababa service area.';
+        title = 'Service Unavailable';
+        msg = 'Service not available in your area yet.';
       }
 
       // Show error alert while still on SearchingScreen

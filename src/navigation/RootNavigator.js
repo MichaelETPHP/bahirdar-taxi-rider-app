@@ -6,13 +6,18 @@ import AppNavigator from './AppNavigator';
 import useAuthStore from '../store/authStore';
 import useSessionManager from '../hooks/useSessionManager';
 
+import SplashScreen from '../screens/auth/SplashScreen';
+import NetworkBanner from '../components/common/NetworkBanner';
+
 const Stack = createStackNavigator();
 export const navigationRef = createNavigationContainerRef();
 
 export default function RootNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
   const loadTokens = useAuthStore((s) => s.loadTokens);
   const [bootstrapped, setBootstrapped] = useState(false);
+  const [splashFinished, setSplashFinished] = useState(false);
 
   // Initialize 30-day session management with app lifecycle tracking
   useSessionManager();
@@ -21,13 +26,7 @@ export default function RootNavigator() {
     const bootstrap = async () => {
       try {
         // Load existing session (30-day persistent login)
-        const hasValidSession = await loadTokens();
-
-        if (hasValidSession) {
-          console.log('[Auth] Session restored from AsyncStorage');
-        } else {
-          console.log('[Auth] No valid session found, user needs to login');
-        }
+        await loadTokens();
       } catch (err) {
         console.error('[Auth] Failed to load tokens:', err);
       } finally {
@@ -38,11 +37,19 @@ export default function RootNavigator() {
     bootstrap();
   }, [loadTokens]);
 
-  // Wait until tokens are loaded before rendering navigation
-  if (!bootstrapped) return null;
+  const handleSplashFinish = () => {
+    setSplashFinished(true);
+  };
 
+  // ── Scenario 1: Still loading tokens or animation in progress ──
+  if (!bootstrapped || !splashFinished) {
+    return <SplashScreen onFinish={handleSplashFinish} />;
+  }
+
+  // ── Scenario 2: Bootstrapped and animation done → Show App ──
   return (
     <NavigationContainer ref={navigationRef}>
+      <NetworkBanner />
       <Stack.Navigator screenOptions={{ headerShown: false, animationEnabled: false }}>
         {isAuthenticated ? (
           <Stack.Screen name="AppNav" component={AppNavigator} />

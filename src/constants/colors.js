@@ -14,8 +14,8 @@ export const colors = {
   background: '#FFFFFF',
   backgroundAlt: '#F9FAFB',
 
-  mapCurrentLocation: '#2563EB',
-  mapDestination: '#00674F',
+  mapCurrentLocation: '#10B981',
+  mapDestination: '#EF4444',
   error: '#EF4444',
   success: '#10B981',
   warning: '#F59E0B',

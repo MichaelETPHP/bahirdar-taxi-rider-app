@@ -59,6 +59,12 @@ export default function RoutePolyline({
     return null;
   }
 
+  // Debug check: road-following routes should have many points
+  if (validCoordinates.length < 5) {
+    console.warn(`[Route] Only ${validCoordinates.length} points — may look like straight line`);
+    console.warn('[Route] Check OSRM is using overview=full');
+  }
+
   return (
     <>
       {/*
@@ -73,6 +79,7 @@ export default function RoutePolyline({
         lineCap="round"
         lineJoin="round"
         zIndex={10}
+        geodesic={true}
       />
 
       {/*
@@ -91,6 +98,7 @@ export default function RoutePolyline({
         lineCap="round"
         lineJoin="round"
         zIndex={11}
+        geodesic={true}
       />
     </>
   );

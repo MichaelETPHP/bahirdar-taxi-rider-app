@@ -49,7 +49,8 @@ export async function getRouteFromBackend(originLat, originLng, destLat, destLng
     let coordinates = [];
 
     console.log(`${logTag} Available route data keys:`, Object.keys(routeData));
-    console.log(`${logTag} polyline type:`, typeof routeData.polyline, Array.isArray(routeData.polyline?.coordinates));
+    console.log(`${logTag} Full routeData:`, JSON.stringify(routeData).substring(0, 500));
+    console.log(`${logTag} polyline type:`, typeof routeData.polyline, '| geometry type:', typeof routeData.geometry);
 
     // Priority 1: GeoJSON geometry (backend returns this)
     if (routeData.geometry?.coordinates && Array.isArray(routeData.geometry.coordinates) && routeData.geometry.coordinates.length > 0) {

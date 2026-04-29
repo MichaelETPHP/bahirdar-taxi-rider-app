@@ -8,9 +8,9 @@ function HamburgerButton({ onPress, style, isOpen = false }) {
   return (
     <TouchableOpacity style={[styles.button, style]} onPress={onPress} activeOpacity={0.8}>
       {isOpen ? (
-        <X size={24} color={colors.primary} />
+        <X size={24} color="#000000" />
       ) : (
-        <Menu size={24} color={colors.primary} />
+        <Menu size={24} color="#000000" />
       )}
     </TouchableOpacity>
   );
