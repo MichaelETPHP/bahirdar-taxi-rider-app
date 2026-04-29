@@ -11,7 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
-import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Stop, Rect, Path, G } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import {
@@ -23,11 +23,38 @@ import {
   Globe,
   CircleCheck,
   Car,
-  Phone,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { FacebookIcon, InstagramIcon, TiktokIcon, TelegramIcon } from '../common/BrandIcons';
 import Avatar from '../common/Avatar';
+
+// Google Play Store icon built from SVG paths (4-colour arrow)
+const PlayStoreIcon = ({ size = 22 }) => (
+  <Svg width={size} height={size} viewBox="0 0 512 512">
+    <G>
+      {/* Teal/Cyan – top-left blade */}
+      <Path
+        d="M30 5.2 L270 256 L30 506.8 C14 498 4 481 4 462 L4 50 C4 31 14 14 30 5.2Z"
+        fill="#00C6FF"
+      />
+      {/* Yellow – top blade */}
+      <Path
+        d="M362 174 L86 18 C74 11 60 9 47 12 L287 256 Z"
+        fill="#FFD700"
+      />
+      {/* Red/Magenta – bottom blade */}
+      <Path
+        d="M362 338 L287 256 L47 500 C60 503 74 501 86 494 Z"
+        fill="#FF3D5A"
+      />
+      {/* Green – right point */}
+      <Path
+        d="M460 216 L362 174 L287 256 L362 338 L461 296 C480 286 492 270 492 256 C492 242 480 226 460 216Z"
+        fill="#2ECC71"
+      />
+    </G>
+  </Svg>
+);
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight, fontFamilyBold, fontFamilySemiBold, fontFamilyRegular } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
@@ -344,14 +371,19 @@ function CustomDrawer({ visible, onClose, navigation }) {
 
           <View style={styles.divider} />
 
-          {/* Support Call Button */}
+          {/* Bahiran Delivery Button */}
           <TouchableOpacity
-            style={[styles.menuItem, styles.supportCallItem]}
-            onPress={() => Linking.openURL('tel:9040')}
-            activeOpacity={0.7}
+            style={[styles.menuItem, styles.deliveryAppItem]}
+            onPress={() => Linking.openURL('https://play.google.com/store/apps/details?id=com.bahirandelivery.app')}
+            activeOpacity={0.75}
           >
-            <Phone size={20} color={colors.primary} />
-            <Text style={styles.supportCallLabel}>Call Support (9040)</Text>
+            <View style={styles.playStoreIconWrap}>
+              <PlayStoreIcon size={16} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.deliveryAppLabel}>Bahiran Delivery</Text>
+              <Text style={styles.deliveryAppSub}>Open on Play Store ▶</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -548,16 +580,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
   },
-  supportCallItem: {
+  deliveryAppItem: {
     marginTop: 10,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: 'rgba(139, 94, 52, 0.15)',
     marginHorizontal: 16,
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 10,
   },
-  supportCallLabel: {
-    fontSize: fontSize.lg,
-    color: colors.primary,
+  playStoreIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(139, 94, 52, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deliveryAppLabel: {
+    fontSize: fontSize.md,
+    color: '#8B5E34',
     fontWeight: fontWeight.bold,
+    fontFamily: fontFamilySemiBold,
+  },
+  deliveryAppSub: {
+    fontSize: fontSize.xs,
+    color: 'rgba(139, 94, 52, 0.7)',
+    fontWeight: fontWeight.regular,
+    marginTop: 1,
   },
 });
