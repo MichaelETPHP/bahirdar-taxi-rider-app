@@ -182,7 +182,7 @@ export default function SearchingScreen({ navigation }) {
     || routeInfo?.distance_km
     || (userCoords && destination
       ? haversineDistance(userCoords.latitude, userCoords.longitude, destination.lat, destination.lng)
-      : 5.2);
+      : 0);
   
   const durMin = tripData?.duration_min || routeInfo?.duration_min || estimateDuration(distKm);
 
@@ -212,7 +212,7 @@ export default function SearchingScreen({ navigation }) {
           )
         : 0;
 
-  const fare = (lockedFare || fareValue) > 0 ? (lockedFare || fareValue).toFixed(2) : '—';
+  const fare = (lockedFare || fareValue) > 0 ? (lockedFare || fareValue).toFixed(0) : '—';
   
   const displayCategory = tripData?.vehicle_category
     ? tripData.vehicle_category.charAt(0).toUpperCase() + tripData.vehicle_category.slice(1)

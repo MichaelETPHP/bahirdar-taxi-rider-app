@@ -107,6 +107,12 @@ export default function TripCompleteScreen({ navigation }) {
             <Text style={styles.statValue}>{Math.round(durMin)} min</Text>
             <Text style={styles.statLabel}>Duration</Text>
           </View>
+          <View style={styles.statDivider} />
+          <View style={styles.stat}>
+            <DollarSign size={20} color={colors.primary} />
+            <Text style={styles.statValue}>ETB {Math.round(fare)}</Text>
+            <Text style={styles.statLabel}>Total Fare</Text>
+          </View>
         </View>
       </View>
 
@@ -166,7 +172,7 @@ const styles = StyleSheet.create({
   },
   statRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   stat: { flex: 1, alignItems: 'center', gap: 6 },
-  statDivider: { width: 1, height: 40, backgroundColor: colors.border, marginHorizontal: 20 },
+  statDivider: { width: 1, height: 40, backgroundColor: colors.border, marginHorizontal: 12 },
   statValue: { fontSize: 20, fontWeight: fontWeight.bold, color: colors.textPrimary },
   statLabel: { fontSize: fontSize.xs, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   ratingCard: {

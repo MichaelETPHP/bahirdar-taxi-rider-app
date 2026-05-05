@@ -1,61 +1,33 @@
 import { memo, useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, Text, Pressable } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Polyline, Marker } from 'react-native-maps';
-import { MapPin, Navigation, Layers } from 'lucide-react-native';
-import { colors } from '../../constants/colors';
-import { fontSize, fontWeight } from '../../constants/typography';
-import { borderRadius } from '../../constants/layout';
+import { View, StyleSheet, Animated, Easing } from 'react-native';
+import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import useRideStore from '../../store/rideStore';
 
-/**
- * Professional Google Maps-Style Ride Map
- *
- * Features:
- * - Uber/Google Maps aesthetic with road lines visible
- * - Street name and location labels
- * - Professional color palette
- * - Smooth animations
- * - Touch-responsive gestures
- */
-
-// Google Maps Professional Styling - Shows road lines and street names
-const PROFESSIONAL_MAP_STYLE = [
-  {
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#f5f5f5" }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#ffffff" }
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#c9c9c9" }
-    ]
-  },
-  {
-    "featureType": "landscape",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#f5f5f5" }
-    ]
-  }
+// Minimal style: keeps roads/labels but skips unnecessary decorative layers
+// Fewer style rules = faster SDK parse time
+const LEAN_MAP_STYLE = [
+  { featureType: 'poi',               stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.park',          stylers: [{ visibility: 'simplified' }] },
+  { featureType: 'transit',           stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative',    elementType: 'labels', stylers: [{ visibility: 'simplified' }] },
 ];
 
-const ADDIS_ABABA = {
-  latitude: 9.0320,
-  longitude: 38.7469,
-  latitudeDelta: 0.08,
-  longitudeDelta: 0.08,
-};
-
-import useRideStore from '../../store/rideStore';
+function MapSkeleton({ opacity }) {
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, styles.skeleton, { opacity }]}>
+      {/* Fake road lines for instant visual feedback */}
+      <View style={[styles.fakeRoad, { top: '38%', left: 0, right: 0, height: 3 }]} />
+      <View style={[styles.fakeRoad, { top: '62%', left: 0, right: 0, height: 2 }]} />
+      <View style={[styles.fakeRoad, { left: '35%', top: 0, bottom: 0, width: 3 }]} />
+      <View style={[styles.fakeRoad, { left: '65%', top: 0, bottom: 0, width: 2 }]} />
+      {/* Center pin */}
+      <View style={styles.skeletonPin}>
+        <View style={styles.skeletonPinDot} />
+        <View style={styles.skeletonPinShadow} />
+      </View>
+    </Animated.View>
+  );
+}
 
 function ProfessionalRideMap({
   children,
@@ -66,27 +38,32 @@ function ProfessionalRideMap({
   onRegionChange,
   onRegionChangeComplete,
   mapPadding,
-  showStreetNames = true,
-  showRoadLines = true,
   scrollEnabled = true,
+  onMapReady: onMapReadyProp,
 }) {
-  // Always call useRef; only fall back to it when no external ref was passed.
-  // Previous code did `mapRef || useRef(null)` — a Rules-of-Hooks violation.
   const internalRef = useRef(null);
   const mapViewRef  = mapRef || internalRef;
   const [mapReady, setMapReady] = useState(false);
 
-  // Push the map's scroll-enabled state directly to the native view via
-  // setNativeProps, bypassing React's render cycle. Going through props
-  // adds 2–4 frames of latency on Android; by the time the prop reaches
-  // the SurfaceView the gesture recogniser has already accepted the touch.
-  // setNativeProps takes effect on the next bridge flush, fast enough that
-  // the lock applies before the MapView starts panning.
+  // Skeleton fades out as soon as the map surface is ready
+  const skeletonOpacity = useRef(new Animated.Value(1)).current;
+
+  const handleMapReady = () => {
+    setMapReady(true);
+    onMapReadyProp?.();
+    Animated.timing(skeletonOpacity, {
+      toValue: 0,
+      duration: 280,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Imperatively push scroll-enabled state — avoids React render cycle latency
   useEffect(() => {
+    if (!mapReady) return;
     const apply = (enabled) => {
-      mapViewRef.current?.setNativeProps({
-        scrollEnabled: scrollEnabled && enabled,
-      });
+      mapViewRef.current?.setNativeProps({ scrollEnabled: scrollEnabled && enabled });
     };
     let prev = useRideStore.getState().isMapScrollEnabled;
     apply(prev);
@@ -98,24 +75,16 @@ function ProfessionalRideMap({
     });
   }, [scrollEnabled, mapReady]);
 
-  const handleMapPress = (event) => {
-    onPress?.(event);
-  };
-
-  const handleRegionChangeComplete = (region) => {
-    onRegionChangeComplete?.(region);
-  };
-
   return (
     <View style={[styles.container, style]}>
       <MapView
         ref={mapViewRef}
         provider={PROVIDER_GOOGLE}
         style={StyleSheet.absoluteFillObject}
-        initialRegion={initialRegion || ADDIS_ABABA}
-        // Using standard Google Maps style with all location names visible
-        customMapStyle={[]} 
-        // Managed via setNativeProps for performance; default to provided prop
+        initialRegion={initialRegion}
+        customMapStyle={LEAN_MAP_STYLE}
+
+        // ── Scroll / gesture ────────────────────────────────────
         scrollEnabled={scrollEnabled}
         zoomEnabled={true}
         zoomTapEnabled={true}
@@ -123,44 +92,42 @@ function ProfessionalRideMap({
         rotateEnabled={false}
         pitchEnabled={false}
         moveOnMarkerPress={false}
-        // Performance
-        cacheEnabled={false}
-        loadingEnabled={true}
-        loadingIndicatorColor="#00674F"
-        // Styling
-        toolbarEnabled={false}
-        showsUserLocation={true}
+
+        // ── Performance ──────────────────────────────────────────
+        // showsUserLocation OFF — we render UberUserLocationMarker ourselves.
+        // The native blue-dot adds a redundant GPS warmup + render pass.
+        showsUserLocation={false}
+        // Remove map chrome that adds GPU layers with no UX value
         showsMyLocationButton={false}
         showsCompass={false}
         showsTraffic={false}
         showsBuildings={false}
         showsIndoors={false}
-        // Callbacks
-        onPress={handleMapPress}
-        onRegionChange={onRegionChange}
-        onRegionChangeComplete={handleRegionChangeComplete}
-        mapPadding={mapPadding}
+        showsPointsOfInterest={false}
+
+        // Loading indicator inside MapView (shows native spinner before tiles appear)
+        loadingEnabled={true}
+        loadingIndicatorColor="#00674F"
+        loadingBackgroundColor="#F5F5F5"
+
+        toolbarEnabled={false}
         mapType="standard"
-        onMapReady={() => setMapReady(true)}
+
+        // ── Callbacks ────────────────────────────────────────────
+        onPress={onPress}
+        onRegionChange={onRegionChange}
+        onRegionChangeComplete={onRegionChangeComplete}
+        mapPadding={mapPadding}
+        onMapReady={handleMapReady}
       >
-        {/* Render all markers and routes */}
-        {children}
+        {/* Only mount children after the map surface is ready.
+            Mounting markers before onMapReady causes native crashes on some
+            Android versions and wastes a render pass on iOS. */}
+        {mapReady ? children : null}
       </MapView>
 
-      {/* Map overlay controls - Professional styling */}
-      {/* Hidden per user request:
-      <View style={styles.overlayContainer} pointerEvents="none">
-        <Pressable
-          style={styles.mapTypeButton}
-          pointerEvents="auto"
-          onPress={() => {
-            // TODO: Toggle map type
-          }}
-        >
-          <Layers size={18} color={colors.primary} />
-        </Pressable>
-      </View>
-      */}
+      {/* Instant skeleton — visible until onMapReady fires */}
+      <MapSkeleton opacity={skeletonOpacity} />
     </View>
   );
 }
@@ -172,23 +139,41 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
   },
-  overlayContainer: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 5,
-  },
-  mapTypeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
+
+  // ── Skeleton ───────────────────────────────────────────────────────────
+  skeleton: {
+    backgroundColor: '#EEF0EB',
     alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'none',
+  },
+  fakeRoad: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
+    opacity: 0.85,
+    borderRadius: 2,
+  },
+  skeletonPin: {
+    alignItems: 'center',
+  },
+  skeletonPinDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#00674F',
+    borderWidth: 3,
+    borderColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  skeletonPinShadow: {
+    width: 10,
+    height: 4,
+    borderRadius: 5,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    marginTop: 2,
   },
 });

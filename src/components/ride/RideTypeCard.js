@@ -29,8 +29,6 @@ const PALETTE = [
   { color: '#B45309', bgColor: '#FEF3C7' },
 ];
 
-const CLASSIC_IMAGE = { uri: 'https://www.pngplay.com/wp-content/uploads/8/Uber-PNG-Photos.png' };
-
 const SHIMMER_TRANSLATE = { inputRange: [-1.5, 1.5], outputRange: [-450, 450] };
 const WIGGLE_ROTATE     = { inputRange: [-1, 1],     outputRange: ['-15deg', '15deg'] };
 
@@ -41,11 +39,6 @@ const SHIMMER_GRADIENT_COLORS = [
   'rgba(255,255,255,0.0)',
   'transparent',
 ];
-
-const isClassicLike = (name) => {
-  const n = name?.toLowerCase();
-  return !!n && (n.includes('classic') || n.includes('standard'));
-};
 
 const calcFare = (category, distanceKm, durationMin) => {
   const base    = parseFloat(category.base_fare)       || 0;
@@ -73,7 +66,11 @@ function RideTypeCard({
     [category.display_order],
   );
   const IconComponent = ICON_MAP[category.icon] || Car;
-  const useImageIcon  = isClassicLike(category.name);
+
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(opacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+  }, []);
   const label = lang === 'am' && category.name_am        ? category.name_am        : category.name;
   const desc  = lang === 'am' && category.description_am ? category.description_am : category.description;
   const fare  = serverFare != null ? parseFloat(serverFare) : calcFare(category, distanceKm, durationMin);
@@ -116,15 +113,13 @@ function RideTypeCard({
     onPress?.();
   }, [onPress]);
 
-
-
   const iconCircleStyle = useMemo(() => ([
     styles.iconCircle,
     {
-      backgroundColor: useImageIcon ? 'transparent' : (selected ? palette.bgColor : '#F3F4F6'),
+      backgroundColor: selected ? palette.bgColor : '#F3F4F6',
       transform: [{ rotate: wiggleRotate }],
     },
-  ]), [useImageIcon, selected, palette.bgColor, wiggleRotate]);
+  ]), [selected, palette.bgColor, wiggleRotate]);
 
   const shimmerStyle = useMemo(() => ([
     StyleSheet.absoluteFill,
@@ -150,11 +145,7 @@ function RideTypeCard({
         )}
 
         <Animated.View style={iconCircleStyle}>
-          {useImageIcon ? (
-            <Image source={CLASSIC_IMAGE} style={styles.categoryImage} contentFit="contain" />
-          ) : (
-            <IconComponent size={22} color={selected ? palette.color : colors.textSecondary} />
-          )}
+          <IconComponent size={22} color={selected ? palette.color : colors.textSecondary} />
         </Animated.View>
 
         <View style={styles.info}>
@@ -174,7 +165,7 @@ function RideTypeCard({
             </View>
             <View style={styles.metaItem}>
               <Car size={10} color={colors.textSecondary} />
-              <Text style={styles.meta}>{category.per_km_rate} ብር/km</Text>
+              <Text style={styles.meta}>{category.per_km_rate} ETB/km</Text>
             </View>
           </View>
         </View>
@@ -186,7 +177,7 @@ function RideTypeCard({
             </View>
           ) : (
             <View style={styles.priceWrap}>
-              <Text style={styles.price}>{typeof fare === 'number' ? Math.round(fare) : fare} ብር</Text>
+              <Text style={styles.price}>ETB {typeof fare === 'number' ? Math.round(fare) : fare}</Text>
               {serverFare != null && (
                 <View style={styles.liveTag}>
                   <Text style={styles.liveText}>LIVE</Text>

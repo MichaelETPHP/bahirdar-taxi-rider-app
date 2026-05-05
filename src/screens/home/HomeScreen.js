@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Animated, Pressable, Dimensions, Image, Platform, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, Animated, Pressable, Dimensions, Image, Platform, InteractionManager, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -720,6 +720,16 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container} collapsable={false}>
+      {/* Locating Overlay — Shown while GPS is initialising */}
+      {locLoading && !permissionDenied && (
+        <View style={styles.locatingOverlay}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Animated.Text style={[styles.locatingText, { opacity: locationPulseAnim }]}>
+            Detacting Location (ጠብቅ ...)
+          </Animated.Text>
+        </View>
+      )}
+
       {/* Fixed Map Layer — pan is disabled via scrollEnabled below.
           Touches stay enabled so pinch-to-zoom and double-tap-zoom keep working. */}
       <View style={styles.mapWrapper}>
@@ -1450,5 +1460,19 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: -1,
     lineHeight: 14,
+  },
+  locatingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+    zIndex: 10000,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  locatingText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: -0.2,
   },
 });

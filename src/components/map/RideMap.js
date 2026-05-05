@@ -1,133 +1,32 @@
-import { memo, useRef, useEffect } from 'react';
-import { StyleSheet } from 'react-native';
+import { memo, useRef, useEffect, useState } from 'react';
+import { View, StyleSheet, Animated, Easing } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import useRideStore from '../../store/rideStore';
 
-// Addis Ababa city center
-const ADDIS_ABABA = {
-  latitude:      9.0320,
-  longitude:     38.7469,
-  latitudeDelta: 0.05,
-  longitudeDelta: 0.05,
-};
-
-// Professional map styling (Uber/Yango aesthetic)
-const PROFESSIONAL_MAP_STYLE = [
-  // Hide clutter
-  {
-    featureType: 'poi',
-    elementType: 'all',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'poi.business',
-    elementType: 'all',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'poi.park',
-    elementType: 'all',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'transit',
-    elementType: 'all',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'administrative.land_parcel',
-    elementType: 'labels',
-    stylers: [{ visibility: 'off' }],
-  },
-  // Road styling
-  {
-    featureType: 'road.local',
-    elementType: 'geometry',
-    stylers: [
-      { color: '#fbfbfb' },
-      { lightness: 3 },
-    ],
-  },
-  {
-    featureType: 'road.local',
-    elementType: 'labels.text',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry',
-    stylers: [
-      { color: '#ffffff' },
-      { lightness: 2 },
-    ],
-  },
-  {
-    featureType: 'road.arterial',
-    elementType: 'geometry',
-    stylers: [
-      { color: '#f8f8f8' },
-      { lightness: 1 },
-    ],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'geometry',
-    stylers: [
-      { color: '#efefef' },
-      { lightness: 0 },
-    ],
-  },
-  // Water
-  {
-    featureType: 'water',
-    elementType: 'geometry',
-    stylers: [
-      { color: '#e8f4f8' },
-      { saturation: -20 },
-      { lightness: 5 },
-    ],
-  },
-  {
-    featureType: 'water',
-    elementType: 'labels.text',
-    stylers: [{ visibility: 'off' }],
-  },
-  // Landscape
-  {
-    featureType: 'landscape',
-    elementType: 'geometry',
-    stylers: [
-      { color: '#f5f5f5' },
-      { saturation: -30 },
-    ],
-  },
-  {
-    featureType: 'landscape.natural',
-    elementType: 'geometry',
-    stylers: [
-      { color: '#f0f0f0' },
-      { saturation: -20 },
-    ],
-  },
-  // Administrative boundaries
-  {
-    featureType: 'administrative.country',
-    elementType: 'geometry.stroke',
-    stylers: [
-      { color: '#e5e5e5' },
-      { weight: 1.5 },
-    ],
-  },
-  {
-    featureType: 'administrative.province',
-    elementType: 'geometry.stroke',
-    stylers: [
-      { color: '#eeeeee' },
-      { weight: 0.8 },
-    ],
-  },
+// Minimal style: keeps roads/labels but skips unnecessary decorative layers
+const LEAN_MAP_STYLE = [
+  { featureType: 'poi',               stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.park',          stylers: [{ visibility: 'simplified' }] },
+  { featureType: 'transit',           stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative',    elementType: 'labels', stylers: [{ visibility: 'simplified' }] },
 ];
 
-import useRideStore from '../../store/rideStore';
+function MapSkeleton({ opacity }) {
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, styles.skeleton, { opacity }]}>
+      {/* Fake road lines for instant visual feedback */}
+      <View style={[styles.fakeRoad, { top: '38%', left: 0, right: 0, height: 3 }]} />
+      <View style={[styles.fakeRoad, { top: '62%', left: 0, right: 0, height: 2 }]} />
+      <View style={[styles.fakeRoad, { left: '35%', top: 0, bottom: 0, width: 3 }]} />
+      <View style={[styles.fakeRoad, { left: '65%', top: 0, bottom: 0, width: 2 }]} />
+      {/* Center pin shadow */}
+      <View style={styles.skeletonPin}>
+        <View style={styles.skeletonPinDot} />
+        <View style={styles.skeletonPinShadow} />
+      </View>
+    </Animated.View>
+  );
+}
 
 function RideMap({
   children,
@@ -141,12 +40,24 @@ function RideMap({
 }) {
   const internalRef = useRef(null);
   const mapViewRef  = providedRef || internalRef;
+  const [mapReady, setMapReady] = useState(false);
+  const skeletonOpacity = useRef(new Animated.Value(1)).current;
+
+  // Fade out skeleton as soon as the map surface is ready
+  const handleMapReady = () => {
+    setMapReady(true);
+    Animated.timing(skeletonOpacity, {
+      toValue: 0,
+      duration: 250,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  };
 
   useEffect(() => {
+    if (!mapReady) return;
     const apply = (enabled) => {
-      mapViewRef.current?.setNativeProps({
-        scrollEnabled: enabled,
-      });
+      mapViewRef.current?.setNativeProps({ scrollEnabled: enabled });
     };
     let prev = useRideStore.getState().isMapScrollEnabled;
     apply(prev);
@@ -156,53 +67,94 @@ function RideMap({
         apply(prev);
       }
     });
-  }, [mapViewRef]);
-
-  const handleMapError = (err) => {
-    console.error('🗺️  MapView Error:', err);
-  };
+  }, [mapViewRef, mapReady]);
 
   return (
-    <MapView
-      ref={mapViewRef}
-      provider={PROVIDER_GOOGLE}
-      style={[styles.map, style]}
-      initialRegion={initialRegion || ADDIS_ABABA}
-      // Use default Google Maps standard style
-      customMapStyle={[]}
-      showsUserLocation={false}
-      followsUserLocation={false}
-      showsMyLocationButton={false}
-      showsCompass={false}
-      showsTraffic={false}
-      showsBuildings={false}
-      showsIndoors={false}
-      toolbarEnabled={false}
-      moveOnMarkerPress={false}
-      scrollEnabled={true}
-      zoomEnabled={true}
-      panEnabled={true}
-      pitchEnabled={false}
-      rotateEnabled={false}
-      mapPadding={mapPadding}
-      onPress={onPress}
-      onRegionChange={onRegionChange}
-      onRegionChangeComplete={onRegionChangeComplete}
-      onError={handleMapError}
-      mapType="standard"
-      cacheEnabled={false}
-      loadingEnabled={true}
-      loadingIndicatorColor="#00674F"
-    >
-      {children}
-    </MapView>
+    <View style={[styles.container, style]}>
+      <MapView
+        ref={mapViewRef}
+        provider={PROVIDER_GOOGLE}
+        style={StyleSheet.absoluteFillObject}
+        // Pass initialRegion directly to avoid hardcoded jump
+        initialRegion={initialRegion}
+        customMapStyle={LEAN_MAP_STYLE}
+        
+        // ── Optimized Performance Flags ──
+        showsUserLocation={false} 
+        followsUserLocation={false}
+        showsMyLocationButton={false}
+        showsCompass={false}
+        showsTraffic={false}
+        showsBuildings={false}
+        showsIndoors={false}
+        toolbarEnabled={false}
+        moveOnMarkerPress={false}
+        
+        // ── Interaction ──
+        scrollEnabled={true}
+        zoomEnabled={true}
+        panEnabled={true}
+        pitchEnabled={false}
+        rotateEnabled={false}
+        
+        // ── Callbacks ──
+        mapPadding={mapPadding}
+        onPress={onPress}
+        onRegionChange={onRegionChange}
+        onRegionChangeComplete={onRegionChangeComplete}
+        onMapReady={handleMapReady}
+        mapType="standard"
+        
+        // ── Native Loading fallback ──
+        loadingEnabled={true}
+        loadingIndicatorColor="#00674F"
+        loadingBackgroundColor="#F5F5F5"
+      >
+        {/* Only mount children after map is ready to prevent UI glitches/crashes */}
+        {mapReady ? children : null}
+      </MapView>
+
+      {/* High-speed skeleton overlay */}
+      <MapSkeleton opacity={skeletonOpacity} />
+    </View>
   );
 }
 
 export default memo(RideMap);
 
 const styles = StyleSheet.create({
-  map: {
+  container: {
     ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  skeleton: {
+    backgroundColor: '#EEF0EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'none',
+  },
+  fakeRoad: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
+    opacity: 0.8,
+    borderRadius: 2,
+  },
+  skeletonPin: {
+    alignItems: 'center',
+  },
+  skeletonPinDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#00674F',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  skeletonPinShadow: {
+    width: 8,
+    height: 3,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    marginTop: 2,
   },
 });

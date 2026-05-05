@@ -65,7 +65,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
   const distKm = routeInfo?.distance_km
     || (userCoords && destination
       ? haversineDistance(userCoords.latitude, userCoords.longitude, destination.lat, destination.lng)
-      : 5.2);
+      : 0);
   const durMin = routeInfo?.duration_min || estimateDuration(distKm);
 
   // Prefer real server fare from /geo/fare-estimate, fall back to client calc
@@ -167,6 +167,9 @@ export default function ConfirmRideScreen({ navigation, route }) {
           dropoff_address: destination.name || destination.address || 'Destination',
           vehicle_category: toCategoryEnum(selectedCategory.name),
           payment_method: 'cash',
+          distance_km: distKm,
+          duration_min: durMin,
+          estimated_fare_etb: Math.round(fare),
         },
         token
       );
@@ -293,7 +296,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
                 </View>
               )}
             </View>
-            <Text style={styles.priceValue}>ETB {fare.toFixed(2)}</Text>
+            <Text style={styles.priceValue}>ETB {Math.round(fare)}</Text>
           </View>
         </View>
 

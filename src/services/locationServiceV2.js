@@ -8,7 +8,6 @@ import { GOOGLE_MAPS_KEY } from '../config/api';
 
 const TIMEOUT_MS = 10000;
 const FALLBACK_ADDRESS = 'Detecting location...';
-const FALLBACK_COORDS = { lat: 11.5936, lng: 37.3906, name: 'Bahir Dar' }; // Bahir Dar center
 
 console.log('🔧 Location Service V2 loaded');
 console.log('📍 Google Maps API Key present:', !!GOOGLE_MAPS_KEY);
@@ -140,10 +139,10 @@ export async function reverseGeocode(lat, lng) {
 
     // Detect city based on coordinates
     const cityResult = await detectCity(lat, lng);
-    const city = cityResult?.city || 'Bahir Dar';
-
-    // Create readable address from coordinates
-    const fallbackAddress = `${city} (${lat.toFixed(2)}°, ${lng.toFixed(2)}°)`;
+    const city = cityResult?.city && cityResult.city !== 'unknown' ? cityResult.city : null;
+    const fallbackAddress = city
+      ? `${city} (${lat.toFixed(3)}°, ${lng.toFixed(3)}°)`
+      : `${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E`;
     console.log('✅ Fallback address:', fallbackAddress);
     return fallbackAddress;
   } catch (error) {
@@ -156,7 +155,7 @@ export async function reverseGeocode(lat, lng) {
  * STEP 3: Search for places (Autocomplete)
  * Real-time search as user types
  */
-export async function searchPlaces(query, lat, lng) {
+export async function searchPlaces(query, lat, lng, radiusMeters = 20000) {
   // Validate input
   if (!query || query.trim().length < 2) {
     return [];
@@ -168,9 +167,6 @@ export async function searchPlaces(query, lat, lng) {
   }
 
   try {
-    console.log('[Places] Calling with key:', GOOGLE_MAPS_KEY.substring(0, 10) + '...');
-    console.log('[Places] Query:', query, '| lat:', lat?.toFixed(4), 'lng:', lng?.toFixed(4));
-
     const url = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
     const params = new URLSearchParams({
       input: query.trim(),
@@ -181,7 +177,7 @@ export async function searchPlaces(query, lat, lng) {
 
     if (lat && lng) {
       params.append('location', `${lat},${lng}`);
-      params.append('radius', '50000');
+      params.append('radius', String(Math.round(radiusMeters)));
     }
 
     const response = await fetch(`${url}?${params}`);
@@ -322,29 +318,13 @@ export async function detectCity(lat, lng) {
  * Get GPS → Geocode → Return everything
  */
 export async function getFullLocation() {
-  try {
-    console.log('📍 Starting full location workflow...');
-    const location = await getCurrentLocation();
-    const address = await reverseGeocode(location.lat, location.lng);
-
-    const result = {
-      lat: location.lat,
-      lng: location.lng,
-      address,
-      accuracy: location.accuracy,
-    };
-
-    console.log('✅ Full location ready:', result);
-    return result;
-  } catch (error) {
-    console.error('❌ Full location workflow failed:', error.message);
-    // Return fallback
-    return {
-      lat: FALLBACK_COORDS.lat,
-      lng: FALLBACK_COORDS.lng,
-      address: FALLBACK_ADDRESS,
-      accuracy: null,
-      isFallback: true,
-    };
-  }
+  const location = await getCurrentLocation();
+  const address = await reverseGeocode(location.lat, location.lng);
+  console.log('✅ Full location ready:', { lat: location.lat, lng: location.lng, address });
+  return {
+    lat: location.lat,
+    lng: location.lng,
+    address,
+    accuracy: location.accuracy,
+  };
 }

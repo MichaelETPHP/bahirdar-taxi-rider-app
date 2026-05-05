@@ -13,12 +13,18 @@ const useLocationStore = create(
       destination: null,
       stops: [],
       recentDestinations: [],
+      savedPlaces: { home: null, work: null },
 
       setUserCoords: (coords) => set({ userCoords: coords }),
 
       setPickup: (pickup) => set({ pickup }),
 
       setDestination: (destination) => set({ destination }),
+
+      setSavedPlace: (type, place) =>
+        set((state) => ({
+          savedPlaces: { ...state.savedPlaces, [type]: place },
+        })),
 
       addStop: () =>
         set((state) => {
@@ -65,6 +71,7 @@ const useLocationStore = create(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         recentDestinations: state.recentDestinations,
+        savedPlaces: state.savedPlaces,
       }),
     }
   )

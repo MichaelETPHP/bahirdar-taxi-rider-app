@@ -70,32 +70,27 @@ const pb = StyleSheet.create({
  * Resolve avatar URL to absolute URL with proper protocol
  * Handles relative paths, data URLs, and URL normalization
  */
+import { API_BASE_URL } from '../../config/api';
+
+/**
+ * Resolve avatar URL to absolute URL with proper protocol
+ */
 function resolveAvatarUrl(rawUrl) {
   if (!rawUrl) return null;
   const normalized = String(rawUrl).trim();
   if (!normalized) return null;
 
-  // Already an absolute URL
   if (/^https?:\/\//i.test(normalized)) return normalized;
-
-  // Protocol-relative URL
   if (normalized.startsWith('//')) return `https:${normalized}`;
-
-  // Data URL (base64 embedded image)
   if (normalized.startsWith('data:image/')) return normalized;
 
-  // Try to resolve from API origin (for relative paths)
   try {
-    // Get API base URL from environment or use default
-    const apiUrl = process.env.REACT_APP_API_URL || 'https://api.example.com/api/v1';
-    const origin = apiUrl.replace(/\/api\/v1\/?$/, '');
-
+    const origin = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
     if (normalized.startsWith('/')) {
       return `${origin}${normalized}`;
     }
     return new URL(normalized, `${origin}/`).toString();
   } catch (e) {
-    console.log('[Avatar] URL resolution failed:', e);
     return null;
   }
 }
@@ -355,7 +350,7 @@ export default function DriverMatchedScreen({ navigation }) {
     tripData?.driver?.vehicle?.plate_number ||
     '';
   const carLine = [carMake, carModel, carColor, carPlate].filter(Boolean).join(' · ') || 'Vehicle';
-  const fare = parseFloat(tripData?.estimated_fare_etb || 0).toFixed(2);
+  const fare = Math.round(parseFloat(tripData?.estimated_fare_etb || 0)).toString();
   const pickupName = tripData?.pickup_address || 'Your location';
   const dropoffName = tripData?.dropoff_address || destination?.name || 'Destination';
 

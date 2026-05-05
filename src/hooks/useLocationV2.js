@@ -1,11 +1,19 @@
-import { useState, useEffect } from 'react';
-import { getFullLocation } from '../services/locationServiceV2';
+import { useState, useEffect, useRef } from 'react';
+import * as Location from 'expo-location';
+import { reverseGeocode } from '../services/locationServiceV2';
 import useLocationStore from '../store/locationStore';
 
-/**
- * USE LOCATION V2 - BULLETPROOF
- * This hook actually works and gets your location
- */
+const GEO_OPTIONS = {
+  accuracy: Location.Accuracy.High,
+  timeInterval: 3000,    // Fast streaming: 3s interval
+  distanceInterval: 5,   // Update every 5m moved
+};
+
+console.log('LOG  [LOCATION] Fast GPS streaming enabled (3s interval) on the rider application');
+
+// Throttle reverse geocode to at most once every 30s
+const GEOCODE_THROTTLE_MS = 30_000;
+
 export default function useLocation() {
   const [currentLocation, setCurrentLocation] = useState(null);
   const [currentAddress, setCurrentAddress] = useState('Getting location...');
@@ -14,92 +22,92 @@ export default function useLocation() {
   const [permissionDenied, setPermissionDenied] = useState(false);
 
   const { setUserCoords, setPickup } = useLocationStore();
+  const lastGeocodeAt = useRef(0);
+  const lastAddress = useRef('');
 
   useEffect(() => {
     let mounted = true;
+    let subscriber = null;
 
-    const initLocation = async () => {
+    const start = async () => {
       try {
-        console.log('🚀 useLocationV2: Starting location initialization');
-        setLoading(true);
-        setError(null);
+        const { status } = await Location.requestForegroundPermissionsAsync();
 
-        // Get location with all data
-        const result = await getFullLocation();
-
-        if (!mounted) {
-          console.log('Component unmounted, ignoring result');
+        if (status !== 'granted') {
+          if (mounted) {
+            setPermissionDenied(true);
+            setLoading(false);
+          }
           return;
         }
 
-        // Store location
-        setCurrentLocation({
-          lat: result.lat,
-          lng: result.lng,
-          accuracy: result.accuracy,
-        });
-
-        setCurrentAddress(result.address);
-
-        // Update store for ride calculations
-        setUserCoords({
-          latitude: result.lat,
-          longitude: result.lng,
-        });
-
-        // Set as pickup location
-        setPickup({
-          name: result.address,
-          lat: result.lat,
-          lng: result.lng,
-          latitude: result.lat,
-          longitude: result.lng,
-        });
-
-        console.log('✅ useLocationV2: Location initialized successfully');
-
-        if (result.isFallback) {
-          console.warn('⚠️  Using fallback location');
-          setError('Using fallback location');
+        // Seed with last-known position immediately so map doesn't sit blank
+        const last = await Location.getLastKnownPositionAsync({ maxAge: 60_000 });
+        if (last && mounted) {
+          const { latitude, longitude, accuracy } = last.coords;
+          setCurrentLocation({ lat: latitude, lng: longitude, accuracy });
+          setUserCoords({ latitude, longitude });
+          // Don't geocode stale position — wait for fresh fix
         }
-      } catch (err) {
-        console.error('❌ useLocationV2: Fatal error:', err);
 
-        if (!mounted) return;
+        // Watch for live position updates
+        subscriber = await Location.watchPositionAsync(GEO_OPTIONS, async (loc) => {
+          if (!mounted) return;
 
-        setError(err.message);
+          const { latitude, longitude, accuracy } = loc.coords;
 
-        // Set fallback
-        const fallback = { lat: 11.5936, lng: 37.3906 };
-        setCurrentLocation(fallback);
-        setCurrentAddress('Bahir Dar');
-        setUserCoords({ latitude: fallback.lat, longitude: fallback.lng });
-        setPickup({
-          name: 'Bahir Dar',
-          lat: fallback.lat,
-          lng: fallback.lng,
-          latitude: fallback.lat,
-          longitude: fallback.lng,
-        });
-      } finally {
-        if (mounted) {
+          setCurrentLocation({ lat: latitude, lng: longitude, accuracy });
+          setUserCoords({ latitude, longitude });
           setLoading(false);
+          setError(null);
+
+          // Throttle geocoding — it's network-heavy, run at most once per 30s
+          const now = Date.now();
+          if (now - lastGeocodeAt.current >= GEOCODE_THROTTLE_MS) {
+            lastGeocodeAt.current = now;
+            const address = await reverseGeocode(latitude, longitude);
+            if (!mounted || !address) return;
+            lastAddress.current = address;
+            setCurrentAddress(address);
+            setPickup({
+              name: address,
+              address,
+              lat: latitude,
+              lng: longitude,
+              latitude,
+              longitude,
+            });
+          } else if (lastAddress.current) {
+            // Keep showing last geocoded address; coords are already updated
+            setPickup({
+              name: lastAddress.current,
+              address: lastAddress.current,
+              lat: latitude,
+              lng: longitude,
+              latitude,
+              longitude,
+            });
+          }
+        });
+      } catch (err) {
+        if (!mounted) return;
+        const msg = err?.message ?? '';
+        if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied')) {
+          setPermissionDenied(true);
+        } else {
+          setError(msg);
         }
+        setLoading(false);
       }
     };
 
-    initLocation();
+    start();
 
     return () => {
       mounted = false;
+      subscriber?.remove();
     };
-  }, [setUserCoords, setPickup]);
+  }, []); // run once — watchPositionAsync keeps it live
 
-  return {
-    currentLocation,
-    currentAddress,
-    loading,
-    error,
-    permissionDenied,
-  };
+  return { currentLocation, currentAddress, loading, error, permissionDenied };
 }
