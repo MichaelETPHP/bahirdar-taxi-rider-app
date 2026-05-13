@@ -39,8 +39,8 @@ export function useNearbyDrivers(coords, radiusKm = 5) {
         token
       ),
     enabled: !!coords && !!token,
-    refetchInterval: 30000, // Reduced from 10s to 30s to avoid constant re-renders
-    staleTime: 20000, // Data considered stale after 20s
+    refetchInterval: 15000,
+    staleTime: 12000,
   });
 }
 

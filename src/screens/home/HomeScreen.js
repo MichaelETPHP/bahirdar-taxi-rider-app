@@ -53,10 +53,10 @@ const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
 const PROMO_BANNERS = [require('../../../assets/banner.gif')];
 const BANNER_WIDTH = Dimensions.get('window').width - 40;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-// Bottom sheet starts at 45% from top — this padding tells MapView to treat bottom 55% as obstructed
-// so animateToRegion / onRegionChangeComplete centers within the visible 45% map area
-// Bottom sheet padding - set to 0 to prevent map from shifting up when sheet expands
-const MAP_PADDING = { top: 0, right: 0, bottom: 0, left: 0 };
+// Bottom padding matches the collapsed sheet height so MapView centers the user marker
+// in the visible map area above the sheet, not behind it.
+const SHEET_COLLAPSED_HEIGHT = 320;
+const MAP_PADDING = { top: 0, right: 0, bottom: SHEET_COLLAPSED_HEIGHT, left: 0 };
 
 // Throttle socket updates to 500ms to prevent constant re-renders
 function createThrottle(intervalMs) {
@@ -745,6 +745,7 @@ export default function HomeScreen({ navigation }) {
           <UberUserLocationMarker
             coordinate={destination ? pickupCoordinate : displayCoords}
             avatarUrl={avatarUrl}
+            title={destination ? (pickup?.name || 'Pickup') : readableLocationName}
             heading={0}
             animated={true}
           />
@@ -879,7 +880,7 @@ export default function HomeScreen({ navigation }) {
         <BottomSheet
           key="main-ride-sheet"
           style={styles.sheet}
-          minHeight={destination ? SCREEN_HEIGHT * 0.52 : 420}
+          minHeight={destination ? SCREEN_HEIGHT * 0.52 : SHEET_COLLAPSED_HEIGHT}
           maxHeight={SCREEN_HEIGHT * 0.85}
           initialExpanded={false}
           onExpandedChange={setSheetExpanded}

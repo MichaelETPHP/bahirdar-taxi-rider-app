@@ -136,12 +136,6 @@ export default function DriverArrivedScreen({ navigation }) {
     if (phone) Linking.openURL(`tel:${phone}`);
   };
   const driverName = driver?.name || driver?.full_name || driver?.fullName || 'Your driver';
-  const driverFirstName = String(driverName).split(' ')[0] || 'Driver';
-  const carMake = driver?.vehicle?.make || '';
-  const carModel = driver?.vehicle?.model || driver?.vehicle_model || driver?.vehicle_category || driver?.car_type || 'Vehicle';
-  const carColor = driver?.vehicle?.color || '';
-  const carPlate = driver?.vehicle?.plateNumber || driver?.plate_number || driver?.plateNumber || '—';
-  const vehicleLine = [carColor, carMake, carModel].filter(Boolean).join(' ');
   const avatarUrl = resolveAvatarUrl(driver?.avatar_url || driver?.avatarUrl || driver?.photoUrl || driver?.photo_url || driver?.profile_image);
 
 
@@ -154,7 +148,7 @@ export default function DriverArrivedScreen({ navigation }) {
 
       <Text style={styles.title}>Your driver has arrived!</Text>
       <Text style={styles.subtitle}>
-        {driverFirstName || 'Your driver'} is waiting for you
+        {driverName} is waiting for you
       </Text>
 
       {/* Vehicle card */}
@@ -191,51 +185,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md, color: colors.textSecondary,
     textAlign: 'center', marginBottom: 36,
   },
-  vehicleCard: {
-    width: '100%',
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    padding: 18, marginBottom: 32,
-    ...shadow.md,
-  },
-  vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  avatarWrap: { position: 'relative' },
-  avatar: {
-    width: 64, height: 64, borderRadius: 32,
-    borderWidth: 2, borderColor: '#E5E7EB',
-  },
-  avatarFallback: {
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  avatarEmoji: { fontSize: 30 },
-  onlineDot: {
-    position: 'absolute', bottom: 2, right: 2,
-    width: 14, height: 14, borderRadius: 7,
-    backgroundColor: '#22C55E',
-    borderWidth: 2, borderColor: colors.white,
-  },
-  nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
-  driverFullName: {
-    fontSize: fontSize.md, fontWeight: fontWeight.bold, color: '#111827',
-  },
-  nameSeparator: {
-    marginHorizontal: 6, fontSize: fontSize.lg, color: '#9CA3AF',
-  },
-  vehicleModelHeader: {
-    fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: '#4B5563',
-  },
-  vehiclePlate: {
-    fontSize: fontSize.sm, color: colors.primary, fontWeight: fontWeight.bold, marginTop: 4,
-  },
-  callBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.pill,
-    paddingHorizontal: 32, paddingVertical: 14,
-    ...shadow.md,
-  },
-  callText: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.white },
   hint: {
     marginTop: 24, fontSize: fontSize.xs, color: colors.textSecondary, textAlign: 'center',
   },

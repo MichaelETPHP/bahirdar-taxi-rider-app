@@ -21,6 +21,7 @@ import { getSocket, disconnectSocket } from '../../services/socketService';
 import { cancelTrip, getDriverLocation, getTrip } from '../../services/tripService';
 import { parseTripPollResponse, TRIP_STATUS_POLL_MS } from '../../utils/tripLifecycle';
 import useRoute from '../../hooks/useRoute';
+import { formatEthiopianPhone } from '../../utils/phoneFormatter';
 
 const LOCATION_POLL_MS = 3000;
 
@@ -266,8 +267,8 @@ export default function DriverMatchedScreen({ navigation }) {
   }, [navigate, goHome, setTripStatus]);
 
   const handleCall = () => {
-    const phone = driver?.phone;
-    if (phone) Linking.openURL(`tel:${phone}`);
+    const phone = formatEthiopianPhone(driver?.phone);
+    if (phone && phone !== '—') Linking.openURL(`tel:${driver?.phone}`);
   };
 
   const handleShareTrip = async () => {

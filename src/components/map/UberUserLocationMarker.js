@@ -15,6 +15,7 @@ import { fontWeight } from '../../constants/typography';
 function UberUserLocationMarker({
   coordinate,
   avatarUrl,
+  title,
   animated = true,
 }) {
   const wave1Anim = useRef(new Animated.Value(0)).current;
@@ -154,7 +155,9 @@ function UberUserLocationMarker({
           {/* "Location is here" Sign / Label */}
           <View style={styles.labelContainer}>
             <View style={styles.labelPill}>
-              <Text style={styles.labelText}>You are here</Text>
+              <Text style={styles.labelText} numberOfLines={1}>
+                {title || 'You are here'}
+              </Text>
             </View>
             <View style={styles.labelPointer} />
           </View>
@@ -266,14 +269,16 @@ const styles = StyleSheet.create({
   },
   labelPill: {
     backgroundColor: colors.mapCurrentLocation,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 6,
+    minWidth: 80,
+    maxWidth: 180,
   },
   labelText: {
     color: colors.white,

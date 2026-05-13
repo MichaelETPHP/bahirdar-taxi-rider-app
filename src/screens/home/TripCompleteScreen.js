@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, ActivityIndicator, Animated, Alert, BackHandler,
+  ActivityIndicator, Animated, BackHandler,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, Circle, MapPin, Route, Clock, DollarSign, Star } from 'lucide-react-native';
+import { Check, Route, Clock, DollarSign, Star, AlertTriangle, Shield } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -15,7 +15,7 @@ import { submitRating } from '../../services/tripService';
 
 export default function TripCompleteScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { tripId, tripData, driver, finalFare, reset } = useRideStore();
+  const { tripId, tripData, driver, finalFare, fareAdjustment, clearFareAdjustment, reset } = useRideStore();
   const { token } = useAuthStore();
   const { clearDestination, clearStops } = useLocationStore();
 
@@ -45,7 +45,10 @@ export default function TripCompleteScreen({ navigation }) {
     return () => backHandler.remove();
   }, []);
 
-  const fare = finalFare?.amount || tripData?.estimated_fare_etb || 0;
+  const fare          = fareAdjustment?.finalFare ?? finalFare?.amount ?? tripData?.estimated_fare_etb ?? 0;
+  const confirmedFare = fareAdjustment?.confirmedFare ?? fare;
+  const adjustment    = fareAdjustment?.adjustment ?? 0;
+  const pricingModel  = fareAdjustment?.pricingModel ?? 'upfront';
   const distKm = finalFare?.distanceKm || tripData?.distance_km || 0;
   const durMin = finalFare?.durationMin || tripData?.duration_min || 0;
 
@@ -73,6 +76,7 @@ export default function TripCompleteScreen({ navigation }) {
   };
 
   const finishFlow = () => {
+    clearFareAdjustment();
     reset();
     clearDestination();
     clearStops();
@@ -110,11 +114,30 @@ export default function TripCompleteScreen({ navigation }) {
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <DollarSign size={20} color={colors.primary} />
-            <Text style={styles.statValue}>ETB {Math.round(fare)}</Text>
+            <Text style={styles.statValue}>ETB {parseFloat(fare).toFixed(0)}</Text>
             <Text style={styles.statLabel}>Total Fare</Text>
           </View>
         </View>
       </View>
+
+      {/* Pricing model receipt */}
+      {pricingModel === 'upfront' && (
+        <View style={[styles.receiptCard, styles.receiptUpfront]}>
+          <Shield size={16} color={colors.primary} />
+          <Text style={styles.receiptText}>You paid the confirmed fare  ETB {parseFloat(confirmedFare).toFixed(2)}</Text>
+        </View>
+      )}
+      {pricingModel === 'hybrid' && adjustment > 0 && (
+        <View style={[styles.receiptCard, styles.receiptHybrid]}>
+          <AlertTriangle size={16} color='#B45309' />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.receiptHybridTitle}>Small traffic adjustment applied</Text>
+            <Text style={styles.receiptHybridRow}>Confirmed fare:   ETB {parseFloat(confirmedFare).toFixed(2)}</Text>
+            <Text style={styles.receiptHybridRow}>Traffic add-on:  +ETB {parseFloat(adjustment).toFixed(2)}</Text>
+            <Text style={styles.receiptHybridTotal}>Total:            ETB {parseFloat(fare).toFixed(2)}</Text>
+          </View>
+        </View>
+      )}
 
       {/* Rating */}
       <View style={styles.ratingCard}>
@@ -208,4 +231,47 @@ const styles = StyleSheet.create({
   submitText: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.white },
   skipBtn: { paddingVertical: 12 },
   skipText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: fontWeight.medium },
+  receiptCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: borderRadius.md,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  receiptUpfront: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  receiptText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: fontWeight.semibold,
+  },
+  receiptHybrid: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    alignItems: 'flex-start',
+  },
+  receiptHybridTitle: {
+    fontSize: fontSize.sm,
+    color: '#92400E',
+    fontWeight: fontWeight.bold,
+    marginBottom: 4,
+  },
+  receiptHybridRow: {
+    fontSize: fontSize.xs,
+    color: '#78350F',
+    fontFamily: 'Courier',
+  },
+  receiptHybridTotal: {
+    fontSize: fontSize.sm,
+    color: '#92400E',
+    fontWeight: fontWeight.bold,
+    fontFamily: 'Courier',
+    marginTop: 4,
+  },
 });

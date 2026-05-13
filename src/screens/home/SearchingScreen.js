@@ -42,7 +42,8 @@ function normalizeDriverPoint(raw, idx) {
   };
 }
 
-const POLL_INTERVAL = 5000;
+// Poll every 2s as a tight fallback — socket is primary, poll is safety net
+const POLL_INTERVAL = 2000;
 
 // Dot loading animation — three dots that bounce in sequence
 function SearchDots() {
@@ -333,9 +334,7 @@ export default function SearchingScreen({ navigation }) {
       navigate('DriverMatched');
     };
     const onNoDrivers = () => {
-      // We ignore early "no drivers" events from the server to allow the 
-      // full 60s countdown and "Ping Animation" to finish for user engagement.
-      console.log('ℹ️ Server reported no drivers, but waiting for timer to finish...');
+      handleNoDrivers();
     };
     const onCancelled = ({ reason }) => {
       console.warn('❌ Trip Cancelled by Server/Socket:', reason);
@@ -344,12 +343,22 @@ export default function SearchingScreen({ navigation }) {
       ]);
     };
 
+    // Primary: listen for explicit match event
     socket.on('trip:matched', onMatched);
+    // Fallback: some server versions emit trip:status with status='matched'
+    socket.on('trip:status', (payload) => {
+      if (payload?.status === 'matched' && payload?.driver) {
+        onMatched({ driver: payload.driver });
+      } else if (payload?.status === 'cancelled' || payload?.status?.startsWith('cancelled')) {
+        onCancelled({ reason: payload?.reason });
+      }
+    });
     socket.on('trip:no_drivers', onNoDrivers);
     socket.on('trip:cancelled', onCancelled);
 
     return () => {
       socket.off('trip:matched', onMatched);
+      socket.off('trip:status');
       socket.off('trip:no_drivers', onNoDrivers);
       socket.off('trip:cancelled', onCancelled);
     };
@@ -387,13 +396,15 @@ export default function SearchingScreen({ navigation }) {
           }
           setTripStatus('completed');
           navigate('TripComplete');
+        } else if (s === 'no_drivers_found') {
+          handleNoDrivers();
         } else if (s === 'cancelled') {
           Alert.alert('Cancelled', 'Trip was cancelled.', [{ text: 'OK', onPress: goBackToHome }]);
         }
       } catch (_) {}
     }, POLL_INTERVAL);
     return () => clearInterval(pollRef.current);
-  }, [tripId, token, navigate, goBackToHome, setDriver, setTripStatus, setFinalFare, mergeTripData]);
+  }, [tripId, token, navigate, goBackToHome, handleNoDrivers, setDriver, setTripStatus, setFinalFare, mergeTripData]);
 
   const [cancelling, setCancelling] = useState(false);
 

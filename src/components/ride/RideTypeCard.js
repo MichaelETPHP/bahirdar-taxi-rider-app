@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { Car, Van, Users } from 'lucide-react-native';
@@ -40,13 +40,15 @@ const SHIMMER_GRADIENT_COLORS = [
   'transparent',
 ];
 
-const calcFare = (category, distanceKm, durationMin) => {
+const calcFare = (category, distanceKm, durationMin, surge = 1) => {
   const base    = parseFloat(category.base_fare)       || 0;
   const perKm   = parseFloat(category.per_km_rate)     || 0;
   const perMin  = parseFloat(category.per_minute_rate) || 0;
   const minFare = parseFloat(category.minimum_fare)    || 0;
-  const total   = base + distanceKm * perKm + durationMin * perMin;
-  return Math.max(minFare, Math.round(total));
+  const subtotal = base + (distanceKm * perKm) + (durationMin * perMin);
+  const surged   = Math.max(subtotal * surge, minFare);
+  // Client-side: mirror the 15% buffer the server applies
+  return Math.ceil((surged * 1.15) / 0.5) * 0.5;
 };
 
 function RideTypeCard({
@@ -56,6 +58,9 @@ function RideTypeCard({
   distanceKm = 5,
   durationMin = 14,
   serverFare,
+  serverBreakdown,   // fare_breakdown from server estimate
+  arrivalEta,
+  surge = 1,
   fareLoading = false,
   lang = 'en',
 }) {
@@ -73,7 +78,7 @@ function RideTypeCard({
   }, []);
   const label = lang === 'am' && category.name_am        ? category.name_am        : category.name;
   const desc  = lang === 'am' && category.description_am ? category.description_am : category.description;
-  const fare  = serverFare != null ? parseFloat(serverFare) : calcFare(category, distanceKm, durationMin);
+  const fare  = serverFare != null ? parseFloat(serverFare) : calcFare(category, distanceKm, durationMin, surge);
 
   const shimmerPos = useRef(new Animated.Value(-1.5)).current;
   const wiggleAnim = useRef(new Animated.Value(0)).current;
@@ -108,10 +113,17 @@ function RideTypeCard({
   const shimmerTranslateX = shimmerPos.interpolate(SHIMMER_TRANSLATE);
   const wiggleRotate      = wiggleAnim.interpolate(WIGGLE_ROTATE);
 
+  const scaleAnim = useRef(new Animated.Value(1)).current;
   const handlePress = useCallback(async () => {
+    // Fast "Swallow" Animation
+    Animated.sequence([
+      Animated.timing(scaleAnim, { toValue: 0.96, duration: 80, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, tension: 150, friction: 10, useNativeDriver: true }),
+    ]).start();
+
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress?.();
-  }, [onPress]);
+  }, [onPress, scaleAnim]);
 
   const iconCircleStyle = useMemo(() => ([
     styles.iconCircle,
@@ -127,7 +139,7 @@ function RideTypeCard({
   ]), [shimmerTranslateX]);
 
   return (
-    <View style={styles.wrapper}>
+    <Animated.View style={[styles.wrapper, { transform: [{ scale: scaleAnim }] }]}>
       <TouchableOpacity
         style={[styles.card, selected && styles.cardSelected]}
         onPress={handlePress}
@@ -144,54 +156,88 @@ function RideTypeCard({
           </Animated.View>
         )}
 
-        <Animated.View style={iconCircleStyle}>
-          <IconComponent size={22} color={selected ? palette.color : colors.textSecondary} />
-        </Animated.View>
+        <View style={styles.cardMain}>
+          <Animated.View style={iconCircleStyle}>
+            <IconComponent size={22} color={selected ? palette.color : colors.textSecondary} />
+          </Animated.View>
 
-        <View style={styles.info}>
-          <View style={styles.nameRow}>
-            <Text style={styles.label}>{label}</Text>
-            {selected && (
-              <View style={[styles.badge, { backgroundColor: palette.color }]}>
-                <Text style={styles.badgeText}>Selected</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.description} numberOfLines={1}>{desc}</Text>
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Users size={10} color={colors.textSecondary} />
-              <Text style={styles.meta}>{category.capacity} seats</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Car size={10} color={colors.textSecondary} />
-              <Text style={styles.meta}>{category.per_km_rate} ETB/km</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.right}>
-          {fareLoading ? (
-            <View style={styles.priceLoading}>
-              <View style={styles.priceSkeleton} />
-            </View>
-          ) : (
-            <View style={styles.priceWrap}>
-              <Text style={styles.price}>ETB {typeof fare === 'number' ? Math.round(fare) : fare}</Text>
-              {serverFare != null && (
-                <View style={styles.liveTag}>
-                  <Text style={styles.liveText}>LIVE</Text>
+          <View style={styles.info}>
+            <View style={styles.nameRow}>
+              <Text 
+                style={styles.label} 
+                numberOfLines={1} 
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.7}
+              >
+                {label}
+              </Text>
+              {arrivalEta != null && (
+                <View style={styles.etaBadge}>
+                  <Text style={styles.etaText}>{arrivalEta} min</Text>
                 </View>
               )}
             </View>
-          )}
+            <Text style={styles.description} numberOfLines={1}>
+              {desc?.substring(0, 12)}
+            </Text>
+            <View style={styles.metaRow}>
+              <View style={styles.metaItem}>
+                <Car size={10} color={colors.textSecondary} />
+                <Text style={styles.meta}>{category.per_km_rate} ETB/km</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.right}>
+            {fareLoading ? (
+              <View style={styles.priceLoading}>
+                <View style={styles.priceSkeleton} />
+              </View>
+            ) : (
+              <View style={styles.priceContainer}>
+                <Text style={styles.priceValue}>
+                  {typeof fare === 'number' ? fare.toFixed(0) : fare}
+                  <Text style={styles.currencyLabel}> ETB / ብር</Text>
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
-        <View style={[styles.radio, selected && { borderColor: palette.color, backgroundColor: palette.bgColor }]}>
-          {selected && <View style={[styles.radioDot, { backgroundColor: palette.color }]} />}
+        {/* Price protection badge */}
+        <View style={styles.protectionRow}>
+          <Text style={styles.protectionText}>Price protected</Text>
+          <Text style={styles.protectionSub}>Adjusts only for heavy traffic</Text>
         </View>
+
+        {selected && serverBreakdown && (
+          <View style={styles.breakdownWrap}>
+            <Text style={styles.breakdownRow}>Base  ETB {(serverBreakdown.baseFare || 0).toFixed(2)}</Text>
+            <Text style={styles.breakdownRow}>
+              Distance ({distanceKm.toFixed(1)}km)  ETB {(serverBreakdown.distanceFare || 0).toFixed(2)}
+            </Text>
+            <Text style={styles.breakdownRow}>
+              Time ({durationMin}min)  ETB {(serverBreakdown.timeFare || 0).toFixed(2)}
+            </Text>
+            {(serverBreakdown.bufferAmount || 0) > 0 && (
+              <Text style={styles.breakdownRow}>
+                Traffic buffer  ETB {(serverBreakdown.bufferAmount || 0).toFixed(2)}
+              </Text>
+            )}
+            <Text style={styles.breakdownTotal}>
+              Confirmed  ETB {fare.toFixed(2)}
+            </Text>
+          </View>
+        )}
+        {selected && !serverBreakdown && (
+          <View style={styles.explanationWrap}>
+            <Text style={styles.explanationText}>
+              Base {category.base_fare} + ({distanceKm.toFixed(1)}km × {category.per_km_rate}) {surge > 1 ? `× ${surge} surge` : ''} + 15% buffer
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -201,34 +247,41 @@ function RideTypeCard({
 // scroll tick of the parent, defeating windowing.
 function areEqual(prev, next) {
   return (
-    prev.selected    === next.selected    &&
-    prev.serverFare  === next.serverFare  &&
-    prev.fareLoading === next.fareLoading &&
-    prev.distanceKm  === next.distanceKm  &&
-    prev.durationMin === next.durationMin &&
-    prev.lang        === next.lang        &&
-    prev.category    === next.category
+    prev.selected        === next.selected        &&
+    prev.serverFare      === next.serverFare      &&
+    prev.serverBreakdown === next.serverBreakdown &&
+    prev.fareLoading     === next.fareLoading     &&
+    prev.distanceKm      === next.distanceKm      &&
+    prev.durationMin     === next.durationMin     &&
+    prev.lang            === next.lang            &&
+    prev.category        === next.category
   );
 }
 
 export default memo(RideTypeCard, areEqual);
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH * 0.88;
 
 const styles = StyleSheet.create({
   wrapper: {
     marginRight: 12,
   },
   card: {
-    width: 300,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 14,
-    borderRadius: 16,
+    width: CARD_WIDTH,
+    flexDirection: 'column',
+    paddingVertical: 8, // Slightly more vertical padding for balance
+    paddingHorizontal: 12,
+    borderRadius: 12, // More standard radius for compact cards
     borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.white,
-    gap: 12,
     ...shadow.sm,
+  },
+  cardMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8, // Reduced gap to give more room to text
   },
   cardSelected: {
     borderColor: colors.primary,
@@ -241,9 +294,9 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 54, // Reduced from 80 for a cleaner look
+    height: 54,
+    borderRadius: 27,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 0,
@@ -262,10 +315,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontSize: 17,
+    flex: 1,
+    fontSize: 15, // Reduced from 17
     fontWeight: '900',
     color: '#000000',
-    letterSpacing: -0.2,
+    letterSpacing: -0.1,
   },
   badge: {
     borderRadius: borderRadius.pill,
@@ -299,29 +353,22 @@ const styles = StyleSheet.create({
   },
   right: {
     alignItems: 'flex-end',
-    gap: 6,
+    justifyContent: 'center',
   },
-  priceWrap: {
+  priceContainer: {
     alignItems: 'flex-end',
-    gap: 2,
+    justifyContent: 'center',
   },
-  price: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
+  priceValue: {
+    fontSize: 18,
+    fontWeight: '900',
     color: '#000000',
     textAlign: 'right',
   },
-  liveTag: {
-    backgroundColor: '#DCFCE7',
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  liveText: {
-    fontSize: 8,
-    fontWeight: '700',
-    color: '#16A34A',
-    letterSpacing: 0.5,
+  currencyLabel: {
+    fontSize: 10,
+    fontWeight: '400',
+    color: colors.textSecondary,
   },
   priceLoading: {
     alignItems: 'flex-end',
@@ -334,21 +381,64 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.border,
   },
-  radio: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    justifyContent: 'center',
+  protectionRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingLeft: 50,
+    marginTop: 2,
   },
-  radioDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  protectionText: {
+    fontSize: 9,
+    color: '#00674F',
+    fontWeight: '700',
+  },
+  protectionSub: {
+    fontSize: 9,
+    color: '#94A3B8',
+    fontWeight: '300',
+  },
+  explanationWrap: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.03)',
+    marginTop: 4,
+    paddingTop: 4,
+    paddingLeft: 50,
+  },
+  explanationText: {
+    fontSize: 9,
+    color: '#94A3B8',
+    fontWeight: '300',
+    letterSpacing: 0.2,
+  },
+  breakdownWrap: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.06)',
+    marginTop: 6,
+    paddingTop: 6,
+    paddingLeft: 50,
+    gap: 2,
+  },
+  breakdownRow: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '400',
+  },
+  breakdownTotal: {
+    fontSize: 11,
+    color: '#00674F',
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  etaBadge: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  etaText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
 });

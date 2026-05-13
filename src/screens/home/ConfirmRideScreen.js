@@ -29,25 +29,7 @@ const formatDistance = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.to
  * Maps any vehicle category display name → valid backend enum value.
  * Backend only accepts: economy | comfort | business
  */
-const CATEGORY_ENUM_MAP = {
-  economy:   'economy',
-  standard:  'economy',
-  basic:     'economy',
-  regular:   'economy',
-  minibus:   'economy',
-  comfort:   'comfort',
-  premium:   'comfort',
-  plus:      'comfort',
-  business:  'business',
-  luxury:    'business',
-  exec:      'business',
-  executive: 'business',
-  vip:       'business',
-};
-
-function toCategoryEnum(name = '') {
-  return CATEGORY_ENUM_MAP[name.trim().toLowerCase()] || 'economy';
-}
+// Removed legacy CATEGORY_ENUM_MAP as we now use dynamic names from the database
 
 export default function ConfirmRideScreen({ navigation, route }) {
   const isRetry = route?.params?.retry === true;
@@ -137,9 +119,9 @@ export default function ConfirmRideScreen({ navigation, route }) {
       pickup_lng: displayCoords.longitude,
       dropoff_lat: destination.lat,
       dropoff_lng: destination.lng,
-      vehicle_category: toCategoryEnum(selectedCategory.name),
+      vehicle_category: selectedCategory.name, // Use raw name from DB
       payment_method: 'cash',
-      estimated_fare_etb: fare,
+      estimated_fare_etb: Number(fare) || 0,
       distance_km: distKm,
       duration_min: durMin,
     };
@@ -165,11 +147,11 @@ export default function ConfirmRideScreen({ navigation, route }) {
           dropoff_lat: destination.lat,
           dropoff_lng: destination.lng,
           dropoff_address: destination.name || destination.address || 'Destination',
-          vehicle_category: toCategoryEnum(selectedCategory.name),
+          vehicle_category: selectedCategory.name, // Use raw name from DB
           payment_method: 'cash',
           distance_km: distKm,
           duration_min: durMin,
-          estimated_fare_etb: Math.round(fare),
+          estimated_fare_etb: Math.round(Number(fare) || 0),
         },
         token
       );

@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
 import { useTranslation } from 'react-i18next';
 import RideTypeCard from './RideTypeCard';
@@ -10,7 +10,8 @@ import useLocationStore from '../../store/locationStore';
 import { colors } from '../../constants/colors';
 import { fontSize } from '../../constants/typography';
 
-const CARD_WIDTH = 300;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH * 0.88;
 const CARD_GAP = 12;
 const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
 
@@ -66,7 +67,12 @@ function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) 
   const fareMap = useMemo(() => {
     const m = {};
     fareEstimates.forEach((e) => {
-      m[e.vehicle_category?.toLowerCase()] = e.estimated_fare_etb;
+      const key = e.vehicle_category?.toLowerCase();
+      m[key] = {
+        fare:      e.confirmed_fare ?? e.estimated_fare_etb,
+        breakdown: e.fare_breakdown ?? null,
+        eta:       e.arrival_eta_min,
+      };
     });
     return m;
   }, [fareEstimates]);
@@ -139,7 +145,10 @@ function RideTypeSelector({ distanceKm = 5, durationMin = 14, showAll = true }) 
             onPress={() => handleSelect(cat.id)}
             distanceKm={realDistKm}
             durationMin={realDurMin}
-            serverFare={fareMap[cat.name?.toLowerCase()]}
+            serverFare={fareMap[cat.name?.toLowerCase()]?.fare}
+            serverBreakdown={fareMap[cat.name?.toLowerCase()]?.breakdown}
+            arrivalEta={fareMap[cat.name?.toLowerCase()]?.eta}
+            surge={surge}
             fareLoading={false}
             lang={lang}
           />

@@ -12,7 +12,7 @@ import { shadow, borderRadius } from '../../constants/layout';
 import useRideStore from '../../store/rideStore';
 import useAuthStore from '../../store/authStore';
 import useLocationStore from '../../store/locationStore';
-import { getSocket, disconnectSocket } from '../../services/socketService';
+import { getSocket, disconnectSocket, listenForFareAdjustment, removeFareAdjustmentListener } from '../../services/socketService';
 import { getDriverLocation, getTrip } from '../../services/tripService';
 import { parseTripPollResponse, TRIP_STATUS_POLL_MS } from '../../utils/tripLifecycle';
 import useRoute from '../../hooks/useRoute';
@@ -50,7 +50,7 @@ export default function TripActiveScreen({ navigation }) {
   const timerRef = useRef(null);
   const handledRef = useRef(false);
 
-  const { tripId, tripData, driver, driverLocation, setDriverLocation, setTripStatus, setFinalFare, resetTrip, mergeTripData } = useRideStore();
+  const { tripId, tripData, driver, driverLocation, setDriverLocation, setTripStatus, setFinalFare, setFareAdjustment, resetTrip, mergeTripData } = useRideStore();
   const { token } = useAuthStore();
   const { userCoords, destination } = useLocationStore();
 
@@ -181,11 +181,26 @@ export default function TripActiveScreen({ navigation }) {
 
     socket.on('trip:completed', onCompleted);
     socket.on('trip:cancelled', onCancelled);
+
+    // Hybrid pricing: store fare adjustment data so TripCompleteScreen can render it
+    listenForFareAdjustment((adj) => {
+      setFareAdjustment({
+        confirmedFare: adj.confirmed_fare,
+        actualFare:    adj.actual_fare,
+        adjustment:    adj.adjustment,
+        finalFare:     adj.final_fare,
+        reason:        adj.adjustment_reason,
+        pricingModel:  adj.pricing_model,
+        breakdown:     adj.breakdown,
+      });
+    });
+
     return () => {
       socket.off('trip:completed', onCompleted);
       socket.off('trip:cancelled', onCancelled);
+      removeFareAdjustmentListener();
     };
-  }, [navigate, setFinalFare, setTripStatus, resetTrip, navigation]);
+  }, [navigate, setFinalFare, setFareAdjustment, setTripStatus, resetTrip, navigation]);
 
   const formatTime = (secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');

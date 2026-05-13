@@ -107,6 +107,10 @@ const useRideStore = create(
 
   setFinalFare: (fare) => set({ finalFare: fare }),
 
+  fareAdjustment: null,   // { confirmedFare, adjustment, finalFare, reason, pricingModel, breakdown }
+  setFareAdjustment: (adj) => set({ fareAdjustment: adj }),
+  clearFareAdjustment: () => set({ fareAdjustment: null }),
+
   resetTrip: () =>
     set({
       tripId: null,

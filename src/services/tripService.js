@@ -53,7 +53,7 @@ export function getDriverLocation(driverId, token) {
 
 export function getNearbyDrivers(lat, lng, radiusKm = 5, token) {
   const q = `lat=${lat}&lng=${lng}&radius_km=${radiusKm}`;
-  return get(`/users/drivers/nearby?${q}`, token);
+  return get(`/geo/nearby-drivers?${q}`, token);
 }
 
 export function submitRating(tripId, { rating, comment, tip }, token) {

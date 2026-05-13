@@ -4,6 +4,7 @@ import { Phone, Star, AlertTriangle } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
+import { formatEthiopianPhone } from '../../utils/phoneFormatter';
 
 export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, hideCallButton = false }) {
   const driverNameFull = driver?.name || driver?.full_name || driver?.fullName || 'Driver';
@@ -11,7 +12,7 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
   const carModel = driver?.vehicle?.model || driver?.vehicle_model || driver?.vehicle_category || driver?.car_type || '';
   const carColor = driver?.vehicle?.color || '';
   const carPlate = driver?.vehicle?.plateNumber || driver?.plate_number || driver?.plateNumber || driver?.vehicle?.plate_number || '—';
-  const phone = driver?.phone || 'No phone number';
+  const phone = formatEthiopianPhone(driver?.phone);
   const displayRating = typeof rating === 'number' ? rating.toFixed(1) : '5.0';
 
   const handleSOS = () => {

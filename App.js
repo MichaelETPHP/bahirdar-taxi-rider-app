@@ -16,6 +16,9 @@ import { Provider as PaperProvider } from 'react-native-paper';
 import RootNavigator from './src/navigation/RootNavigator';
 import { navigationRef } from './src/navigation/RootNavigator';
 import { fontFamily } from './src/constants/typography';
+import MaintenanceScreen from './src/screens/common/MaintenanceScreen';
+import { checkMaintenanceStatus } from './src/api/maintenance';
+import useMaintenanceStore from './src/store/maintenanceStore';
 
 enableScreens();
 
@@ -110,6 +113,21 @@ async function registerExpoPushTokenIfConfigured() {
 }
 
 export default function App() {
+  const { isMaintenanceMode, maintenanceData, setMaintenance } = useMaintenanceStore();
+
+  const runMaintenanceCheck = async () => {
+    const status = await checkMaintenanceStatus();
+    if (status.maintenance) {
+      setMaintenance(true, status);
+    } else {
+      setMaintenance(false);
+    }
+  };
+
+  useEffect(() => {
+    runMaintenanceCheck();
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
@@ -165,6 +183,20 @@ export default function App() {
       subscription?.remove();
     };
   }, []);
+
+  if (isMaintenanceMode && maintenanceData) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <MaintenanceScreen
+          title={maintenanceData.title}
+          message={maintenanceData.message}
+          estimatedTime={maintenanceData.estimatedTime}
+          contact={maintenanceData.contact}
+          onRetry={runMaintenanceCheck}
+        />
+      </GestureHandlerRootView>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

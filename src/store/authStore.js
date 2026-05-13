@@ -6,6 +6,7 @@ import useLocationStore from './locationStore';
 import useRideStore from './rideStore';
 import { initApiClient } from '../lib/apiClient';
 import { showSessionExpiredAlert } from '../utils/logoutAlert';
+import useMaintenanceStore from './maintenanceStore';
 
 const useAuthStore = create((set, get) => ({
   user: null,
@@ -142,6 +143,9 @@ initApiClient({
     await showSessionExpiredAlert(async () => {
       await useAuthStore.getState().logout();
     });
+  },
+  onMaintenance: async (data) => {
+    useMaintenanceStore.getState().setMaintenance(true, data);
   }
 });
 
