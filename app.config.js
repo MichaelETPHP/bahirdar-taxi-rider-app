@@ -7,10 +7,10 @@ export default {
     slug: 'BahirdarRide',
     version: '1.0.0',
     orientation: 'portrait',
-    icon: './assets/bahiranLogo.png',
+    icon: './assets/Rider-AppIcon.png',
     userInterfaceStyle: 'light',
     splash: {
-      image: './assets/bahiranLogo.png',
+      image: './assets/Rider-AppIcon.png',
       resizeMode: 'contain',
       backgroundColor: '#00674F',
     },
@@ -28,6 +28,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
+        foregroundImage: './assets/Rider-AppIcon.png',
         backgroundColor: '#00674F',
       },
       package: 'com.bahirdar.ride',
