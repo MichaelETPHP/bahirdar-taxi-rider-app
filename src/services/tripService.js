@@ -23,6 +23,48 @@ export function getTrip(tripId, token) {
   return get(`/trips/${tripId}`, token);
 }
 
+function toTripHistoryItem(raw) {
+  const timestamp =
+    raw.completed_at ||
+    raw.cancelled_at ||
+    raw.started_at ||
+    raw.created_at ||
+    new Date().toISOString();
+  const date = new Date(timestamp);
+  const time = Number.isNaN(date.getTime())
+    ? '00:00'
+    : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+  const fare = Number(
+    raw.total_fare_etb ??
+    raw.confirmed_fare ??
+    raw.estimated_fare_etb ??
+    raw.final_fare_etb ??
+    0
+  );
+
+  return {
+    id: String(raw.id ?? raw.trip_id ?? timestamp),
+    date: Number.isNaN(date.getTime()) ? timestamp : date.toISOString(),
+    time,
+    pickup: raw.pickup_address || raw.pickup?.address || 'Pickup location',
+    destination: raw.dropoff_address || raw.dropoff?.address || 'Drop-off location',
+    distanceKm: Number(raw.actual_distance_km ?? raw.estimated_distance_km ?? raw.distance_km ?? 0),
+    durationMin: Number(raw.actual_duration_min ?? raw.estimated_duration_min ?? raw.duration_min ?? 0),
+    fareETB: Number.isFinite(fare) ? fare.toFixed(0) : '0',
+    rideType: raw.vehicle_category || raw.ride_type || 'economy',
+    status: normalizeTripStatus(raw.status) || 'completed',
+    userRating: raw.rider_rating ?? raw.user_rating ?? raw.rating ?? '-',
+    driver: raw.driver || null,
+  };
+}
+
+export async function getTripHistory(token, { limit = 50 } = {}) {
+  const res = await get(`/trips?limit=${limit}`, token);
+  const rows = Array.isArray(res?.data) ? res.data : [];
+  return rows.map(toTripHistoryItem);
+}
+
 export function patchTripArrived(tripId, token, extra = {}) {
   return patch(`/trips/${tripId}/arrived`, Object.keys(extra).length ? extra : {}, token);
 }

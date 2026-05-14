@@ -25,6 +25,7 @@ import Button from '../../components/design-system/Button';
 import { haversineDistance, estimateDuration } from '../../utils/distanceUtils';
 import DriverMarker from '../../components/map/DriverMarker';
 import { useNearbyDrivers } from '../../hooks/useTripQueries';
+import { getFareEstimateForCategory } from '../../utils/fareEstimates';
 
 function normalizeDriverPoint(raw, idx) {
   const rawLat = raw?.lat ?? raw?.latitude ?? raw?.driver_lat ?? raw?.current_lat ?? raw?.location?.lat ?? raw?.location?.latitude ?? raw?.coords?.lat ?? raw?.coords?.latitude;
@@ -191,27 +192,16 @@ export default function SearchingScreen({ navigation }) {
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
 
   // Fare Calculation (Locked from confirmation)
-  // Priority: 1. tripData (confirmed) -> 2. Server Estimate -> 3. Local Calc
-  const serverEstimate = selectedCategory
-    ? fareEstimates.find((e) => e.vehicle_category?.toLowerCase() === selectedCategory.name?.toLowerCase())
-    : null;
+  // Priority: 1. tripData (confirmed) -> 2. Server Estimate
+  const serverEstimate = getFareEstimateForCategory(fareEstimates, selectedCategory);
 
   const baseFare = parseFloat(tripData?.estimated_fare_etb ?? tripData?.total_fare_etb ?? 0);
   
   const fareValue = baseFare > 0 
     ? baseFare 
-    : serverEstimate
-      ? parseFloat(serverEstimate.estimated_fare_etb)
-      : selectedCategory
-        ? Math.max(
-            parseFloat(selectedCategory.minimum_fare) || 0,
-            Math.round(
-              (parseFloat(selectedCategory.base_fare) || 0) +
-              distKm * (parseFloat(selectedCategory.per_km_rate) || 0) +
-              durMin * (parseFloat(selectedCategory.per_minute_rate) || 0)
-            )
-          )
-        : 0;
+    : serverEstimate?.fare != null
+      ? parseFloat(serverEstimate.fare)
+      : 0;
 
   const fare = (lockedFare || fareValue) > 0 ? (lockedFare || fareValue).toFixed(0) : '—';
   

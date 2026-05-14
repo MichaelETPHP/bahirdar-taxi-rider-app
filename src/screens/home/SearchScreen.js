@@ -196,30 +196,7 @@ export default function SearchScreen({ navigation, route }) {
     ]).start();
   }, [shakeAnim]);
 
-  const openSaveSheet = useCallback((place) => {
-    setSaveSheet({ place });
-    saveSheetAnim.setValue(0);
-    Animated.spring(saveSheetAnim, {
-      toValue: 1, useNativeDriver: true, tension: 80, friction: 10,
-    }).start();
-  }, [saveSheetAnim]);
 
-  const closeSaveSheet = useCallback(() => {
-    Animated.timing(saveSheetAnim, {
-      toValue: 0, duration: 180, useNativeDriver: true,
-    }).start(() => setSaveSheet(null));
-  }, [saveSheetAnim]);
-
-  const handleSaveAs = useCallback((type) => {
-    if (!saveSheet?.place) return;
-    setSavedPlace(type, saveSheet.place);
-    setSavedFeedback(type);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setTimeout(() => {
-      closeSaveSheet();
-      setSavedFeedback(null);
-    }, 800);
-  }, [saveSheet, setSavedPlace, closeSaveSheet]);
 
   const resolveCoords = useCallback(async (item) => {
     if (item.lat != null && item.lng != null) return item;
@@ -265,15 +242,6 @@ export default function SearchScreen({ navigation, route }) {
           setDestination(finalItem);
         }
 
-        // Offer save-as Home/Work for destination selections (not stops)
-        const isNotSavedPlace = !savedPlaces?.home || !savedPlaces?.work;
-        if (!skipSavePrompt && searchMode !== 'stop' && isNotSavedPlace) {
-          openSaveSheet(finalItem);
-          // Don't go back yet — user sees the save sheet first
-          navigation.goBack();
-          return;
-        }
-
         navigation.goBack();
       } catch {
         navigation.goBack();
@@ -284,8 +252,8 @@ export default function SearchScreen({ navigation, route }) {
     [
       resolveCoords, addToRecentDestination, setDestination, setStop,
       searchMode, stopIndex, navigation, getBiasCoords, shakeWarning,
-      savedPlaces, openSaveSheet,
     ],
+
   );
 
   const renderResult = useCallback(
@@ -430,46 +398,8 @@ export default function SearchScreen({ navigation, route }) {
         </View>
       )}
 
-      {/* Home / Work shortcuts */}
-      {!isSearching && (
-        <View style={styles.savedRow}>
-          <TouchableOpacity
-            style={[styles.savedBtn, hasSavedHome && styles.savedBtnFilled]}
-            onPress={() => hasSavedHome ? handleSelect(savedPlaces.home, { skipSavePrompt: true }) : null}
-            activeOpacity={hasSavedHome ? 0.75 : 1}
-          >
-            <View style={[styles.savedBtnIcon, hasSavedHome && styles.savedBtnIconFilled]}>
-              <Home size={14} color={hasSavedHome ? colors.primary : colors.textSecondary} />
-            </View>
-            <View style={styles.savedBtnText}>
-              <Text style={[styles.savedBtnLabel, hasSavedHome && styles.savedBtnLabelFilled]}>Home</Text>
-              {hasSavedHome ? (
-                <Text style={styles.savedBtnAddr} numberOfLines={1}>{savedPlaces.home.name}</Text>
-              ) : (
-                <Text style={styles.savedBtnSet}>Tap to set</Text>
-              )}
-            </View>
-          </TouchableOpacity>
+      {/* Home / Work shortcuts removed as requested */}
 
-          <TouchableOpacity
-            style={[styles.savedBtn, hasSavedWork && styles.savedBtnFilled]}
-            onPress={() => hasSavedWork ? handleSelect(savedPlaces.work, { skipSavePrompt: true }) : null}
-            activeOpacity={hasSavedWork ? 0.75 : 1}
-          >
-            <View style={[styles.savedBtnIcon, hasSavedWork && styles.savedBtnIconFilled]}>
-              <Briefcase size={14} color={hasSavedWork ? colors.primary : colors.textSecondary} />
-            </View>
-            <View style={styles.savedBtnText}>
-              <Text style={[styles.savedBtnLabel, hasSavedWork && styles.savedBtnLabelFilled]}>Work</Text>
-              {hasSavedWork ? (
-                <Text style={styles.savedBtnAddr} numberOfLines={1}>{savedPlaces.work.name}</Text>
-              ) : (
-                <Text style={styles.savedBtnSet}>Tap to set</Text>
-              )}
-            </View>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {/* City tag */}
       {!isSearching && detectedCity && (
@@ -540,79 +470,6 @@ export default function SearchScreen({ navigation, route }) {
         />
       )}
 
-      {/* Save-as Home/Work bottom sheet */}
-      <Modal
-        visible={!!saveSheet}
-        transparent
-        animationType="none"
-        onRequestClose={closeSaveSheet}
-      >
-        <Pressable style={styles.sheetOverlay} onPress={closeSaveSheet}>
-          <Animated.View
-            style={[
-              styles.sheet,
-              {
-                transform: [{
-                  translateY: saveSheetAnim.interpolate({ inputRange: [0, 1], outputRange: [240, 0] }),
-                }],
-                opacity: saveSheetAnim,
-              },
-            ]}
-          >
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Save this place?</Text>
-            <Text style={styles.sheetSub} numberOfLines={2}>
-              {saveSheet?.place?.name}
-            </Text>
-
-            <View style={styles.sheetActions}>
-              {/* Save as Home */}
-              <TouchableOpacity
-                style={styles.sheetBtn}
-                onPress={() => handleSaveAs('home')}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.sheetBtnIcon, savedFeedback === 'home' && styles.sheetBtnIconDone]}>
-                  {savedFeedback === 'home'
-                    ? <Check size={18} color="#fff" />
-                    : <Home size={18} color={colors.primary} />}
-                </View>
-                <View>
-                  <Text style={styles.sheetBtnLabel}>Save as Home</Text>
-                  {savedPlaces?.home && (
-                    <Text style={styles.sheetBtnSub}>Replaces: {savedPlaces.home.name}</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-
-              <View style={styles.sheetDivider} />
-
-              {/* Save as Work */}
-              <TouchableOpacity
-                style={styles.sheetBtn}
-                onPress={() => handleSaveAs('work')}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.sheetBtnIcon, savedFeedback === 'work' && styles.sheetBtnIconDone]}>
-                  {savedFeedback === 'work'
-                    ? <Check size={18} color="#fff" />
-                    : <Briefcase size={18} color={colors.primary} />}
-                </View>
-                <View>
-                  <Text style={styles.sheetBtnLabel}>Save as Work</Text>
-                  {savedPlaces?.work && (
-                    <Text style={styles.sheetBtnSub}>Replaces: {savedPlaces.work.name}</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity style={styles.sheetSkip} onPress={closeSaveSheet}>
-              <Text style={styles.sheetSkipText}>Not now</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -865,61 +722,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // ── Saved places row ────────────────────────────────────────────────────
-  savedRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 4,
-    gap: 10,
-  },
-  savedBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-  },
-  savedBtnFilled: {
-    backgroundColor: `${colors.primary}08`,
-    borderColor: `${colors.primary}30`,
-  },
-  savedBtnIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  savedBtnIconFilled: {
-    backgroundColor: `${colors.primary}15`,
-  },
-  savedBtnText: { flex: 1, minWidth: 0 },
-  savedBtnLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    color: colors.textSecondary,
-  },
-  savedBtnLabelFilled: {
-    color: colors.textPrimary,
-  },
-  savedBtnAddr: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: 1,
-  },
-  savedBtnSet: {
-    fontSize: fontSize.xs,
-    color: `${colors.primary}80`,
-    marginTop: 1,
-  },
+  // Saved places row styles removed
+
 
   // ── Save-as bottom sheet ────────────────────────────────────────────────
   sheetOverlay: {

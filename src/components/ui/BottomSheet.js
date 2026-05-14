@@ -31,7 +31,9 @@ export default function BottomSheet({
   onDragEnd,
   style,
   scrollEnabled = true,
+  draggable = true,
 }) {
+
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
@@ -100,16 +102,16 @@ export default function BottomSheet({
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
+      onStartShouldSetPanResponder: () => draggable && !lockExpanded,
+
       onMoveShouldSetPanResponder: (evt, { dx, dy }) => {
-        if (lockExpanded) return false;
+        if (lockExpanded || !draggable) return false;
         // Increase ratio to 3.0 to ensure horizontal swipes (like the car selector)
         // are not intercepted by the vertical sheet.
         return Math.abs(dy) > Math.abs(dx) * 3.0 && Math.abs(dy) > 10;
       },
       onMoveShouldSetPanResponderCapture: (evt, { dx, dy }) => {
-        if (lockExpanded) return false;
+        if (lockExpanded || !draggable) return false;
         return Math.abs(dy) > Math.abs(dx) * 3.0 && Math.abs(dy) > 10;
       },
       onPanResponderTerminationRequest: () => true,
@@ -142,9 +144,12 @@ export default function BottomSheet({
 
         Animated.spring(sheetAnim, {
           toValue: target,
-          useNativeDriver: true, // MUCH smoother and doesn't affect map
-          tension: 80,
-          friction: 13,
+          useNativeDriver: true,
+          tension: 65,
+          friction: 11,
+          restSpeedThreshold: 10,
+          restDisplacementThreshold: 10,
+
         }).start(() => {
           if (!shouldExpand) startBounce();
         });
@@ -222,7 +227,10 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
-    zIndex: 10,
+    zIndex: 100,
+
+
+
   },
   sheet: {
     backgroundColor: colors.white,
@@ -239,7 +247,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
-    elevation: 16,
+    elevation: 25,
+
   },
   topShadowGlow: {
     position: 'absolute',
@@ -283,12 +292,15 @@ const styles = StyleSheet.create({
   scrollContent: {
     flex: 1,
   },
-  scrollContentInner: {
-    paddingBottom: 8,
+   scrollContentInner: {
+    paddingBottom: 100, // Enough room for the sticky footer
   },
   footer: {
-    paddingTop: 10,
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+
 });

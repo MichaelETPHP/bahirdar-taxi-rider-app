@@ -1,13 +1,15 @@
 import { X, Star, Check, Phone, Car, Clock, DollarSign, Share2, AlertTriangle, User } from 'lucide-react-native';
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
-import { mockTrips } from '../../data/mockTrips';
+import useAuthStore from '../../store/authStore';
+import { getTripHistory } from '../../services/tripService';
 import { formatDate, formatTime } from '../../utils/formatters';
 
 const TripCard = React.memo(({ item }) => (
@@ -43,12 +45,36 @@ const TripCard = React.memo(({ item }) => (
 ));
 
 export default function RideHistoryScreen({ navigation }) {
+  const token = useAuthStore((state) => state.token);
+  const [trips, setTrips] = useState([]);
+
   const handleBackPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.goBack();
   };
 
   const { t } = useTranslation();
+
+  const loadTrips = useCallback(async () => {
+    if (!token) {
+      setTrips([]);
+      return;
+    }
+
+    try {
+      const data = await getTripHistory(token);
+      setTrips(data);
+    } catch (err) {
+      console.error('[RideHistory] Failed to load trip history:', err);
+      setTrips([]);
+    }
+  }, [token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTrips();
+    }, [loadTrips])
+  );
 
   const renderTrip = useCallback(({ item }) => <TripCard item={item} />, []);
 
@@ -62,7 +88,7 @@ export default function RideHistoryScreen({ navigation }) {
       </View>
 
       <FlatList
-        data={mockTrips}
+        data={trips}
         keyExtractor={(item) => item.id}
         renderItem={renderTrip}
         contentContainerStyle={styles.list}

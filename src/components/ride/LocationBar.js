@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Pressable }
 import { useTranslation } from 'react-i18next';
 import { MapPin, XCircle, Plus } from 'lucide-react-native';
 import Svg, { Line } from 'react-native-svg';
+const AnimatedLine = Animated.createAnimatedComponent(Line);
+
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
@@ -18,6 +20,8 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
   const cursorBlink = useRef(new Animated.Value(1)).current;
   const liquidAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const dashOffset = useRef(new Animated.Value(0)).current;
+
 
   const handlePressIn = useCallback(() => {
     Animated.parallel([
@@ -35,7 +39,20 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
     ]).start();
   }, [liquidAnim, scaleAnim]);
 
+  useEffect(() => {
+    // Matrix-style flowing dots animation
+    Animated.loop(
+      Animated.timing(dashOffset, {
+        toValue: -12, // Move by two full dash patterns
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [dashOffset]);
+
   const handlePressOut = useCallback(() => {
+
     Animated.parallel([
       Animated.timing(liquidAnim, {
         toValue: 0,
@@ -119,16 +136,18 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
           <React.Fragment key={`stop-${stop?.placeId || stop?.id || i}`}>
             <View style={styles.dottedLineContainer}>
               <Svg height="100%" width="2">
-                <Line
+                <AnimatedLine
                   x1="1"
                   y1="0"
                   x2="1"
                   y2="100%"
                   stroke={colors.mapDestination}
                   strokeWidth="2"
-                  strokeDasharray="0.1, 6"
+                  strokeDasharray="1, 6"
+                  strokeDashoffset={dashOffset}
                   strokeLinecap="round"
                 />
+
               </Svg>
             </View>
             <View style={styles.pinWrapper}>
@@ -138,16 +157,18 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
         ))}
         <View style={styles.dottedLineContainer}>
           <Svg height="100%" width="2">
-            <Line
+            <AnimatedLine
               x1="1"
               y1="0"
               x2="1"
               y2="100%"
               stroke={colors.mapDestination}
               strokeWidth="2"
-              strokeDasharray="0.1, 6"
+              strokeDasharray="1, 6"
+              strokeDashoffset={dashOffset}
               strokeLinecap="round"
             />
+
           </Svg>
         </View>
         <View style={styles.pinWrapper}>

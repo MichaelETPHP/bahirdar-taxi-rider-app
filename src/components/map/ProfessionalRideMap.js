@@ -3,13 +3,23 @@ import { View, StyleSheet, Animated, Easing } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import useRideStore from '../../store/rideStore';
 
-// Minimal style: keeps roads/labels but skips unnecessary decorative layers
-// Fewer style rules = faster SDK parse time
+// Clean ride-hailing map: muted land, visible roads, fewer distracting POIs.
 const LEAN_MAP_STYLE = [
-  { featureType: 'poi',               stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park',          stylers: [{ visibility: 'simplified' }] },
-  { featureType: 'transit',           stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative',    elementType: 'labels', stylers: [{ visibility: 'simplified' }] },
+  { elementType: 'geometry', stylers: [{ color: '#F3F5F2' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#46515A' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#FFFFFF' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#20322D' }] },
+  { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#EEF2EF' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#DDECDD' }, { visibility: 'simplified' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#FFFFFF' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#D8DED9' }] },
+  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#FFF8EA' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#F4D58D' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#E1B758' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#BFDDE8' }] },
 ];
 
 function MapSkeleton({ opacity }) {
@@ -142,7 +152,7 @@ const styles = StyleSheet.create({
 
   // ── Skeleton ───────────────────────────────────────────────────────────
   skeleton: {
-    backgroundColor: '#EEF0EB',
+    backgroundColor: '#F3F5F2',
     alignItems: 'center',
     justifyContent: 'center',
     pointerEvents: 'none',

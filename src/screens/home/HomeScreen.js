@@ -1,5 +1,9 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, Pressable, Dimensions, Image, Platform, InteractionManager, ActivityIndicator } from 'react-native';
+import SplashLoader from '../../components/common/SplashLoader';
+import * as Haptics from 'expo-haptics';
+
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -55,7 +59,11 @@ const BANNER_WIDTH = Dimensions.get('window').width - 40;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 // Bottom padding matches the collapsed sheet height so MapView centers the user marker
 // in the visible map area above the sheet, not behind it.
+// Bottom padding matches the collapsed sheet height so MapView centers the user marker
+// in the visible map area above the sheet, not behind it.
 const SHEET_COLLAPSED_HEIGHT = 320;
+
+
 const MAP_PADDING = { top: 0, right: 0, bottom: SHEET_COLLAPSED_HEIGHT, left: 0 };
 
 // Throttle socket updates to 500ms to prevent constant re-renders
@@ -248,6 +256,37 @@ export default function HomeScreen({ navigation }) {
     if (!currentAddress || !currentLocation) return 'Getting location...';
     return extractNeighborhoodName(currentAddress, currentLocation.lat, currentLocation.lng);
   }, [currentAddress, currentLocation]);
+
+  const displayLocationName = useMemo(() => {
+    const candidates = [
+      pickup?.name,
+      readableLocationName,
+      currentAddress,
+    ];
+
+    const locationName = candidates.find((value) => {
+      if (!value) return false;
+      const normalized = String(value).trim().toLowerCase();
+      return (
+        normalized &&
+        normalized !== 'getting location...' &&
+        normalized !== 'current location' &&
+        normalized !== 'your current location' &&
+        normalized !== 'locating...'
+      );
+    });
+
+    if (locationName) return locationName;
+    if (userCoords) return 'Current location';
+    return 'Enable location';
+  }, [pickup?.name, readableLocationName, currentAddress, userCoords]);
+
+  const displayLocationAddress = useMemo(() => {
+    if (!currentAddress || currentAddress === displayLocationName || currentAddress === 'Getting location...') {
+      return userCoords ? 'Tap to recenter map' : 'Location permission is required';
+    }
+    return currentAddress;
+  }, [currentAddress, displayLocationName, userCoords]);
 
   // Diagnostic check: verify API key loads correctly in production APK
   useEffect(() => {
@@ -720,15 +759,11 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container} collapsable={false}>
-      {/* Locating Overlay — Shown while GPS is initialising */}
+      {/* Splash Loader — Shown while GPS is initialising */}
       {locLoading && !permissionDenied && (
-        <View style={styles.locatingOverlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Animated.Text style={[styles.locatingText, { opacity: locationPulseAnim }]}>
-            Detacting Location (ጠብቅ ...)
-          </Animated.Text>
-        </View>
+        <SplashLoader text="Detecting Location (ጠብቅ ...)" />
       )}
+
 
       {/* Fixed Map Layer — pan is disabled via scrollEnabled below.
           Touches stay enabled so pinch-to-zoom and double-tap-zoom keep working. */}
@@ -799,29 +834,6 @@ export default function HomeScreen({ navigation }) {
       {/* SOS button - rendered directly to avoid full-screen touch blocking */}
       <MovableCircleButton />
 
-      {/* Location info at bottom - outside glass style */}
-      {userCoords && (
-        <View style={[styles.locationBottomBar, { paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
-          <Pressable
-            style={styles.locationInfoButton}
-            onPress={handleRecenter}
-            android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
-          >
-            <MapPin size={13} color={colors.mapCurrentLocation} />
-            <Text style={styles.locationBottomText} numberOfLines={1}>
-              {pickup?.name || 'Current Location'}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={styles.locationSyncButton}
-            onPress={handleRecenter}
-            android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
-          >
-            <RefreshCw size={12} color={colors.primary} />
-          </Pressable>
-        </View>
-      )}
-
       {/* Overlays - only capture touches in their bounds */}
       <View style={[styles.topBar, { top: insets.top + 12 }]} pointerEvents="box-none" collapsable={false}>
         {/* Row 1: hamburger + greeting + recenter */}
@@ -847,29 +859,28 @@ export default function HomeScreen({ navigation }) {
           <LocationPinButton onPress={handleRecenter} />
         </View>
 
-        {/* Row 2: current location label with waving animation */}
-        <Animated.View 
-          className="px-4 mt-2 items-center" 
-          pointerEvents="none"
-          style={{ transform: [{ scale: locationPulseAnim }] }}
+        {/* Current pickup location */}
+        <Pressable
+          style={styles.currentLocationCard}
+          onPress={handleRecenter}
+          android_ripple={{ color: 'rgba(0,103,79,0.08)' }}
         >
-          <View className="bg-white/90 self-center px-3 py-1 rounded-full flex-row items-center border border-gray-100 shadow-sm">
-            <View className="mr-2">
-              <MapPin size={9} color={colors.mapDestination} />
-            </View>
-            <Text 
-              className="font-italic text-[10px] font-semibold" 
-              style={{ color: '#FF0000' }}
-              numberOfLines={1}
-            >
-              {pickup?.name && pickup.name !== 'Your current location' && pickup.name !== 'Current Location'
-                ? pickup.name
-                : userCoords
-                  ? 'Locating…'
-                  : 'Enable location'}
+          <View style={styles.currentLocationIconWrap}>
+            <MapPin size={17} color={colors.primary} />
+          </View>
+          <View style={styles.currentLocationTextWrap}>
+            <Text style={styles.currentLocationEyebrow}>Pickup location</Text>
+            <Text style={styles.currentLocationTitle} numberOfLines={1}>
+              {displayLocationName}
+            </Text>
+            <Text style={styles.currentLocationSubtitle} numberOfLines={1}>
+              {displayLocationAddress}
             </Text>
           </View>
-        </Animated.View>
+          <View style={styles.currentLocationAction}>
+            <RefreshCw size={14} color={colors.primary} />
+          </View>
+        </Pressable>
       </View>
 
       {/* Bottom sheet — self-positions at bottom, pointerEvents managed internally */}
@@ -884,9 +895,12 @@ export default function HomeScreen({ navigation }) {
           maxHeight={SCREEN_HEIGHT * 0.85}
           initialExpanded={false}
           onExpandedChange={setSheetExpanded}
-          scrollEnabled={!destination}
+          scrollEnabled={false}
+
           onDragStart={() => setSheetDragging(true)}
           onDragEnd={() => setSheetDragging(false)}
+
+
           header={!destination ? (
             isInServiceArea ? (
               <LocationBar
@@ -931,46 +945,41 @@ export default function HomeScreen({ navigation }) {
             </View>
           )}
         >
-          {!destination && (
-            <View style={styles.recentSection}>
-              {/* Actual search history - limited to 3 */}
-              <RecentTrips
-                onSelectPlace={(place) => setDestination(place)}
-                limit={3}
-              />
-              
-              {/* If no history yet, show a hint */}
-              {recentDestinations.length === 0 && (
-                <View style={styles.hintSection}>
-                  <Text style={styles.hintText}>{t('search.typeToSearch')}</Text>
-                </View>
-              )}
-            </View>
-          )}
+          {/* Removed recentSection as requested */}
+
           {destination && (
             <View style={styles.categorySection}>
-              <RideTypeSelector showAll={sheetExpanded} />
+              <RideTypeSelector />
             </View>
           )}
         </BottomSheet>
+
+
       </View>
 
-      {/* Sticky Select button — fixed at bottom, never moves with sheet */}
       {destination && (
         <View 
-          style={[styles.stickyButton, { paddingBottom: Math.max(16, insets.bottom) + 16 }]}
-          pointerEvents="box-none"
+          style={[styles.stickyButton, { paddingBottom: Math.max(16, insets.bottom) + 12 }]}
+          pointerEvents="auto"
         >
-          <Button
-            label={selectedCategory ? `Select ${selectedCategory.name}` : 'Select a Category'}
-            onPress={handleFindDrivers}
-            loading={!categorySelectionReady}
-            disabled={!selectedCategory}
-            shimmer={true}
-            className="w-full"
-          />
+          {!categoriesLoaded ? (
+            <View style={styles.selectButtonSkeleton} />
+          ) : (
+            <AppButton
+              title={selectedCategory ? `Select ${selectedCategory.name}` : 'Select a Category'}
+              onPress={handleFindDrivers}
+              loading={!categorySelectionReady}
+              disabled={!selectedCategory}
+              variant="primary"
+              shimmer={true}
+            />
+          )}
         </View>
       )}
+
+
+
+
 
       {/* Custom drawer — rendered on top of everything */}
       <CustomDrawer
@@ -1141,6 +1150,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 9999,
+    elevation: 100,
     paddingTop: 14,
     paddingHorizontal: 20,
     backgroundColor: colors.white,
@@ -1148,16 +1159,17 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.07,
+    shadowOpacity: 0.12,
     shadowRadius: 18,
-    elevation: 10,
-    zIndex: 2,
   },
+
   selectButtonSkeleton: {
     height: 56,
-    borderRadius: borderRadius.pill,
-    backgroundColor: colors.border,
+    borderRadius: 180,
+    backgroundColor: '#F1F5F9',
+    opacity: 0.6,
   },
+
   sheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -1229,40 +1241,32 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingBottom: 20,
   },
-  findBtn: {
-    marginTop: 10,
-  },
   recentSection: {
-    marginTop: 16,
+    marginTop: 10,
+    paddingHorizontal: 4,
   },
   recentLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginBottom: 10,
-  },
-  recentLabelMargin: {
-    marginTop: 10,
+    letterSpacing: 1.5,
+    marginBottom: 12,
+    paddingLeft: 4,
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.backgroundAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 8,
-    gap: 10,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.04)',
+    gap: 14,
   },
   recentIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.primaryLight,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,103,79,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1392,53 +1396,65 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     color: colors.white,
   },
-  locationBottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 14,
-    paddingTop: 14,
+  currentLocationCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundClor: 'rgba(0,0,0,0)',
-  },
-  locationInfoButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    minHeight: 72,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.pill,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 6,
+    borderColor: 'rgba(15,23,42,0.08)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 22,
+    elevation: 10,
   },
-  locationBottomText: {
-    flex: 1,
-    fontSize: fontSize.xs,
-    color: colors.textPrimary,
-    fontWeight: fontWeight.medium,
-  },
-  locationSyncButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.white,
+  currentLocationIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    marginRight: 12,
+  },
+  currentLocationTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  currentLocationEyebrow: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.bold,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  currentLocationTitle: {
+    fontSize: fontSize.md,
+    color: colors.textPrimary,
+    fontWeight: fontWeight.bold,
+    lineHeight: 20,
+  },
+  currentLocationSubtitle: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.medium,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  currentLocationAction: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0,103,79,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
   },
   outOfAreaBanner: {
     flexDirection: 'row',

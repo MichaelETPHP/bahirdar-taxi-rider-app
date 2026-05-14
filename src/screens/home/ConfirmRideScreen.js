@@ -21,6 +21,7 @@ import useRoute from '../../hooks/useRoute';
 import { haversineDistance, estimateDuration } from '../../utils/distanceUtils';
 import { createTrip } from '../../services/tripService';
 import { connectSocket, joinRiderRoom } from '../../services/socketService';
+import { getFareEstimateForCategory } from '../../utils/fareEstimates';
 
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
 const formatDistance = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
@@ -50,25 +51,12 @@ export default function ConfirmRideScreen({ navigation, route }) {
       : 0);
   const durMin = routeInfo?.duration_min || estimateDuration(distKm);
 
-  // Prefer real server fare from /geo/fare-estimate, fall back to client calc
-  const serverEstimate = selectedCategory
-    ? fareEstimates.find((e) => e.vehicle_category?.toLowerCase() === selectedCategory.name?.toLowerCase())
-    : null;
+  // Price must come from the backend/Admin-defined fare estimate.
+  const serverEstimate = getFareEstimateForCategory(fareEstimates, selectedCategory);
 
-  const fare = serverEstimate
-    ? parseFloat(serverEstimate.estimated_fare_etb)
-    : selectedCategory
-      ? Math.max(
-          parseFloat(selectedCategory.minimum_fare) || 0,
-          Math.round(
-            (parseFloat(selectedCategory.base_fare) || 0) +
-            distKm * (parseFloat(selectedCategory.per_km_rate) || 0) +
-            durMin * (parseFloat(selectedCategory.per_minute_rate) || 0)
-          )
-        )
-      : 0;
+  const fare = serverEstimate?.fare != null ? parseFloat(serverEstimate.fare) : null;
 
-  const isLiveFare = serverEstimate != null;
+  const isLiveFare = fare != null;
 
   const { coordinates: routeCoords } = useRoute(
     userCoords,
@@ -278,14 +266,14 @@ export default function ConfirmRideScreen({ navigation, route }) {
                 </View>
               )}
             </View>
-            <Text style={styles.priceValue}>ETB {Math.round(fare)}</Text>
+            <Text style={styles.priceValue}>{fare != null ? `ETB ${Math.round(fare)}` : '—'}</Text>
           </View>
         </View>
 
         <AppButton
           title={loading ? 'Confirming…' : isRetry ? 'Find Again' : `Confirm ${selectedCategory?.name || 'Ride'}`}
           onPress={handleConfirm}
-          disabled={loading || !destination || !selectedCategory}
+          disabled={loading || !destination || !selectedCategory || fare == null}
           loading={loading}
           shimmer={true}
           style={styles.confirmBtn}
