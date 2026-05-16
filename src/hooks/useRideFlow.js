@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import useRideStore from '../store/rideStore';
-import { mockDrivers } from '../data/mockDrivers';
 
 export default function useRideFlow() {
   const { status, startSearch, assignDriver, startTrip, completeTrip, cancelRide, reset } =
@@ -8,16 +7,7 @@ export default function useRideFlow() {
 
   const beginSearch = useCallback(() => {
     startSearch();
-
-    setTimeout(() => {
-      const randomDriver = mockDrivers[Math.floor(Math.random() * mockDrivers.length)];
-
-      let fare = null;
-      let eta = randomDriver.etaMinutes;
-
-      assignDriver(randomDriver, fare, eta);
-    }, 4000);
-  }, [startSearch, assignDriver]);
+  }, [startSearch]);
 
   const beginTrip = useCallback(() => {
     startTrip();

@@ -47,6 +47,7 @@ export default function useLocation() {
           const { latitude, longitude, accuracy } = last.coords;
           setCurrentLocation({ lat: latitude, lng: longitude, accuracy });
           setUserCoords({ latitude, longitude });
+          setLoading(false);
           // Don't geocode stale position — wait for fresh fix
         }
 

@@ -7,10 +7,12 @@ import {
   Dimensions,
   TouchableOpacity,
   Modal,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { WifiOff, RefreshCw } from 'lucide-react-native';
 import * as Network from 'expo-network';
+import * as Location from 'expo-location';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 
@@ -18,6 +20,7 @@ const { width, height } = Dimensions.get('window');
 
 export default function SplashScreen({ onFinish }) {
   const [isOffline, setIsOffline] = useState(false);
+  const [isLocationDenied, setIsLocationDenied] = useState(false);
   const [hasChecked, setHasChecked] = useState(false);
   const [checking, setChecking] = useState(true);
   const logoScale = useRef(new Animated.Value(0.6)).current;
@@ -29,6 +32,8 @@ export default function SplashScreen({ onFinish }) {
   const checkConnectivity = async () => {
     try {
       setChecking(true);
+      setHasChecked(false);
+      setIsLocationDenied(false);
       const state = await Network.getNetworkStateAsync();
       console.log('[Network] State:', JSON.stringify(state));
       
@@ -58,11 +63,29 @@ export default function SplashScreen({ onFinish }) {
       
       console.log('[Network] Final decision - isOffline:', !isActuallyConnected);
       setIsOffline(!isActuallyConnected);
+      if (!isActuallyConnected) {
+        setHasChecked(true);
+        return;
+      }
+
+      const current = await Location.getForegroundPermissionsAsync();
+      let locationGranted = current.status === Location.PermissionStatus.GRANTED;
+      if (!locationGranted && current.status === Location.PermissionStatus.UNDETERMINED) {
+        const requested = await Location.requestForegroundPermissionsAsync();
+        locationGranted = requested.status === Location.PermissionStatus.GRANTED;
+      }
+
+      if (!locationGranted) {
+        setIsLocationDenied(true);
+        setHasChecked(true);
+        return;
+      }
+
       setHasChecked(true);
-      
-      // Crucial: Only exit splash if internet is confirmed AND animation is done
+
+      // Crucial: Only exit splash if internet, location, and animation are confirmed
       if (isActuallyConnected && animationFinished.current) {
-        console.log('[Splash] Both internet and animation ready. Proceeding...');
+        console.log('[Splash] Internet + location + animation ready. Proceeding...');
         if (onFinish) onFinish();
       }
     } catch (error) {
@@ -109,7 +132,7 @@ export default function SplashScreen({ onFinish }) {
       }),
     ]).start(() => {
       animationFinished.current = true;
-      console.log('[Splash] Animation finished. checking internet...');
+      console.log('[Splash] Animation finished. checking access...');
       
       // Re-trigger check to be sure, or proceed if already known good
       checkConnectivity();
@@ -168,6 +191,43 @@ export default function SplashScreen({ onFinish }) {
                   <Text style={styles.retryBtnText}>Try Again</Text>
                 </>
               )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {hasChecked && !isOffline && isLocationDenied && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.iconCircleLarge}>
+              <WifiOff size={40} color={colors.error} />
+            </View>
+
+            <Text style={styles.modalTitle}>Location Access Required</Text>
+            <Text style={styles.modalBody}>
+              Bahir Dar Ride needs location access to start. Please allow location in settings and return to the app.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={checkConnectivity}
+              disabled={checking}
+            >
+              {checking ? (
+                <Text style={styles.retryBtnText}>Checking...</Text>
+              ) : (
+                <>
+                  <RefreshCw size={18} color="white" style={{ marginRight: 8 }} />
+                  <Text style={styles.retryBtnText}>Try Again</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.retryBtn, styles.secondaryBtn]}
+              onPress={() => Linking.openSettings()}
+            >
+              <Text style={[styles.retryBtnText, styles.secondaryBtnText]}>Open Settings</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -273,5 +333,14 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: fontWeight.bold,
+  },
+  secondaryBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginTop: 10,
+  },
+  secondaryBtnText: {
+    color: colors.textPrimary,
   },
 });

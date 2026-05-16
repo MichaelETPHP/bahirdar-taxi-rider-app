@@ -1,331 +1,164 @@
-import { memo, useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Easing, Text } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Marker } from 'react-native-maps';
 import { colors } from '../../constants/colors';
-import { fontWeight } from '../../constants/typography';
 
-/**
- * Elegant User Location Marker with Wave Animation
- * - Prominent profile picture (60px) at current location
- * - Sophisticated organic wave animation
- * - Minimalist luxury aesthetic
- * - Multiple ripple waves at staggered intervals
- */
-function UberUserLocationMarker({
-  coordinate,
-  avatarUrl,
-  title,
-  animated = true,
-}) {
-  const wave1Anim = useRef(new Animated.Value(0)).current;
-  const wave2Anim = useRef(new Animated.Value(0)).current;
-  const wave3Anim = useRef(new Animated.Value(0)).current;
+const OUTER_SIZE = 48;
+const SHELL_SIZE = 34;
+
+function PulseRing({ delay = 0 }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.55)).current;
 
   useEffect(() => {
-    if (!animated) return;
-
-    // Wave 1 - immediate start
-    const wave1 = Animated.loop(
+    const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(wave1Anim, {
-          toValue: 1,
-          duration: 3000,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(wave1Anim, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: true,
-        }),
+        Animated.delay(delay),
+        Animated.parallel([
+          Animated.timing(scale, {
+            toValue: 2.2,
+            duration: 1800,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: 1800,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.55, duration: 0, useNativeDriver: true }),
+        ]),
       ])
     );
 
-    // Wave 2 - 600ms delay
-    const wave2 = Animated.loop(
-      Animated.sequence([
-        Animated.timing(wave2Anim, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        Animated.timing(wave2Anim, {
-          toValue: 1,
-          duration: 3000,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(wave2Anim, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ])
-    );
+    animation.start();
+    return () => animation.stop();
+  }, [delay, scale, opacity]);
 
-    // Wave 3 - 1200ms delay
-    const wave3 = Animated.loop(
-      Animated.sequence([
-        Animated.timing(wave3Anim, {
-          toValue: 0,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(wave3Anim, {
-          toValue: 1,
-          duration: 3000,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(wave3Anim, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ])
-    );
+  return (
+    <Animated.View
+      style={[
+        styles.pulseRing,
+        {
+          transform: [{ scale }],
+          opacity,
+        },
+      ]}
+    />
+  );
+}
 
-    wave1.start();
-    wave2.start();
-    wave3.start();
+function UberUserLocationMarker({ coordinate, avatarUrl, animated = true }) {
+  const [imageReady, setImageReady] = useState(false);
 
-    return () => {
-      wave1.stop();
-      wave2.stop();
-      wave3.stop();
-    };
-  }, [animated, wave1Anim, wave2Anim, wave3Anim]);
-
-  // Create wave scale and opacity interpolations
-  const createWaveInterpolations = (animValue) => ({
-    scale: animValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: [1, 2.2],
-    }),
-    opacity: animValue.interpolate({
-      inputRange: [0, 0.3, 1],
-      outputRange: [0.4, 0.2, 0],
-    }),
-  });
-
-  const wave1 = createWaveInterpolations(wave1Anim);
-  const wave2 = createWaveInterpolations(wave2Anim);
-  const wave3 = createWaveInterpolations(wave3Anim);
+  if (!coordinate) return null;
 
   return (
     <Marker
       coordinate={coordinate}
-      tracksViewChanges={true}
-      zIndex={1000} // Bring to front
       anchor={{ x: 0.5, y: 0.5 }}
+      zIndex={99999}
+      flat={false}
+      tracksViewChanges={Platform.OS === 'android' ? true : animated || !imageReady}
     >
-      <View style={styles.container}>
-        {/* Wave rings - elegant ripple animation */}
-        <Animated.View
-          style={[
-            styles.waveRing,
-            {
-              transform: [{ scale: wave1.scale }],
-              opacity: wave1.opacity,
-            },
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.waveRing,
-            {
-              transform: [{ scale: wave2.scale }],
-              opacity: wave2.opacity,
-            },
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.waveRing,
-            {
-              transform: [{ scale: wave3.scale }],
-              opacity: wave3.opacity,
-            },
-          ]}
-        />
+      <View style={styles.column} collapsable={false}>
+        <View style={styles.outer}>
+          <PulseRing delay={0} />
+          <PulseRing delay={900} />
 
-        {/* Profile picture container - main element */}
-        <View style={styles.profileContainer}>
-          {/* "Location is here" Sign / Label */}
-          <View style={styles.labelContainer}>
-            <View style={styles.labelPill}>
-              <Text style={styles.labelText} numberOfLines={1}>
-                {title || 'You are here'}
-              </Text>
-            </View>
-            <View style={styles.labelPointer} />
-          </View>
+          <View style={styles.ring} />
 
-          <View style={styles.profileShadow}>
-            <View style={styles.profileRing}>
+          <View style={styles.shellShadow}>
+            <View style={styles.shell}>
               {avatarUrl ? (
                 <Image
                   source={{ uri: avatarUrl }}
-                  style={styles.profileImage}
+                  style={styles.avatar}
                   contentFit="cover"
-                  transition={200}
                   cachePolicy="disk"
+                  transition={150}
+                  onLoad={() => setImageReady(true)}
+                  onError={() => setImageReady(false)}
                 />
               ) : (
-                <View style={styles.profilePlaceholder} />
+                <View style={styles.fallbackDot} />
               )}
             </View>
           </View>
-          {/* Precise center dot 'mark' */}
-          <View style={styles.centerDot} />
         </View>
-
-        {/* Subtle accuracy indicator */}
-        <View style={styles.accuracyRing} />
       </View>
     </Marker>
   );
 }
 
-export default memo(UberUserLocationMarker);
-
-const CONTAINER_SIZE = 220;
+export default React.memo(UberUserLocationMarker);
 
 const styles = StyleSheet.create({
-  container: {
+  column: {
     alignItems: 'center',
-    justifyContent: 'center',
-    width: CONTAINER_SIZE,
-    height: CONTAINER_SIZE,
   },
-
-  // ── Wave rings - elegant ripple effect
-  waveRing: {
+  outer: {
+    width: OUTER_SIZE,
+    height: OUTER_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulseRing: {
     position: 'absolute',
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: colors.mapCurrentLocation,
-    // Center: (220 - 88) / 2 = 66
-    top: 66,
-    left: 66,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
   },
-
-  // ── Profile picture container - minimalist luxury
-  profileContainer: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
+  ring: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2.5,
+    borderColor: colors.mapCurrentLocation,
+    backgroundColor: `${colors.mapCurrentLocation}22`,
   },
-
-  profileRing: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    overflow: 'hidden',
-    backgroundColor: colors.white,
-  },
-
-  profileShadow: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
+  shellShadow: {
+    width: SHELL_SIZE,
+    height: SHELL_SIZE,
+    borderRadius: SHELL_SIZE / 2,
+    borderWidth: 3,
     borderColor: colors.white,
     backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
-    // Elegant shadow - separated from overflow:hidden
-    shadowColor: colors.mapCurrentLocation,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-
-  profileImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-
-  profilePlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F5F4F0',
-  },
-
-  // ── Label Sign Styles
-  labelContainer: {
-    position: 'absolute',
-    top: -30, // Position above the profile picture
-    alignItems: 'center',
-    zIndex: 30,
-  },
-  labelPill: {
-    backgroundColor: colors.mapCurrentLocation,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 6,
-    minWidth: 80,
-    maxWidth: 180,
+    shadowOpacity: 0.24,
+    shadowRadius: 3.84,
   },
-  labelText: {
-    color: colors.white,
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 0.2,
+  shell: {
+    width: SHELL_SIZE - 4,
+    height: SHELL_SIZE - 4,
+    borderRadius: (SHELL_SIZE - 4) / 2,
+    overflow: 'hidden',
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  labelPointer: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderBottomWidth: 0,
-    borderTopWidth: 6,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: colors.mapCurrentLocation,
-    marginTop: -1,
+  avatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 1000,
   },
-
-  // ── Subtle accuracy indicator
-  accuracyRing: {
-    position: 'absolute',
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 1,
-    borderColor: `${colors.mapCurrentLocation}15`,
-    // Center: (220 - 104) / 2 = 58
-    top: 58,
-    left: 58,
-  },
-  centerDot: {
-    position: 'absolute',
+  fallbackDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.mapCurrentLocation,
-    borderWidth: 2,
-    borderColor: colors.white,
-    zIndex: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
   },
 });

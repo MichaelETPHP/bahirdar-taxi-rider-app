@@ -3,25 +3,6 @@ import { View, StyleSheet, Animated, Easing } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import useRideStore from '../../store/rideStore';
 
-// Clean ride-hailing map: muted land, visible roads, fewer distracting POIs.
-const LEAN_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#F3F5F2' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#46515A' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#FFFFFF' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#20322D' }] },
-  { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#EEF2EF' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#DDECDD' }, { visibility: 'simplified' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#FFFFFF' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#D8DED9' }] },
-  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#FFF8EA' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#F4D58D' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#E1B758' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#BFDDE8' }] },
-];
-
 function MapSkeleton({ opacity }) {
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.skeleton, { opacity }]}>
@@ -90,10 +71,10 @@ function ProfessionalRideMap({
       <MapView
         ref={mapViewRef}
         provider={PROVIDER_GOOGLE}
+        googleRenderer="LEGACY"
         style={StyleSheet.absoluteFillObject}
         initialRegion={initialRegion}
-        customMapStyle={LEAN_MAP_STYLE}
-
+        
         // ── Scroll / gesture ────────────────────────────────────
         scrollEnabled={scrollEnabled}
         zoomEnabled={true}
@@ -111,9 +92,9 @@ function ProfessionalRideMap({
         showsMyLocationButton={false}
         showsCompass={false}
         showsTraffic={false}
-        showsBuildings={false}
+        showsBuildings={true}
         showsIndoors={false}
-        showsPointsOfInterest={false}
+        showsPointsOfInterest={true}
 
         // Loading indicator inside MapView (shows native spinner before tiles appear)
         loadingEnabled={true}

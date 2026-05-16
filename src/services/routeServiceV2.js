@@ -31,30 +31,30 @@ const FALLBACK_COORDS = [
  */
 export async function getRouteFromBackend(originLat, originLng, destLat, destLng, token) {
   try {
-    const logTag = `[🛣️ ROUTE]`;
-    console.log(`${logTag} Requesting road route:`, {
-      origin: `${originLat.toFixed(6)},${originLng.toFixed(6)}`,
-      destination: `${destLat.toFixed(6)},${destLng.toFixed(6)}`,
-    });
+    const logTag = `[ROUTE]`;
+    if (__DEV__) {
+      console.log(`${logTag} Requesting road route:`, {
+        origin: `${originLat.toFixed(6)},${originLng.toFixed(6)}`,
+        destination: `${destLat.toFixed(6)},${destLng.toFixed(6)}`,
+      });
+    }
 
-    // Call backend fare-estimate endpoint
     const fareData = await getFareEstimate(originLat, originLng, destLat, destLng, token);
     const routeData = fareData?.data;
 
     if (!routeData) {
-      console.warn(`${logTag} No route data returned from backend. Status:`, fareData?.status);
       throw new Error('No route data in backend response');
     }
 
     let coordinates = [];
 
-    console.log(`${logTag} Available route data keys:`, Object.keys(routeData));
-    console.log(`${logTag} Full routeData:`, JSON.stringify(routeData).substring(0, 500));
-    console.log(`${logTag} polyline type:`, typeof routeData.polyline, '| geometry type:', typeof routeData.geometry);
+    if (__DEV__) {
+      console.log(`${logTag} Available route data keys:`, Object.keys(routeData));
+    }
 
     // Priority 1: GeoJSON geometry (backend returns this)
     if (routeData.geometry?.coordinates && Array.isArray(routeData.geometry.coordinates) && routeData.geometry.coordinates.length > 0) {
-      console.log(`${logTag} ✅ Using geometry.coordinates (${routeData.geometry.coordinates.length} points)`);
+      if (__DEV__) console.log(`${logTag} Using geometry.coordinates (${routeData.geometry.coordinates.length} points)`);
       coordinates = routeData.geometry.coordinates.map(([lng, lat]) => ({
         latitude: lat,
         longitude: lng,
@@ -62,7 +62,7 @@ export async function getRouteFromBackend(originLat, originLng, destLat, destLng
     }
     // Priority 2: Polyline as GeoJSON object
     else if (routeData.polyline && typeof routeData.polyline === 'object' && Array.isArray(routeData.polyline.coordinates) && routeData.polyline.coordinates.length > 0) {
-      console.log(`${logTag} ✅ Using polyline.coordinates (${routeData.polyline.coordinates.length} points)`);
+      if (__DEV__) console.log(`${logTag} Using polyline.coordinates (${routeData.polyline.coordinates.length} points)`);
       coordinates = routeData.polyline.coordinates.map(([lng, lat]) => ({
         latitude: lat,
         longitude: lng,
@@ -70,7 +70,7 @@ export async function getRouteFromBackend(originLat, originLng, destLat, destLng
     }
     // Priority 3: Direct coordinates array
     else if (Array.isArray(routeData.coordinates) && routeData.coordinates.length > 0) {
-      console.log(`${logTag} ✅ Using direct coordinates array (${routeData.coordinates.length} points)`);
+      if (__DEV__) console.log(`${logTag} Using direct coordinates array (${routeData.coordinates.length} points)`);
       coordinates = routeData.coordinates.map(c => ({
         latitude: c.latitude ?? c.lat,
         longitude: c.longitude ?? c.lng,
@@ -78,59 +78,28 @@ export async function getRouteFromBackend(originLat, originLng, destLat, destLng
     }
     // Priority 4: Encoded polyline string
     else if (typeof routeData.polyline === 'string' && routeData.polyline.length > 0) {
-      console.log(`${logTag} 🔄 Decoding polyline string...`);
+      if (__DEV__) console.log(`${logTag} Decoding polyline string...`);
       coordinates = decodePolyline(routeData.polyline);
-      console.log(`${logTag} ✅ Decoded to ${coordinates.length} points`);
+      if (__DEV__) console.log(`${logTag} Decoded to ${coordinates.length} points`);
     }
 
-    // Validation: Ensure we actually got road points
     if (!coordinates || coordinates.length < 2) {
-      console.warn(`${logTag} Could not extract road-snapped points from backend response. Falling back to straight line.`);
       coordinates = [
         { latitude: originLat, longitude: originLng },
         { latitude: destLat, longitude: destLng },
       ];
     } else {
-      console.log(`${logTag} Success! Received ${coordinates.length} road-snapped points.`);
+      if (__DEV__) console.log(`${logTag} Received ${coordinates.length} road-snapped points.`);
     }
 
     const distanceKm = routeData.distance_km || routeData.distance || 0;
     const durationMin = routeData.duration_min || routeData.duration || 0;
 
-    return {
-      coordinates,
-      distanceKm,
-      durationMin,
-    };
+    return { coordinates, distanceKm, durationMin };
   } catch (error) {
-    console.error('❌ Backend routing failed:', error.message);
+    if (__DEV__) console.error('[ROUTE] Backend routing failed:', error.message);
 
-    // ── Public OSRM Fallback (Ensures user always sees a road-following route) ──
-    try {
-      console.log('🔄 Attempting Public OSRM Fallback...');
-      const publicUrl = `https://router.project-osrm.org/route/v1/driving/${originLng},${originLat};${destLng},${destLat}?overview=full&geometries=geojson`;
-      const response = await fetch(publicUrl);
-      const publicData = await response.json();
-
-      if (publicData.code === 'Ok' && publicData.routes?.[0]) {
-        const route = publicData.routes[0];
-        const coordinates = route.geometry.coordinates.map(([lng, lat]) => ({
-          latitude: lat,
-          longitude: lng,
-        }));
-        
-        console.log('✅ Public OSRM Success! Recovered smooth road route.');
-        return {
-          coordinates,
-          distanceKm: parseFloat((route.distance / 1000).toFixed(2)),
-          durationMin: Math.ceil(route.duration / 60),
-        };
-      }
-    } catch (fallbackError) {
-      console.error('❌ Public OSRM fallback failed:', fallbackError.message);
-    }
-
-    // Absolute last resort: Straight line
+    // Straight-line fallback — no external routing services
     return {
       coordinates: [
         { latitude: originLat, longitude: originLng },

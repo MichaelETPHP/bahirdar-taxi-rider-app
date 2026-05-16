@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   Easing,
   PanResponder,
   Dimensions,
-  Pressable,
 } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +15,7 @@ import { colors } from '../../constants/colors';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const MIN_HEIGHT = 220;
-const MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
+const MAX_HEIGHT = SCREEN_HEIGHT * 0.52;
 
 export default function BottomSheet({
   children,
@@ -26,10 +25,12 @@ export default function BottomSheet({
   maxHeight = MAX_HEIGHT,
   initialExpanded = false,
   lockExpanded = false,
+  canExpand = true,
   onExpandedChange,
   onDragStart,
   onDragEnd,
   style,
+  contentScrollable = true,
   scrollEnabled = true,
   draggable = true,
 }) {
@@ -41,13 +42,20 @@ export default function BottomSheet({
   // translateY = 0 means fully expanded (maxHeight).
   // translateY = maxHeight - minHeight means collapsed (minHeight).
   const COLLAPSED_Y = maxHeight - minHeight;
-  const initialY = initialExpanded || lockExpanded ? 0 : COLLAPSED_Y;
+  const initialY = (initialExpanded || lockExpanded) && canExpand ? 0 : COLLAPSED_Y;
 
   const sheetAnim = useRef(new Animated.Value(initialY)).current;
   const lastY = useRef(initialY);
   const [isExpanded, setIsExpanded] = useState(initialY === 0);
 
   useEffect(() => {
+    if (!canExpand) {
+      lastY.current = COLLAPSED_Y;
+      sheetAnim.setValue(COLLAPSED_Y);
+      setIsExpanded(false);
+      onExpandedChange?.(false);
+      return;
+    }
     if (lockExpanded) {
       lastY.current = 0;
       sheetAnim.setValue(0);
@@ -59,7 +67,7 @@ export default function BottomSheet({
     lastY.current = target;
     sheetAnim.setValue(target);
     setIsExpanded(initialExpanded);
-  }, [maxHeight, minHeight, lockExpanded, initialExpanded]);
+  }, [COLLAPSED_Y, canExpand, lockExpanded, initialExpanded, onExpandedChange, sheetAnim]);
 
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const bounceLoop = useRef(null);
@@ -95,23 +103,23 @@ export default function BottomSheet({
   }, [bounceAnim]);
 
   useEffect(() => {
-    if (lockExpanded) return undefined;
+    if (lockExpanded || !canExpand) return undefined;
     if (!isExpanded) startBounce();
     return () => bounceLoop.current?.stop();
-  }, [lockExpanded, isExpanded, startBounce]);
+  }, [canExpand, lockExpanded, isExpanded, startBounce]);
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => draggable && !lockExpanded,
+      onStartShouldSetPanResponder: () => draggable && !lockExpanded && canExpand,
 
-      onMoveShouldSetPanResponder: (evt, { dx, dy }) => {
-        if (lockExpanded || !draggable) return false;
+      onMoveShouldSetPanResponder: (_evt, { dx, dy }) => {
+        if (lockExpanded || !draggable || !canExpand) return false;
         // Increase ratio to 3.0 to ensure horizontal swipes (like the car selector)
         // are not intercepted by the vertical sheet.
         return Math.abs(dy) > Math.abs(dx) * 3.0 && Math.abs(dy) > 10;
       },
-      onMoveShouldSetPanResponderCapture: (evt, { dx, dy }) => {
-        if (lockExpanded || !draggable) return false;
+      onMoveShouldSetPanResponderCapture: (_evt, { dx, dy }) => {
+        if (lockExpanded || !draggable || !canExpand) return false;
         return Math.abs(dy) > Math.abs(dx) * 3.0 && Math.abs(dy) > 10;
       },
       onPanResponderTerminationRequest: () => true,
@@ -176,19 +184,19 @@ export default function BottomSheet({
           style={styles.dragArea}
           collapsable={false}
         >
-          <Animated.View
-            style={{
-              alignItems: 'center',
-              transform: [{ translateY: lockExpanded ? 0 : bounceAnim }],
-            }}
-          >
-            <View style={styles.handle} />
-            {!lockExpanded && (
-              <View style={styles.swipeHintWrap}>
-                <Text style={styles.swipeHint}>
-                  {isExpanded
-                    ? t('home.swipeDownToHide', 'Swipe down')
-                    : t('home.swipeUpToViewMore')}
+        <Animated.View
+          style={{
+            alignItems: 'center',
+            transform: [{ translateY: lockExpanded ? 0 : bounceAnim }],
+          }}
+        >
+          <View style={styles.handle} />
+          {!lockExpanded && canExpand && (
+            <View style={styles.swipeHintWrap}>
+              <Text style={styles.swipeHint}>
+                {isExpanded
+                  ? t('home.swipeDownToHide', 'Swipe down')
+                  : t('home.swipeUpToViewMore')}
                 </Text>
               </View>
             )}
@@ -199,17 +207,25 @@ export default function BottomSheet({
             {header}
           </View>
         ) : null}
-        <ScrollView
-          style={styles.scrollContent}
-          contentContainerStyle={styles.scrollContentInner}
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-          scrollEventThrottle={16}
-          removeClippedSubviews
-          scrollEnabled={scrollEnabled}
-        >
-          {children}
-        </ScrollView>
+        {contentScrollable ? (
+          <ScrollView
+            style={styles.scrollContent}
+            contentContainerStyle={styles.scrollContentInner}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            scrollEventThrottle={16}
+            removeClippedSubviews={false}
+            scrollEnabled={scrollEnabled}
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={styles.scrollContent} pointerEvents="box-none">
+            <View style={styles.scrollContentInner} pointerEvents="box-none">
+              {children}
+            </View>
+          </View>
+        )}
         {footer ? (
           <View
             style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}
@@ -292,7 +308,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flex: 1,
   },
-   scrollContentInner: {
+  scrollContentInner: {
     paddingBottom: 100, // Enough room for the sticky footer
   },
   footer: {

@@ -1,9 +1,10 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
-
+import { memo, useCallback, useEffect, useRef } from 'react';
+import { Platform, View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
+
 import RideTypeCard from './RideTypeCard';
 import RideTypeCardSkeleton from './RideTypeCardSkeleton';
 import useRideStore from '../../store/rideStore';
@@ -13,38 +14,40 @@ import { getFareEstimateForCategory } from '../../utils/fareEstimates';
 import { colors } from '../../constants/colors';
 import { fontSize } from '../../constants/typography';
 
-const SNAP_INTERVAL = 90;
+const AnimatedScroll = Animated.createAnimatedComponent(GHScrollView);
 
-const VISIBLE_ROWS = 2;
+const ITEM_HEIGHT = 92;
+const VISIBLE     = 3;
+const DRUM_HEIGHT = ITEM_HEIGHT * VISIBLE;
 
 function RideTypeSelector({ distanceKm, durationMin }) {
-
   const { i18n } = useTranslation();
 
-  // Narrow slice selectors: unrelated store updates (e.g. driverLocation
-  // ticking during a trip) won't re-render this list.
-  const categories = useRideStore((s) => s.categories);
-  const categoriesLoaded = useRideStore((s) => s.categoriesLoaded);
-  const selectedCategoryId = useRideStore((s) => s.selectedCategoryId);
-  const fareEstimates = useRideStore((s) => s.fareEstimates);
+  const categories          = useRideStore((s) => s.categories);
+  const categoriesLoaded    = useRideStore((s) => s.categoriesLoaded);
+  const selectedCategoryId  = useRideStore((s) => s.selectedCategoryId);
+  const fareEstimates       = useRideStore((s) => s.fareEstimates);
   const fareEstimateLoading = useRideStore((s) => s.fareEstimateLoading);
-  const routeInfo = useRideStore((s) => s.routeInfo);
-  const loadCategories = useRideStore((s) => s.loadCategories);
-  const selectCategory = useRideStore((s) => s.selectCategory);
-  const loadFareEstimates = useRideStore((s) => s.loadFareEstimates);
-  const setMapScrollEnabled = useRideStore((s) => s.setMapScrollEnabled);
+  const routeInfo           = useRideStore((s) => s.routeInfo);
+  const loadCategories      = useRideStore((s) => s.loadCategories);
+  const selectCategory      = useRideStore((s) => s.selectCategory);
+  const loadFareEstimates   = useRideStore((s) => s.loadFareEstimates);
 
-  const token = useAuthStore((s) => s.token);
-  const userCoords = useLocationStore((s) => s.userCoords);
+  const token       = useAuthStore((s) => s.token);
+  const userCoords  = useLocationStore((s) => s.userCoords);
   const destination = useLocationStore((s) => s.destination);
 
   const lastEstimateKey = useRef(null);
-  const lastHapticIndex = useRef(-1);
+  const scrollRef       = useRef(null);
+  const scrollY         = useRef(new Animated.Value(0)).current;
+  const lastSnapIdx     = useRef(0);
+  const lastHapticIdx   = useRef(-1);
+  const initialized     = useRef(false);
 
   useEffect(() => {
     loadCategories();
-    const interval = setInterval(loadCategories, 30000);
-    return () => clearInterval(interval);
+    const iv = setInterval(loadCategories, 30000);
+    return () => clearInterval(iv);
   }, [loadCategories]);
 
   useEffect(() => {
@@ -54,32 +57,82 @@ function RideTypeSelector({ distanceKm, durationMin }) {
     lastEstimateKey.current = key;
     loadFareEstimates(
       userCoords.latitude, userCoords.longitude,
-      destination.lat, destination.lng,
+      destination.lat,     destination.lng,
       token,
     );
   }, [userCoords?.latitude, userCoords?.longitude, destination?.lat, destination?.lng, token, loadFareEstimates]);
 
-  const lang = i18n.language === 'am' ? 'am' : 'en';
+  // Initial scroll to selected item once layout is ready
+  useEffect(() => {
+    if (!categoriesLoaded || !categories.length || initialized.current) return;
+    initialized.current = true;
+    const idx = Math.max(0, categories.findIndex(c => c.id === selectedCategoryId));
+    lastSnapIdx.current   = idx;
+    lastHapticIdx.current = idx;
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: false });
+    }, 80);
+  }, [categoriesLoaded, categories, selectedCategoryId]);
 
+  // Scroll to item when selection changes externally (e.g. store reset)
+  useEffect(() => {
+    if (!categoriesLoaded || !categories.length) return;
+    const idx = Math.max(0, categories.findIndex(c => c.id === selectedCategoryId));
+    if (idx !== lastSnapIdx.current) {
+      lastSnapIdx.current = idx;
+      scrollRef.current?.scrollTo({ y: idx * ITEM_HEIGHT, animated: true });
+    }
+  }, [selectedCategoryId, categories, categoriesLoaded]);
 
-  const realDistKm = routeInfo?.distance_km || distanceKm;
-  const realDurMin = routeInfo?.duration_min || durationMin;
-  const surge = routeInfo?.surge_multiplier ?? 1;
+  const handleScrollEnd = useCallback((e) => {
+    const y   = e.nativeEvent.contentOffset.y;
+    const idx = Math.max(0, Math.min(Math.round(y / ITEM_HEIGHT), categories.length - 1));
+    if (idx !== lastSnapIdx.current) {
+      lastSnapIdx.current = idx;
+      selectCategory(categories[idx].id);
+    }
+  }, [categories, selectCategory]);
 
-  const visibleCategories = useMemo(() => [...categories], [categories]);
+  const scrollHandler = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: true,
+      listener: (e) => {
+        const rawIdx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
+        const idx    = Math.max(0, Math.min(rawIdx, categories.length - 1));
+        if (idx !== lastHapticIdx.current) {
+          lastHapticIdx.current = idx;
+          Haptics.selectionAsync();
+        }
+      },
+    },
+  );
 
-  const handleSelect = useCallback((id) => selectCategory(id), [selectCategory]);
+  // Per-item drum-wheel scale and opacity derived from shared scrollY
+  const getItemStyle = useCallback((index) => {
+    const c = index * ITEM_HEIGHT;
+    return {
+      scale: scrollY.interpolate({
+        inputRange:  [c - 2*ITEM_HEIGHT, c - ITEM_HEIGHT, c, c + ITEM_HEIGHT, c + 2*ITEM_HEIGHT],
+        outputRange: [0.80, 0.90, 1.00, 0.90, 0.80],
+        extrapolate: 'clamp',
+      }),
+      opacity: scrollY.interpolate({
+        inputRange:  [c - 2*ITEM_HEIGHT, c - ITEM_HEIGHT, c, c + ITEM_HEIGHT, c + 2*ITEM_HEIGHT],
+        outputRange: [0.22, 0.58, 1.00, 0.58, 0.22],
+        extrapolate: 'clamp',
+      }),
+    };
+  }, [scrollY]);
 
-  const handleScrollSettle = useCallback((offsetY) => {
-    const index = Math.max(0, Math.round(offsetY / SNAP_INTERVAL));
-    if (index === lastHapticIndex.current) return;
-    lastHapticIndex.current = index;
-    Haptics.selectionAsync().catch(() => { });
-  }, []);
+  const lang    = i18n.language === 'am' ? 'am' : 'en';
+  const distKm  = routeInfo?.distance_km  || distanceKm;
+  const durMin  = routeInfo?.duration_min || durationMin;
+  const surge   = routeInfo?.surge_multiplier ?? 1;
 
   if (!categoriesLoaded) {
     return (
-      <View style={styles.cardList}>
+      <View style={styles.drum}>
         <RideTypeCardSkeleton />
         <RideTypeCardSkeleton />
         <RideTypeCardSkeleton />
@@ -87,7 +140,7 @@ function RideTypeSelector({ distanceKm, durationMin }) {
     );
   }
 
-  if (categories.length === 0) {
+  if (!categories.length) {
     return (
       <View style={styles.empty}>
         <Text style={styles.emptyText}>No vehicle types available</Text>
@@ -96,72 +149,85 @@ function RideTypeSelector({ distanceKm, durationMin }) {
   }
 
   const farePending = Boolean(destination && fareEstimateLoading && fareEstimates.length === 0);
-  if (farePending) {
-    return (
-      <View style={styles.cardList}>
-        {visibleCategories.map((c) => (
-          <RideTypeCardSkeleton key={`fare-loading-${c.id}`} />
-        ))}
-      </View>
-    );
-  }
 
   return (
-    <View style={styles.cardList}>
+    <View>
       {surge > 1 && (
         <View style={styles.surgeBanner}>
           <Text style={styles.surgeText}>⚡ {surge}× surge pricing active</Text>
         </View>
       )}
 
-      <View style={styles.pickerContainer}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-          alwaysBounceVertical
-          bounces
-          overScrollMode="always"
-          snapToInterval={SNAP_INTERVAL}
+      <View style={styles.drum}>
+        <View style={styles.centerBand} pointerEvents="none" />
+        {/* Top fade overlay */}
+        <LinearGradient
+          colors={[colors.white, 'transparent']}
+          style={[styles.fade, styles.fadeTop]}
+          pointerEvents="none"
+        />
+        {/* Bottom fade overlay */}
+        <LinearGradient
+          colors={['transparent', colors.white]}
+          style={[styles.fade, styles.fadeBottom]}
+          pointerEvents="none"
+        />
+        {/* Selection zone lines */}
+        <View style={[styles.zoneLine, { top: ITEM_HEIGHT - 0.5 }]}   pointerEvents="none" />
+        <View style={[styles.zoneLine, { top: ITEM_HEIGHT * 1.5 - 0.5 }]} pointerEvents="none" />
 
+        <AnimatedScroll
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          snapToInterval={ITEM_HEIGHT}
           snapToAlignment="start"
           disableIntervalMomentum
-          decelerationRate="fast"
+          decelerationRate={Platform.OS === 'ios' ? 'fast' : 0.99}
+          bounces={false}
+          alwaysBounceVertical={false}
+          overScrollMode="never"
+          nestedScrollEnabled
+          directionalLockEnabled
           scrollEventThrottle={16}
-          onMomentumScrollEnd={(e) => handleScrollSettle(e.nativeEvent.contentOffset.y)}
-          onScrollEndDrag={(e) => handleScrollSettle(e.nativeEvent.contentOffset.y)}
+          removeClippedSubviews={false}
+          onScroll={scrollHandler}
+          onMomentumScrollEnd={handleScrollEnd}
+          onScrollEndDrag={handleScrollEnd}
         >
-          {visibleCategories.map((cat, index) => {
-            const estimate = getFareEstimateForCategory(fareEstimates, cat, index);
+          {categories.map((cat, index) => {
+            const est            = getFareEstimateForCategory(fareEstimates, cat, index);
+            const { scale, opacity } = getItemStyle(index);
             return (
-              <View key={cat.id.toString()}>
-                <View style={styles.cardWrapper}>
-                  <RideTypeCard
-                    category={cat}
-                    selected={selectedCategoryId === cat.id}
-                    onPress={() => handleSelect(cat.id)}
-                    distanceKm={realDistKm}
-                    durationMin={realDurMin}
-                    serverFare={estimate?.fare}
-                    serverBreakdown={estimate?.breakdown}
-                    arrivalEta={estimate?.eta}
-                    surge={surge}
-                    fareLoading={false}
-                    lang={lang}
-                  />
-                </View>
-                {index < visibleCategories.length - 1 && <View style={{ height: 0 }} />}
-
-              </View>
+              <Animated.View
+                key={cat.id.toString()}
+                style={[styles.item, { transform: [{ scale }], opacity }]}
+              >
+                <RideTypeCard
+                  category={cat}
+                  selected={selectedCategoryId === cat.id}
+                  onPress={() => {
+                    const tIdx = categories.findIndex(c => c.id === cat.id);
+                    if (tIdx >= 0) {
+                      scrollRef.current?.scrollTo({ y: tIdx * ITEM_HEIGHT, animated: true });
+                    }
+                    selectCategory(cat.id);
+                  }}
+                  distanceKm={distKm}
+                  durationMin={durMin}
+                  serverFare={farePending ? undefined : est?.fare}
+                  serverBreakdown={est?.breakdown}
+                  arrivalEta={est?.eta}
+                  surge={surge}
+                  fareLoading={farePending}
+                  lang={lang}
+                />
+              </Animated.View>
             );
           })}
-        </ScrollView>
+        </AnimatedScroll>
       </View>
-
-
-
-
-
-
     </View>
   );
 }
@@ -169,9 +235,69 @@ function RideTypeSelector({ distanceKm, durationMin }) {
 export default memo(RideTypeSelector);
 
 const styles = StyleSheet.create({
-  cardList: { paddingVertical: 2 },
-  empty: { paddingVertical: 20, alignItems: 'center' },
-  emptyText: { fontSize: fontSize.sm, color: colors.textSecondary },
+  drum: {
+    height: DRUM_HEIGHT,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.05)',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop:    ITEM_HEIGHT,
+    paddingBottom: ITEM_HEIGHT,
+  },
+  item: {
+    height: ITEM_HEIGHT,
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  fade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: ITEM_HEIGHT * 0.9,
+    zIndex: 10,
+  },
+  fadeTop: {
+    top: 0,
+  },
+  fadeBottom: {
+    bottom: 0,
+  },
+  centerBand: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    top: ITEM_HEIGHT,
+    height: ITEM_HEIGHT,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,103,79,0.05)',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(0,103,79,0.10)',
+    zIndex: 9,
+  },
+  zoneLine: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    height: 1,
+    backgroundColor: 'rgba(0,103,79,0.10)',
+    zIndex: 11,
+  },
+  empty: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
   surgeBanner: {
     backgroundColor: '#FEF3C7',
     borderRadius: 8,
@@ -184,18 +310,4 @@ const styles = StyleSheet.create({
     color: '#92400E',
     fontWeight: '600',
   },
-  pickerContainer: {
-    height: SNAP_INTERVAL * VISIBLE_ROWS,
-    overflow: 'hidden',
-  },
-
-
-  cardWrapper: {
-    height: SNAP_INTERVAL,
-    justifyContent: 'center',
-    paddingVertical: 0,
-  },
-
-
-
 });

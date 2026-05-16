@@ -76,7 +76,7 @@ export default React.memo(function DriverMarker({ driver, onPress }) {
     <Marker
       coordinate={{ latitude: driver.lat, longitude: driver.lng }}
       onPress={onPress}
-      tracksViewChanges={true} // Keep true for smooth pulse animation
+      tracksViewChanges={true}
       anchor={{ x: 0.5, y: 1 }}
       zIndex={50} // Above route, below user
     >

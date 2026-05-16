@@ -3,14 +3,6 @@ import { View, StyleSheet, Animated, Easing } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import useRideStore from '../../store/rideStore';
 
-// Minimal style: keeps roads/labels but skips unnecessary decorative layers
-const LEAN_MAP_STYLE = [
-  { featureType: 'poi',               stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park',          stylers: [{ visibility: 'simplified' }] },
-  { featureType: 'transit',           stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative',    elementType: 'labels', stylers: [{ visibility: 'simplified' }] },
-];
-
 function MapSkeleton({ opacity }) {
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.skeleton, { opacity }]}>
@@ -74,10 +66,10 @@ function RideMap({
       <MapView
         ref={mapViewRef}
         provider={PROVIDER_GOOGLE}
+        googleRenderer="LEGACY"
         style={StyleSheet.absoluteFillObject}
         // Pass initialRegion directly to avoid hardcoded jump
         initialRegion={initialRegion}
-        customMapStyle={LEAN_MAP_STYLE}
         
         // ── Optimized Performance Flags ──
         showsUserLocation={false} 
@@ -85,8 +77,9 @@ function RideMap({
         showsMyLocationButton={false}
         showsCompass={false}
         showsTraffic={false}
-        showsBuildings={false}
+        showsBuildings={true}
         showsIndoors={false}
+        showsPointsOfInterest={true}
         toolbarEnabled={false}
         moveOnMarkerPress={false}
         

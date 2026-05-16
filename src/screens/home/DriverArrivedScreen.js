@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Animated, Linking, Alert, BackHandler
 } from 'react-native';
+import { Audio } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
@@ -87,6 +88,38 @@ export default function DriverArrivedScreen({ navigation }) {
     };
   }, [navigation]);
 
+  // ── Repeating Arrival Sound (every 5s) ────────────────
+  useEffect(() => {
+    let soundObj = null;
+
+    const playHonk = async () => {
+      try {
+        if (soundObj) {
+          await soundObj.unloadAsync();
+        }
+        const { sound } = await Audio.Sound.createAsync(
+          require('../../../audio/trip_offer_honk.mp3')
+        );
+        soundObj = sound;
+        await sound.playAsync();
+      } catch (error) {
+        // Silent fail for audio
+      }
+    };
+
+    // Initial play
+    playHonk();
+
+    const interval = setInterval(playHonk, 5000);
+
+    return () => {
+      clearInterval(interval);
+      if (soundObj) {
+        soundObj.unloadAsync();
+      }
+    };
+  }, []);
+
   // ── Socket: trip:started (after PATCH /trips/:id/start on server) ──
   useEffect(() => {
     const socket = getSocket();
@@ -162,6 +195,19 @@ export default function DriverArrivedScreen({ navigation }) {
       </View>
 
       <Text style={styles.hint}>Waiting for the driver to start the trip…</Text>
+
+      {/* Support Footer */}
+      <View style={styles.supportFooter}>
+        <Text style={styles.supportLabel}>Need help?</Text>
+        <TouchableOpacity 
+          style={styles.supportBtn} 
+          onPress={() => Linking.openURL('tel:9040')}
+          activeOpacity={0.7}
+        >
+          <Phone size={14} color={colors.primary} />
+          <Text style={styles.supportText}>Call Support 9040</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -187,5 +233,31 @@ const styles = StyleSheet.create({
   },
   hint: {
     marginTop: 24, fontSize: fontSize.xs, color: colors.textSecondary, textAlign: 'center',
+  },
+  supportFooter: {
+    position: 'absolute',
+    bottom: 48,
+    alignItems: 'center',
+    gap: 6,
+  },
+  supportLabel: {
+    fontSize: 10,
+    color: colors.textSecondary,
+  },
+  supportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  supportText: {
+    fontSize: 12,
+    fontWeight: fontWeight.bold,
+    color: colors.primary,
   },
 });

@@ -1,8 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, TextInput, StyleSheet, Animated } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { colors } from '../../constants/colors';
-import { borderRadius } from '../../constants/layout';
 import { fontSize, fontWeight } from '../../constants/typography';
 
 const OTP_LENGTH = 4;
@@ -11,19 +10,19 @@ export default function OTPInput({ value = '', onChange, hasError = false }) {
   const inputRef = useRef(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
-  const digits = value.split('').concat(Array(OTP_LENGTH).fill('')).slice(0, OTP_LENGTH);
-
-  React.useEffect(() => {
+  useEffect(() => {
     if (hasError) {
       Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 10,  duration: 60, useNativeDriver: true }),
         Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 8,   duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -8,  duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0,   duration: 60, useNativeDriver: true }),
       ]).start();
     }
   }, [hasError]);
+
+  const digits = value.split('').concat(Array(OTP_LENGTH).fill('')).slice(0, OTP_LENGTH);
 
   return (
     <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
@@ -46,15 +45,15 @@ export default function OTPInput({ value = '', onChange, hasError = false }) {
       />
       {digits.map((digit, index) => {
         const isFocused = index === value.length && index < OTP_LENGTH;
-        const isFilled = index < value.length;
+        const isFilled  = index < value.length;
         return (
           <View
             key={index}
             style={[
               styles.box,
               isFocused && styles.boxFocused,
-              isFilled && styles.boxFilled,
-              hasError && styles.boxError,
+              isFilled  && styles.boxFilled,
+              hasError  && styles.boxError,
             ]}
             onStartShouldSetResponder={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -62,7 +61,7 @@ export default function OTPInput({ value = '', onChange, hasError = false }) {
               return true;
             }}
           >
-            {isFilled && <Animated.Text style={styles.digit}>{digit}</Animated.Text>}
+            {isFilled  && <Animated.Text style={styles.digit}>{digit}</Animated.Text>}
             {isFocused && <View style={styles.cursor} />}
           </View>
         );
@@ -93,17 +92,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.white,
   },
-  boxFocused: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  boxFilled: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-  },
-  boxError: {
-    borderColor: colors.error,
-  },
+  boxFocused: { borderColor: colors.primary, borderWidth: 2 },
+  boxFilled:  { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  boxError:   { borderColor: colors.error },
   digit: {
     fontSize: fontSize['2xl'],
     fontWeight: fontWeight.bold,

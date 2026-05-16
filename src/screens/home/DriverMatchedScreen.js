@@ -1,11 +1,11 @@
-import { Car, Star, Phone, Clock, DollarSign, Share2, AlertTriangle } from 'lucide-react-native';
+import { Car, Star, Phone, AlertTriangle } from 'lucide-react-native';
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  Animated, Alert, Linking, Share, Easing, Vibration, BackHandler
+  Alert, Linking, Vibration, BackHandler
 } from 'react-native';
+import { Audio } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import RideMap from '../../components/map/RideMap';
 import DriverMarker from '../../components/map/DriverMarker';
 import PickupMarker from '../../components/map/PickupMarker';
@@ -26,46 +26,7 @@ import { formatEthiopianPhone } from '../../utils/phoneFormatter';
 const LOCATION_POLL_MS = 3000;
 
 // Animated progress bar for ETA / distance
-function ETAProgressBar({ distanceKm, initialDistanceKm }) {
-  const progress = useRef(new Animated.Value(0)).current;
-  const prevDist = useRef(initialDistanceKm ?? distanceKm ?? 1);
 
-  useEffect(() => {
-    const maxDist = prevDist.current || 1;
-    const ratio = initialDistanceKm
-      ? Math.max(0, Math.min(1, 1 - distanceKm / initialDistanceKm))
-      : 0;
-    Animated.timing(progress, {
-      toValue: ratio,
-      duration: 800,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: false,
-    }).start();
-  }, [distanceKm, initialDistanceKm]);
-
-  const width = progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
-
-  return (
-    <View style={pb.track}>
-      <Animated.View style={[pb.fill, { width }]} />
-    </View>
-  );
-}
-
-const pb = StyleSheet.create({
-  track: {
-    flex: 1,
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  fill: {
-    height: '100%',
-    backgroundColor: colors.white,
-    borderRadius: 3,
-  },
-});
 
 /**
  * Resolve avatar URL to absolute URL with proper protocol
@@ -121,16 +82,8 @@ export default function DriverMatchedScreen({ navigation }) {
     }
   }, [driver?.id, driver?.avatar_url, driver?.photoUrl]);
 
-  // Sheet slide-up animation
-  const sheetAnim = useRef(new Animated.Value(300)).current;
   useEffect(() => {
     Vibration.vibrate([0, 100, 80, 180]);
-    Animated.spring(sheetAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      speed: 14,
-      bounciness: 8,
-    }).start();
   }, []);
 
   // ── Prevent accidental exit ───────────────────────────
@@ -254,7 +207,22 @@ export default function DriverMatchedScreen({ navigation }) {
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
-    const onArrived = () => { setTripStatus('driver_arrived'); navigate('DriverArrived'); };
+    const playArrivalSound = async () => {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          require('../../../audio/trip_offer_honk.mp3')
+        );
+        await sound.playAsync();
+      } catch (error) {
+        console.log('Error playing arrival sound:', error);
+      }
+    };
+
+    const onArrived = () => { 
+      playArrivalSound();
+      setTripStatus('driver_arrived'); 
+      navigate('DriverArrived'); 
+    };
     const onCancelled = ({ reason }) => {
       Alert.alert('Trip Cancelled', reason || 'Driver cancelled.', [{ text: 'OK', onPress: goHome }]);
     };
@@ -271,18 +239,7 @@ export default function DriverMatchedScreen({ navigation }) {
     if (phone && phone !== '—') Linking.openURL(`tel:${driver?.phone}`);
   };
 
-  const handleShareTrip = async () => {
-    const driverName = driver?.name || driver?.full_name || driver?.fullName || 'Your driver';
-    const plate = driver?.vehicle?.plateNumber || driver?.plate_number || driver?.plateNumber || '—';
-    const pickup = tripData?.pickup_address || 'pickup';
-    const dropoff = tripData?.dropoff_address || 'destination';
-    try {
-      await Share.share({
-        message:
-          `I'm riding with ${driverName} (${plate}) from ${pickup} to ${dropoff}. Track my trip on BahirdarRide.`,
-      });
-    } catch (_) {}
-  };
+
 
   const handleSOS = () => {
     Alert.alert(
@@ -298,11 +255,11 @@ export default function DriverMatchedScreen({ navigation }) {
   const handleCancel = () => {
     Alert.alert(
       'Cancel Trip',
-      'A cancellation fee may apply. Cancel anyway?',
+      'Are you sure you want to cancel this trip?',
       [
         { text: 'No', style: 'cancel' },
         {
-          text: 'Cancel Trip',
+          text: 'Yes, Cancel',
           style: 'destructive',
           onPress: async () => {
             setCancelLoading(true);
@@ -357,8 +314,8 @@ export default function DriverMatchedScreen({ navigation }) {
 
   return (
     <View style={styles.root}>
-      {/* ── Full-screen map ── */}
-      <View style={styles.mapWrapper}>
+      {/* ── Background Map ── */}
+      <View style={StyleSheet.absoluteFill}>
         <RideMap mapRef={mapRef} style={StyleSheet.absoluteFill}>
           {userCoords && (
             <PickupMarker coordinate={userCoords} title={tripData?.pickup_address || 'Your location'} />
@@ -377,15 +334,13 @@ export default function DriverMatchedScreen({ navigation }) {
           )}
           <RoutePolyline coordinates={routeCoords} dashed />
         </RideMap>
+        {/* Emerald Overlay */}
+        <View style={styles.mapOverlay} />
+        {/* Map Watermark */}
+        <View style={styles.watermarkContainer} pointerEvents="none">
+          <Text style={styles.mapWatermark}>ETHIOPIAN CITIES</Text>
+        </View>
       </View>
-
-      {/* ── Gradient overlay ── */}
-      <LinearGradient
-        colors={['transparent', 'rgba(0,103,79,0.15)', 'rgba(0,103,79,0.65)', colors.primary]}
-        locations={[0, 0.28, 0.58, 1]}
-        style={styles.gradient}
-        pointerEvents="none"
-      />
 
       {/* ── Top badge: "Driver is on the way!" ── */}
       <View style={[styles.topBadge, { top: insets.top + 16 }]}>
@@ -393,98 +348,92 @@ export default function DriverMatchedScreen({ navigation }) {
         <Text style={styles.topBadgeText}>Driver is on the way!</Text>
       </View>
 
-      {/* ── Slide-up bottom sheet ── */}
-      <Animated.View
-        style={[
-          styles.sheet,
-          { paddingBottom: Math.max(insets.bottom, 16) + 8, transform: [{ translateY: sheetAnim }] },
-        ]}
-      >
-        {/* ── Driver card ── */}
-        <DriverProfileCard 
-          driver={driver} 
-          avatarUrl={`${avatarUrl}?bust=${avatarBust}`} 
-          rating={rating} 
-          onCall={handleCall} 
-        />
-
-        {/* ── ETA + progress bar ── */}
-        <View style={styles.etaCard}>
-          <View style={styles.etaRow}>
-            <Clock size={13} color="rgba(255,255,255,0.85)" />
-            <Text style={styles.etaText}>
-              {etaMin != null ? `Arriving in ${etaMin} minute${etaMin !== 1 ? 's' : ''}` : 'Calculating…'}
-            </Text>
-            {distKm != null && (
-              <Text style={styles.distText}>{distKm.toFixed(1)} km away</Text>
-            )}
-          </View>
-          <ETAProgressBar
-            distanceKm={distKm ?? 0}
-            initialDistanceKm={initialDistRef.current}
+      {/* ── Unified Central Card ── */}
+      <View style={styles.unifiedCardContainer}>
+        <View style={styles.unifiedCard}>
+          {/* 1. Driver Profile Section */}
+          <DriverProfileCard 
+            driver={driver} 
+            avatarUrl={`${avatarUrl}?bust=${avatarBust}`} 
+            rating={rating} 
+            onCall={handleCall}
           />
-        </View>
 
-        {/* ── Trip details (pickup → destination + fare) ── */}
-        <View style={styles.tripCard}>
-          <View style={styles.tripRow}>
-            <View style={[styles.tripDot, { backgroundColor: colors.success }]} />
-            <Text style={styles.tripText} numberOfLines={1}>{pickupName}</Text>
-          </View>
-          <View style={styles.tripConnector}>
-            {[0, 1, 2].map((i) => (
-              <View key={i} style={styles.tripDash} />
-            ))}
-          </View>
-          <View style={styles.tripRow}>
-            <View style={[styles.tripDot, { backgroundColor: colors.success }]} />
-            <Text style={styles.tripText} numberOfLines={1}>{dropoffName}</Text>
-          </View>
-          {fare !== '0.00' && (
-            <View style={styles.tripFareRow}>
-              <DollarSign size={11} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.tripFareText}>ETB {fare}</Text>
-              <View style={styles.tripPayChip}>
-                <Text style={styles.tripPayText}>Cash</Text>
+          <View style={styles.cardDivider} />
+
+          {/* 2. Trip Details Section */}
+          <View style={styles.locationSection}>
+            <View style={styles.locationItem}>
+              <View style={[styles.locationDot, { backgroundColor: colors.success }]} />
+              <View style={styles.locationTextWrap}>
+                <Text style={styles.locationLabel}>PICKUP</Text>
+                <Text style={styles.locationAddress} numberOfLines={1}>{pickupName}</Text>
               </View>
             </View>
-          )}
-        </View>
+            
+            <View style={styles.locationConnector}>
+              <View style={styles.locationDash} />
+              <View style={styles.locationDash} />
+            </View>
 
-        {/* ── Share trip ── */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.actionBtn} onPress={handleShareTrip} activeOpacity={0.85}>
-            <Share2 size={14} color={colors.white} />
-            <Text style={styles.actionBtnText}>Share Trip Details</Text>
+            <View style={styles.locationItem}>
+              <View style={[styles.locationDot, { backgroundColor: colors.mapDestination }]} />
+              <View style={styles.locationTextWrap}>
+                <Text style={styles.locationLabel}>DESTINATION</Text>
+                <Text style={styles.locationAddress} numberOfLines={1}>{dropoffName}</Text>
+              </View>
+            </View>
+          </View>
+
+          {fare !== '0.00' && (
+            <View style={styles.fareRow}>
+              <Text style={styles.fareLabel}>ESTIMATED FARE</Text>
+              <Text style={styles.fareAmount}>ETB {fare}</Text>
+            </View>
+          )}
+
+          <View style={styles.cardDivider} />
+
+          {/* 3. Footer Action: Cancel */}
+          <TouchableOpacity
+            style={styles.cancelBtn}
+            onPress={handleCancel}
+            disabled={cancelLoading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cancelText}>
+              {cancelLoading ? 'Cancelling…' : 'Cancel Trip'}
+            </Text>
           </TouchableOpacity>
         </View>
+      </View>
 
-        {/* ── Cancel ── */}
-        <TouchableOpacity
-          style={styles.cancelBtn}
-          onPress={handleCancel}
-          disabled={cancelLoading}
-          activeOpacity={0.8}
+      {/* Support Footer */}
+      <View style={styles.supportFooter}>
+        <Text style={styles.supportLabel}>Need help?</Text>
+        <TouchableOpacity 
+          style={styles.supportBtn} 
+          onPress={() => Linking.openURL('tel:9040')}
+          activeOpacity={0.7}
         >
-          <Text style={styles.cancelText}>
-            {cancelLoading ? 'Cancelling…' : 'Cancel Trip'}
-          </Text>
+          <Phone size={14} color={colors.white} />
+          <Text style={styles.supportText}>Call Support 9040</Text>
         </TouchableOpacity>
-      </Animated.View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
-  mapWrapper: {
+  root: { 
+    flex: 1, 
+    backgroundColor: '#000',
+  },
+  mapOverlay: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: -1,
+    backgroundColor: 'rgba(0, 103, 79, 0.65)', // Emerald Overlay
   },
 
-  gradient: {
-    position: 'absolute', left: 0, right: 0, bottom: 0, height: '60%',
-  },
 
   // Top badge
   topBadge: {
@@ -497,6 +446,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 9,
     borderRadius: 50,
+    zIndex: 10,
   },
   topBadgeText: {
     fontSize: fontSize.md,
@@ -504,181 +454,135 @@ const styles = StyleSheet.create({
     color: colors.white,
     letterSpacing: 0.3,
   },
-
-  // Sheet
-  sheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    gap: 10,
+  unifiedCardContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
   },
-
-  // Driver card
-  driverCard: {
+  unifiedCard: {
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    padding: 8,
+    ...shadow.lg,
+    shadowOpacity: 0.2,
+    elevation: 12,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginHorizontal: 16,
+    marginVertical: 4,
+  },
+  locationSection: {
+    padding: 16,
+    gap: 2,
+  },
+  locationItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: colors.white,
-    ...shadow.md,
-    borderRadius: borderRadius.xl,
-    padding: 16,
   },
-  avatarWrap: { position: 'relative' },
-  avatar: {
-    width: 58, height: 58, borderRadius: 29,
-    borderWidth: 2, borderColor: '#E5E7EB',
-  },
-  avatarFallback: {
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  avatarEmoji: { fontSize: 28 },
-  onlineDot: {
-    position: 'absolute', bottom: 1, right: 1,
-    width: 14, height: 14, borderRadius: 7,
-    backgroundColor: '#22C55E',
-    borderWidth: 2, borderColor: colors.white,
-  },
-  driverMeta: { flex: 1, gap: 2 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  driverName: {
-    fontSize: fontSize.md, fontWeight: fontWeight.bold, color: '#111827',
-    maxWidth: '40%',
-  },
-  nameSeparator: {
-    marginHorizontal: 4, fontSize: fontSize.md, color: '#9CA3AF',
-  },
-  vehicleHeader: {
-    fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: '#4B5563',
-    maxWidth: '35%',
-  },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ratingText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: '#374151' },
-  ratingLabel: { fontSize: fontSize.xs, color: '#9CA3AF', marginLeft: 2 },
-  plateBadge: {
-    marginLeft: 8,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  locationDot: {
+    width: 8,
+    height: 8,
     borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
   },
-  plateBadgeText: {
-    fontSize: 10,
-    color: '#111827',
+  locationTextWrap: {
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: 9,
     fontWeight: fontWeight.bold,
-    textTransform: 'uppercase',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
-  callBtn: {
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: '#DCFCE7', // nice light green
-    justifyContent: 'center', alignItems: 'center',
+  locationAddress: {
+    fontSize: 13,
+    fontWeight: fontWeight.semibold,
+    color: '#334155',
   },
-
-  // ETA card
-  etaCard: {
-    backgroundColor: 'rgba(255,255,255,0.13)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 10,
+  locationConnector: {
+    paddingLeft: 3.5,
+    gap: 3,
+    marginVertical: 2,
   },
-  etaRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+  locationDash: {
+    width: 1,
+    height: 4,
+    backgroundColor: '#CBD5E1',
   },
-  etaText: {
-    flex: 1,
-    fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.white,
-  },
-  distText: {
-    fontSize: fontSize.xs, color: 'rgba(255,255,255,0.75)', fontWeight: fontWeight.medium,
-  },
-
-  // Action row
-  actionRow: {
-    flexDirection: 'row', gap: 10,
-  },
-  actionBtn: {
-    flex: 1,
+  fareRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)',
-    borderRadius: 16,
-    paddingVertical: 14,
-  },
-  actionBtnText: {
-    fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.white, letterSpacing: 0.2,
-  },
-  sosBtn: {
-    backgroundColor: '#F59E0B', // Amber/Yellow
-    borderColor: 'rgba(255,255,255,0.4)',
-    flex: 0.5,
-  },
-  sosBtnText: { color: colors.white, fontWeight: fontWeight.bold },
-
-  // Trip details card
-  tripCard: {
-    backgroundColor: 'rgba(255,255,255,0.13)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
-    borderRadius: borderRadius.lg,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingBottom: 16,
   },
-  tripRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
+  fareLabel: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: '#64748B',
   },
-  tripDot: {
-    width: 10, height: 10, borderRadius: 5,
+  fareAmount: {
+    fontSize: 14,
+    fontWeight: fontWeight.bold,
+    color: colors.primary,
   },
-  tripText: {
-    flex: 1, fontSize: fontSize.sm,
-    color: colors.white, fontWeight: fontWeight.medium,
-  },
-  tripConnector: {
-    flexDirection: 'column', alignItems: 'flex-start',
-    paddingLeft: 4, gap: 3, marginVertical: 4,
-  },
-  tripDash: {
-    width: 1.5, height: 4,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-    marginLeft: 4,
-  },
-  tripFareRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginTop: 12, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.15)',
-  },
-  tripFareText: {
-    flex: 1, fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.white,
-  },
-  tripPayChip: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: borderRadius.pill,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
-  tripPayText: {
-    fontSize: fontSize.xs, fontWeight: fontWeight.semibold, color: 'rgba(255,255,255,0.85)',
-  },
-
-  // Cancel
   cancelBtn: {
-    backgroundColor: '#EF4444',
-    borderRadius: 16,
+    margin: 16,
+    marginTop: 8,
     paddingVertical: 14,
-    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadow.md,
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
   },
   cancelText: {
-    fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.white, letterSpacing: 0.2,
+    fontSize: 14,
+    fontWeight: fontWeight.bold,
+    color: '#EF4444',
+  },
+  supportFooter: {
+    position: 'absolute',
+    bottom: 48,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    gap: 6,
+  },
+  supportLabel: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  supportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: borderRadius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  supportText: {
+    fontSize: 12,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
+  },
+  watermarkContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapWatermark: {
+    fontSize: 48,
+    fontWeight: fontWeight.bold,
+    color: 'rgba(255,255,255,0.08)',
+    letterSpacing: 8,
+    textAlign: 'center',
   },
 });

@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Animated, BackHandler,
+  ActivityIndicator, Animated, BackHandler, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, Route, Clock, DollarSign, Star, AlertTriangle, Shield } from 'lucide-react-native';
+import { Check, Route, Clock, DollarSign, Star, AlertTriangle, Shield, Phone, MapPin, Navigation } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -16,6 +16,8 @@ import { submitRating } from '../../services/tripService';
 export default function TripCompleteScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { tripId, tripData, driver, finalFare, fareAdjustment, clearFareAdjustment, reset } = useRideStore();
+  const pickupAddress  = tripData?.pickup_address  || null;
+  const dropoffAddress = tripData?.dropoff_address || null;
   const { token } = useAuthStore();
   const { clearDestination, clearStops } = useLocationStore();
 
@@ -46,8 +48,9 @@ export default function TripCompleteScreen({ navigation }) {
   }, []);
 
   const fare          = fareAdjustment?.finalFare ?? finalFare?.amount ?? tripData?.estimated_fare_etb ?? 0;
-  const confirmedFare = fareAdjustment?.confirmedFare ?? fare;
-  const adjustment    = fareAdjustment?.adjustment ?? 0;
+  const driverPayout  = fare * 0.9; // Deducting 10% platform commission
+  const confirmedFare = (fareAdjustment?.confirmedFare ?? fare) * 0.9;
+  const adjustment    = (fareAdjustment?.adjustment ?? 0) * 0.9;
   const pricingModel  = fareAdjustment?.pricingModel ?? 'upfront';
   const distKm = finalFare?.distanceKm || tripData?.distance_km || 0;
   const durMin = finalFare?.durationMin || tripData?.duration_min || 0;
@@ -95,7 +98,27 @@ export default function TripCompleteScreen({ navigation }) {
       </Animated.View>
 
       <Text style={styles.title}>Trip Completed!</Text>
-      <Text style={styles.subtitle}>Thanks for riding with BahirdarRide</Text>
+      <Text style={styles.subtitle}>Thanks for riding with Bahiran Ride</Text>
+
+      {/* Route summary card */}
+      {(pickupAddress || dropoffAddress) && (
+        <View style={styles.routeCard}>
+          <View style={styles.routeRow}>
+            <View style={styles.routeDotGreen} />
+            <Text style={styles.routeText} numberOfLines={2}>{pickupAddress || 'Pickup'}</Text>
+          </View>
+          <View style={styles.routeLine} />
+          <View style={styles.routeRow}>
+            <View style={styles.routeDotBlue} />
+            <Text style={styles.routeText} numberOfLines={2}>{dropoffAddress || 'Destination'}</Text>
+          </View>
+          <View style={styles.routeDivider} />
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total Paid</Text>
+            <Text style={styles.totalValue}>ETB {parseFloat(fare).toFixed(2)}</Text>
+          </View>
+        </View>
+      )}
 
       {/* Trip Summary Stats */}
       <View style={styles.statsCard}>
@@ -114,8 +137,8 @@ export default function TripCompleteScreen({ navigation }) {
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <DollarSign size={20} color={colors.primary} />
-            <Text style={styles.statValue}>ETB {parseFloat(fare).toFixed(0)}</Text>
-            <Text style={styles.statLabel}>Total Fare</Text>
+            <Text style={styles.statValue}>ETB {parseFloat(driverPayout).toFixed(0)}</Text>
+            <Text style={styles.statLabel}>Price</Text>
           </View>
         </View>
       </View>
@@ -124,17 +147,17 @@ export default function TripCompleteScreen({ navigation }) {
       {pricingModel === 'upfront' && (
         <View style={[styles.receiptCard, styles.receiptUpfront]}>
           <Shield size={16} color={colors.primary} />
-          <Text style={styles.receiptText}>You paid the confirmed fare  ETB {parseFloat(confirmedFare).toFixed(2)}</Text>
+          <Text style={styles.receiptText}>The driver received  ETB {parseFloat(confirmedFare).toFixed(2)}</Text>
         </View>
       )}
       {pricingModel === 'hybrid' && adjustment > 0 && (
         <View style={[styles.receiptCard, styles.receiptHybrid]}>
           <AlertTriangle size={16} color='#B45309' />
           <View style={{ flex: 1 }}>
-            <Text style={styles.receiptHybridTitle}>Small traffic adjustment applied</Text>
-            <Text style={styles.receiptHybridRow}>Confirmed fare:   ETB {parseFloat(confirmedFare).toFixed(2)}</Text>
-            <Text style={styles.receiptHybridRow}>Traffic add-on:  +ETB {parseFloat(adjustment).toFixed(2)}</Text>
-            <Text style={styles.receiptHybridTotal}>Total:            ETB {parseFloat(fare).toFixed(2)}</Text>
+            <Text style={styles.receiptHybridTitle}>Net payout calculation</Text>
+            <Text style={styles.receiptHybridRow}>Base payout:     ETB {parseFloat(confirmedFare).toFixed(2)}</Text>
+            <Text style={styles.receiptHybridRow}>Traffic bonus:   +ETB {parseFloat(adjustment).toFixed(2)}</Text>
+            <Text style={styles.receiptHybridTotal}>Net Payout:      ETB {parseFloat(driverPayout).toFixed(2)}</Text>
           </View>
         </View>
       )}
@@ -164,6 +187,19 @@ export default function TripCompleteScreen({ navigation }) {
       <TouchableOpacity style={styles.skipBtn} onPress={finishFlow} activeOpacity={0.7}>
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
+
+      {/* Support Footer */}
+      <View style={styles.supportFooter}>
+        <Text style={styles.supportLabel}>Need help with this trip?</Text>
+        <TouchableOpacity 
+          style={styles.supportBtn} 
+          onPress={() => Linking.openURL('tel:9040')}
+          activeOpacity={0.7}
+        >
+          <Phone size={16} color={colors.primary} />
+          <Text style={styles.supportText}>Call Support 9040</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -185,6 +221,23 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm, color: colors.textSecondary,
     textAlign: 'center', marginBottom: 28,
   },
+  routeCard: {
+    width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: 16, marginBottom: 16,
+    borderWidth: 1, borderColor: colors.border,
+    ...shadow.sm,
+  },
+  routeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 4 },
+  routeDotGreen: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22C55E', marginTop: 4, flexShrink: 0 },
+  routeDotBlue:  { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginTop: 4, flexShrink: 0 },
+  routeText: { flex: 1, fontSize: fontSize.sm, color: colors.textPrimary, fontWeight: fontWeight.medium, lineHeight: 20 },
+  routeLine: { width: 1, height: 12, backgroundColor: colors.border, marginLeft: 4, marginVertical: 2 },
+  routeDivider: { height: 1, backgroundColor: colors.border, marginVertical: 12 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  totalLabel: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: fontWeight.medium },
+  totalValue: { fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.primary },
   statsCard: {
     width: '100%',
     backgroundColor: colors.backgroundAlt,
@@ -231,6 +284,31 @@ const styles = StyleSheet.create({
   submitText: { fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.white },
   skipBtn: { paddingVertical: 12 },
   skipText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: fontWeight.medium },
+  supportFooter: {
+    marginTop: 32,
+    alignItems: 'center',
+    gap: 8,
+  },
+  supportLabel: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  supportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  supportText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.primary,
+  },
   receiptCard: {
     width: '100%',
     flexDirection: 'row',

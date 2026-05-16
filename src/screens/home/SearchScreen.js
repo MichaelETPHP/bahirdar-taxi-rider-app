@@ -42,7 +42,7 @@ import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
 import useLocationStore from '../../store/locationStore';
 import { searchPlaces, getPlaceDetails, detectCity } from '../../services/locationServiceV2';
-import { saveSearchPlace, getSearchHistory } from '../../services/searchHistoryService';
+import { saveSearchPlace, getSearchHistory, removeFromHistory, clearSearchHistory } from '../../services/searchHistoryService';
 
 const SEARCH_DEBOUNCE_MS = 280;
 const SEARCH_RADIUS_KM = 20; // tight city-level radius
@@ -143,6 +143,16 @@ export default function SearchScreen({ navigation, route }) {
   // Load search history
   useEffect(() => {
     getSearchHistory().then(setSearchHistory).catch(() => {});
+  }, []);
+
+  const handleDeleteHistoryItem = useCallback(async (placeId) => {
+    await removeFromHistory(placeId).catch(() => {});
+    setSearchHistory((prev) => prev.filter((p) => p.placeId !== placeId));
+  }, []);
+
+  const handleClearHistory = useCallback(async () => {
+    await clearSearchHistory().catch(() => {});
+    setSearchHistory([]);
   }, []);
 
   // Animate results in
@@ -256,6 +266,24 @@ export default function SearchScreen({ navigation, route }) {
 
   );
 
+  // Splits `text` around every case-insensitive occurrence of `query` and
+  // renders matching segments in emerald so the user can see exactly what matched.
+  const HighlightText = useCallback(({ text = '', query: q = '', style }) => {
+    if (!q) return <Text style={style} numberOfLines={1}>{text}</Text>;
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+    const lower = q.toLowerCase();
+    return (
+      <Text style={style} numberOfLines={1}>
+        {parts.map((part, i) =>
+          part.toLowerCase() === lower
+            ? <Text key={i} style={styles.highlight}>{part}</Text>
+            : part
+        )}
+      </Text>
+    );
+  }, []);
+
   const renderResult = useCallback(
     ({ item, section }) => {
       const isRecent  = section?.key === 'recent' || section?.key === 'history';
@@ -265,6 +293,8 @@ export default function SearchScreen({ navigation, route }) {
         : isPopular
         ? (CATEGORY_ICONS[item.icon] || MapPin)
         : MapPin;
+
+      const needle = isRecent || isPopular ? '' : query.trim();
 
       return (
         <TouchableOpacity
@@ -277,23 +307,38 @@ export default function SearchScreen({ navigation, route }) {
             <IconComp size={15} color={isRecent ? colors.textSecondary : colors.primary} />
           </View>
           <View style={styles.itemText}>
-            <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+            <HighlightText text={item.name} query={needle} style={styles.itemName} />
             {!!item.address && (
-              <Text style={styles.itemAddress} numberOfLines={1}>{item.address}</Text>
+              <HighlightText text={item.address} query={needle} style={styles.itemAddress} />
             )}
           </View>
-          <ChevronRight size={13} color={colors.border} />
+          {isRecent ? (
+            <TouchableOpacity
+              onPress={() => handleDeleteHistoryItem(item.placeId)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.deleteBtn}
+            >
+              <X size={14} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : (
+            <ChevronRight size={13} color={colors.border} />
+          )}
         </TouchableOpacity>
       );
     },
-    [handleSelect, selecting],
+    [handleSelect, selecting, query, handleDeleteHistoryItem],
   );
 
   const renderSectionHeader = useCallback(({ section }) => (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionLabel}>{section.title}</Text>
+      {section.key === 'history' && (
+        <TouchableOpacity onPress={handleClearHistory} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.clearAllText}>Clear all</Text>
+        </TouchableOpacity>
+      )}
     </View>
-  ), []);
+  ), [handleClearHistory]);
 
   // Popular places for detected city (or both if unknown)
   const popularPlaces = detectedCity
@@ -303,10 +348,10 @@ export default function SearchScreen({ navigation, route }) {
   // Build sections for empty-query view
   const sections = [];
   if (searchHistory.length > 0) {
-    sections.push({ key: 'history', title: 'Recent Searches', data: searchHistory.slice(0, 4) });
+    sections.push({ key: 'history', title: 'Recent Searches', data: searchHistory });
   }
   if (recentDestinations.length > 0) {
-    sections.push({ key: 'recent', title: 'Recent Destinations', data: recentDestinations.slice(0, 3) });
+    sections.push({ key: 'recent', title: 'Recent Destinations', data: recentDestinations });
   }
   if (popularPlaces.length > 0) {
     sections.push({
@@ -417,6 +462,7 @@ export default function SearchScreen({ navigation, route }) {
             keyExtractor={(item) => item.id || item.placeId || item.name}
             renderItem={({ item }) => renderResult({ item, section: {} })}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             initialNumToRender={12}
             maxToRenderPerBatch={12}
             windowSize={10}
@@ -456,7 +502,8 @@ export default function SearchScreen({ navigation, route }) {
           renderItem={renderResult}
           renderSectionHeader={renderSectionHeader}
           keyboardShouldPersistTaps="handled"
-          initialNumToRender={14}
+          keyboardDismissMode="on-drag"
+          initialNumToRender={20}
           maxToRenderPerBatch={14}
           windowSize={10}
           removeClippedSubviews
@@ -620,6 +667,9 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 6,
     backgroundColor: colors.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sectionLabel: {
     fontSize: fontSize.xs,
@@ -664,6 +714,19 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
     color: colors.textPrimary,
+  },
+  highlight: {
+    color: '#10b981',
+    fontWeight: fontWeight.bold,
+  },
+  deleteBtn: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  clearAllText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.semibold,
   },
   itemAddress: {
     fontSize: fontSize.xs,

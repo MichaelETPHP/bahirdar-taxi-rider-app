@@ -44,6 +44,22 @@ export function connectSocket(token) {
     });
   }
 
+  // Single-session enforcement: server fires this when the same account logs in elsewhere.
+  _socket.on('auth:force_logout', async () => {
+    if (__DEV__) console.warn('[SOCKET] 🚫 Force logout — account signed in on another device');
+    // Disconnect immediately so the socket stops trying to reconnect with the revoked session.
+    if (_socket) {
+      _socket.removeAllListeners();
+      _socket.disconnect();
+      _socket = null;
+    }
+    const { showForcedLogoutAlert } = await import('../utils/logoutAlert');
+    const authStore = (await import('../store/authStore')).default;
+    await showForcedLogoutAlert(async () => {
+      await authStore.getState().logout();
+    });
+  });
+
   return _socket;
 }
 

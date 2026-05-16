@@ -147,15 +147,19 @@ export default function TripActiveScreen({ navigation }) {
     const socket = getSocket();
     if (!socket) return;
 
-    const onCompleted = ({ finalFare, distanceKm, durationMin, distance, duration, fare_breakdown }) => {
+    const onCompleted = ({ finalFare, distanceKm, durationMin, distance, duration, fare_breakdown, pickup_address, dropoff_address, actual_distance_km, actual_duration_min }) => {
       clearInterval(locationPollRef.current);
       clearInterval(tripStatusPollRef.current);
       clearInterval(timerRef.current);
       setFinalFare({
-        amount: Number(finalFare ?? fare_breakdown?.total_etb ?? tripData?.final_fare_etb ?? 0),
-        distanceKm: Number(distanceKm ?? distance ?? tripData?.actual_distance_km ?? 0),
-        durationMin: Number(durationMin ?? duration ?? tripData?.actual_duration_min ?? 0),
+        amount:      Number(finalFare ?? fare_breakdown?.total_etb ?? tripData?.final_fare_etb ?? 0),
+        distanceKm:  Number(distanceKm ?? actual_distance_km ?? distance ?? tripData?.actual_distance_km ?? 0),
+        durationMin: Number(durationMin ?? actual_duration_min ?? duration ?? tripData?.actual_duration_min ?? 0),
       });
+      // Merge addresses into tripData so TripCompleteScreen can display them
+      if (pickup_address || dropoff_address) {
+        mergeTripData({ pickup_address, dropoff_address });
+      }
       setTripStatus('completed');
       disconnectSocket();
       navigate('TripComplete');

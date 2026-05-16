@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -27,9 +27,6 @@ import useAuthStore from '../../store/authStore';
 import { verifyOtp, sendOtp } from '../../services/authService';
 
 const OTP_LENGTH = 4;
-
-// ── DEMO: Use '1234' as the bypass OTP (backend accepts this in dev mode)
-const DEMO_OTP = '1234';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function OTPScreen({ navigation, route }) {
@@ -43,11 +40,11 @@ export default function OTPScreen({ navigation, route }) {
 
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [inputKey, setInputKey] = useState(0);
   const { formattedTime, canResend, resend: resetTimer } = useOTPTimer();
   const slideAnim = useRef(new Animated.Value(0)).current;
-  // Use a ref so the auto-submit useEffect can always call the latest handleVerify
-  const handleVerifyRef = useRef(null);
 
   const slideUpAndNavigate = (action) => {
     Keyboard.dismiss();
@@ -70,18 +67,15 @@ export default function OTPScreen({ navigation, route }) {
     try {
       const res = await verifyOtp(phone, code);
       const { accessToken, refreshToken, user, expiresIn } = res.data;
-      
-      // Ensure the avatar and fullName are mapped correctly for immediate UI display
+
       const mappedUser = {
         ...user,
         avatarUrl: user.avatar_url || user.avatarUrl,
         fullName: user.full_name || user.fullName,
-        isVerified: true
+        isVerified: true,
       };
 
-      // Save user at the same time as tokens to ensure immediate persistence
       await setTokens(accessToken, refreshToken, expiresIn || 3600, mappedUser);
-      // loadProfile runs in background to get extra details
       await loadProfile();
 
       const displayName = user?.fullName || user?.full_name;
@@ -91,44 +85,24 @@ export default function OTPScreen({ navigation, route }) {
         slideUpAndNavigate(() => setAuthenticated(true, false));
       }
     } catch (err) {
-      // Demo bypass failing at backend (e.g. user doesn't exist or bypass disabled)
-      // We should NOT fallback to local session as it breaks API calls later.
-      if (code === DEMO_OTP && (err?.message?.includes('not found') || err?.status === 404 || err?.status === 401)) {
-        console.warn('[OTP] Demo bypass failed at backend. User must register or use real OTP.');
-        setHasError(true);
-        setOtp('');
-        Alert.alert('Bypass Failed', 'The master OTP 1234 was rejected by the server. Please check if your account is registered.');
+      setHasError(true);
+      setOtp('');
+      // Remount OTPInput so the native keyboard buffer is fully cleared.
+      // Without this, Android sends the old stale digits on the next attempt.
+      setInputKey((k) => k + 1);
+      if (err?.status === 429) {
+        Alert.alert('Too many attempts', 'Please wait before trying again.');
+      } else if (err?.status === 423) {
+        Alert.alert('Account locked', 'Too many failed attempts. Please request a new code.');
+      } else if (err?.status === 410) {
+        Alert.alert('Code expired', 'Your verification code has expired. Please request a new one.');
       } else {
-        // Real error — show error state
-        setHasError(true);
-        setOtp('');
-        if (err.status === 429) {
-          Alert.alert('Too many attempts', 'Please wait before trying again.');
-        } else if (err?.message) {
-          Alert.alert('Verification Failed', err.message);
-        }
+        Alert.alert('Verification Failed', err?.message || 'Invalid code. Please try again.');
       }
     } finally {
       setLoading(false);
     }
   };
-
-  // Keep ref in sync so the auto-submit can call the latest version
-  handleVerifyRef.current = handleVerify;
-
-  // ── DEMO MODE: Auto-fill and auto-submit OTP "1234" ──────────────────
-  useEffect(() => {
-    const fillTimer = setTimeout(() => {
-      setOtp(DEMO_OTP);
-      // Auto-submit shortly after filling
-      const submitTimer = setTimeout(() => {
-        handleVerifyRef.current(DEMO_OTP);
-      }, 400);
-      return () => clearTimeout(submitTimer);
-    }, 800);
-    return () => clearTimeout(fillTimer);
-  }, []);
-  // ─────────────────────────────────────────────────────────────────────
 
   const handleOTPChange = (code) => {
     setOtp(code);
@@ -137,79 +111,89 @@ export default function OTPScreen({ navigation, route }) {
   };
 
   const handleResend = async () => {
-    if (!canResend) return;
+    if (!canResend || resending) return;
+    setResending(true);
     try {
       await sendOtp(phone);
       resetTimer();
+      setOtp('');
+      setHasError(false);
     } catch (err) {
-      Alert.alert('Error', err.message || 'Could not resend OTP.');
+      if (err?.status === 429) {
+        Alert.alert('Please wait', 'You can only request a new code once per minute.');
+      } else {
+        Alert.alert('Error', err?.message || 'Could not resend code. Please try again.');
+      }
+    } finally {
+      setResending(false);
     }
   };
 
   return (
     <Animated.View style={[styles.animWrapper, { transform: [{ translateY: slideAnim }] }]}>
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-        enabled={Platform.OS === 'ios'}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false} delayPressIn={0}>
-          <View style={[styles.flex, styles.scroll]}>
-            <TouchableOpacity onPress={handleBackPress} style={styles.backBtn}>
-              <X size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={0}
+          enabled={Platform.OS === 'ios'}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false} delayPressIn={0}>
+            <View style={[styles.flex, styles.scroll]}>
+              <TouchableOpacity onPress={handleBackPress} style={styles.backBtn}>
+                <X size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
 
-            <View style={styles.content}>
-              <View style={styles.iconCircle}>
-                <MessageCircle size={32} color={colors.primary} />
-              </View>
+              <View style={styles.content}>
+                <View style={styles.iconCircle}>
+                  <MessageCircle size={32} color={colors.primary} />
+                </View>
 
-              {/* DEMO badge — visible during development */}
-              <View style={styles.demoBadge}>
-                <Text style={styles.demoBadgeText}>🔧 DEMO — Auto-verifying with OTP: 1234</Text>
-              </View>
+                <Text style={styles.heading}>{t('auth.verifyTitle')}</Text>
+                <Text style={styles.sub}>
+                  {t('auth.verifySubtitle')}{' '}
+                  <Text style={styles.phoneBold}>{formatPhoneDisplay(phone)}</Text>
+                </Text>
 
-              <Text style={styles.heading}>{t('auth.verifyTitle')}</Text>
-              <Text style={styles.sub}>
-                {t('auth.verifySubtitle')}{' '}
-                <Text style={styles.phoneBold}>{formatPhoneDisplay(phone)}</Text>
-              </Text>
+                <View style={styles.otpWrapper}>
+                  <OTPInput key={inputKey} value={otp} onChange={handleOTPChange} hasError={hasError} />
+                </View>
 
-              <View style={styles.otpWrapper}>
-                <OTPInput value={otp} onChange={handleOTPChange} hasError={hasError} />
-              </View>
-
-              {hasError && (
-                <Text style={styles.errorText}>{t('auth.wrongCode')}</Text>
-              )}
-
-              <AppButton
-                title={t('auth.verifyTitle')}
-                onPress={() => handleVerify()}
-                loading={loading}
-                disabled={otp.length < OTP_LENGTH || loading}
-                style={styles.button}
-              />
-
-              <View style={styles.resendRow}>
-                <Text style={styles.resendLabel}>{t('auth.didntReceive')} </Text>
-                {canResend ? (
-                  <TouchableOpacity onPress={handleResend}>
-                    <Text style={styles.resendLink}>{t('auth.resendNow')}</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={styles.resendTimer}>
-                    {t('auth.resendIn')} {formattedTime}
-                  </Text>
+                {hasError && (
+                  <Text style={styles.errorText}>{t('auth.wrongCode')}</Text>
                 )}
+
+                <AppButton
+                  title={t('auth.verifyTitle')}
+                  onPress={() => handleVerify()}
+                  loading={loading}
+                  disabled={otp.length < OTP_LENGTH || loading}
+                  style={styles.button}
+                />
+
+                <View style={styles.resendRow}>
+                  <Text style={styles.resendLabel}>{t('auth.didntReceive')} </Text>
+                  {canResend ? (
+                    <TouchableOpacity
+                      onPress={handleResend}
+                      disabled={resending}
+                      activeOpacity={0.6}
+                    >
+                      <Text style={[styles.resendLink, resending && styles.resendLinkDisabled]}>
+                        {resending ? 'Sending...' : t('auth.resendNow')}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.resendTimer}>
+                      {t('auth.resendIn')} {formattedTime}
+                    </Text>
+                  )}
+                </View>
               </View>
             </View>
-          </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Animated.View>
   );
 }
@@ -241,22 +225,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  demoBadge: {
-    backgroundColor: '#FFF3CD',
-    borderColor: '#FBBF24',
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    marginBottom: 20,
-    alignSelf: 'flex-start',
-  },
-  demoBadgeText: {
-    fontSize: 11,
-    color: '#92400E',
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
   heading: {
     fontSize: 26,
     fontWeight: fontWeight.bold,
@@ -277,4 +245,5 @@ const styles = StyleSheet.create({
   resendLabel: { fontSize: fontSize.sm, color: colors.textSecondary },
   resendTimer: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: fontWeight.medium },
   resendLink: { fontSize: fontSize.sm, color: colors.primary, fontWeight: fontWeight.semibold },
+  resendLinkDisabled: { opacity: 0.45 },
 });

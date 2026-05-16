@@ -312,8 +312,12 @@ export default function PhoneEntryScreen({ navigation }) {
                     <View style={styles.container}>
                       <View style={styles.content}>
                         <View style={styles.logoWrapper}>
-                          <View style={styles.logoCircle}>
-                            <CarTaxiFront size={44} color="white" />
+                          <View style={[styles.logoCircle, { backgroundColor: colors.white }]}>
+                            <Image 
+                              source={require('../../../assets/Rider-AppIcon.png')}
+                              style={styles.logoImage}
+                              resizeMode="contain"
+                            />
                           </View>
                         </View>
                         <Text style={styles.heading}>{t('auth.welcome')}</Text>
@@ -524,6 +528,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 14,
     elevation: 10,
+    overflow: 'hidden',
+  },
+  logoImage: {
+    width: 88,
+    height: 88,
   },
   heading: {
     fontSize: 28,

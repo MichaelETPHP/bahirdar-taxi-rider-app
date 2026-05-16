@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-const TIMER_DURATION = 60;
+// 62 seconds: 2-second buffer over the backend's 60-second cooldown.
+// Prevents the race where the frontend timer hits 0 but the server-side
+// cooldown hasn't quite expired yet, causing a rejected resend.
+const TIMER_DURATION = 62;
 
 export default function useOTPTimer() {
   const [seconds, setSeconds] = useState(TIMER_DURATION);

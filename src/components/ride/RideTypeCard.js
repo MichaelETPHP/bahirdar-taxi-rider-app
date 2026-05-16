@@ -202,23 +202,19 @@ function RideTypeCard({
                 <View style={styles.priceSkeleton} />
               </View>
             ) : (
-              !selected && (
-                <View style={styles.priceContainer}>
-                  <Text style={styles.priceValue}>
-                    {fare != null ? (
-                      <>
-                        ~ {fare.toFixed(0)}
-                        <Text style={styles.currencyLabel}> ETB</Text>
-                      </>
-                    ) : (
-                      <Text style={styles.currencyLabel}>Price pending</Text>
-                    )}
-                  </Text>
-                </View>
-              )
-
+              <View style={styles.priceContainer}>
+                <Text style={[styles.priceValue, selected && styles.priceValueSelected]}>
+                  {fare != null ? (
+                    <>
+                      {fare.toFixed(0)}
+                      <Text style={styles.currencyLabel}> ETB</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.currencyLabel}>—</Text>
+                  )}
+                </Text>
+              </View>
             )}
-
           </View>
         </View>
 
@@ -344,11 +340,15 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     paddingVertical: 8, // Slightly more vertical padding for balance
     paddingHorizontal: 12,
-    borderRadius: 12, // More standard radius for compact cards
+    borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    ...shadow.sm,
+    borderColor: 'rgba(15,23,42,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   cardMain: {
     flexDirection: 'row',
@@ -358,12 +358,12 @@ const styles = StyleSheet.create({
   cardSelected: {
     borderColor: colors.primary,
     borderWidth: 2,
-    backgroundColor: colors.primaryLight,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 4,
+    backgroundColor: 'rgba(0,103,79,0.06)',
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   iconCircle: {
     width: 64,
@@ -450,6 +450,9 @@ const styles = StyleSheet.create({
     color: '#000000',
     textAlign: 'right',
   },
+  priceValueSelected: {
+    color: '#00674F',
+  },
   currencyLabel: {
     fontSize: 10,
     fontWeight: '400',
@@ -464,7 +467,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 18,
     borderRadius: 4,
-    backgroundColor: colors.border,
+    backgroundColor: 'rgba(15,23,42,0.10)',
   },
   protectionRow: {
     flexDirection: 'row',

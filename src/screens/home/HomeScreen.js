@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Animated, Pressable, Dimensions, Image, Platform, InteractionManager, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Animated, Pressable, Dimensions, Image, Platform, InteractionManager, ActivityIndicator, Easing } from 'react-native';
 import SplashLoader from '../../components/common/SplashLoader';
 import * as Haptics from 'expo-haptics';
 
@@ -178,7 +178,17 @@ export default function HomeScreen({ navigation }) {
   const token = useAuthStore((s) => s.token);
   const { destination, recentDestinations, setDestination, setPickup, pickup, userCoords, setUserCoords, clearStops } = useLocationStore();
   const resetRideState = useRideStore((s) => s.reset);
-  const displayCoords = userCoords ?? ADDIS_ABABA_COORDS;
+  const { currentLocation, currentAddress, loading: locLoading, permissionDenied } = useLocationV2();
+  const displayCoords = useMemo(() => {
+    if (currentLocation) {
+      return {
+        latitude: currentLocation.lat,
+        longitude: currentLocation.lng,
+      };
+    }
+    if (userCoords) return userCoords;
+    return ADDIS_ABABA_COORDS;
+  }, [currentLocation?.lat, currentLocation?.lng, userCoords?.latitude, userCoords?.longitude]);
   const selectedRideType = useRideStore((s) => s.selectedRideType);
   const categories = useRideStore((s) => s.categories);
   const categoriesLoading = useRideStore((s) => s.categoriesLoading);
@@ -246,10 +256,10 @@ export default function HomeScreen({ navigation }) {
   // native MapView via setNativeProps inside ProfessionalRideMap, which never
   // triggers a React re-render.
   const [sheetDragging, setSheetDragging] = useState(false);
-  const isMapScrollEnabledStore = useRideStore((state) => state.isMapScrollEnabled);
-  const mapScrollEnabled = !sheetDragging && isMapScrollEnabledStore;
+    const isMapScrollEnabledStore = useRideStore((state) => state.isMapScrollEnabled);
+    const mapScrollEnabled = !destination && !sheetDragging && isMapScrollEnabledStore;
+    const rideSheetHeight = destination ? SCREEN_HEIGHT * 0.58 : SHEET_COLLAPSED_HEIGHT;
   const [isInServiceArea, setIsInServiceArea] = useState(true);
-  const { currentLocation, currentAddress, loading: locLoading, permissionDenied } = useLocationV2();
 
   // Get readable neighborhood name instead of full address
   const readableLocationName = useMemo(() => {
@@ -414,7 +424,12 @@ export default function HomeScreen({ navigation }) {
   const lastDriverUpdateRef = useRef(0);
   const throttleMs = 800; // Throttle location updates to 800ms (from constant 500ms)
 
-  const { data: nearbyDriversRes } = useNearbyDrivers(displayCoords, 10);
+  const nearbyDriverCoords = useMemo(() => ({
+    latitude: Number(displayCoords.latitude.toFixed(4)),
+    longitude: Number(displayCoords.longitude.toFixed(4)),
+  }), [displayCoords.latitude, displayCoords.longitude]);
+
+  const { data: nearbyDriversRes } = useNearbyDrivers(nearbyDriverCoords, 10);
 
   useEffect(() => {
     if (nearbyDriversRes) {
@@ -669,6 +684,15 @@ export default function HomeScreen({ navigation }) {
 
 
   const handleRecenter = useCallback(() => {
+    // Start spin animation for visual feedback
+    refreshSpinAnim.setValue(0);
+    Animated.timing(refreshSpinAnim, {
+      toValue: 1,
+      duration: 800,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: true,
+    }).start();
+
     InteractionManager.runAfterInteractions(() => {
       if (mapRef.current) {
         mapRef.current.animateToRegion(
@@ -682,7 +706,7 @@ export default function HomeScreen({ navigation }) {
         );
       }
     });
-  }, [displayCoords.latitude, displayCoords.longitude]);
+  }, [displayCoords.latitude, displayCoords.longitude, refreshSpinAnim]);
 
   const handlePickupDrag = useCallback((coord) => {
     // Update store with dragged position
@@ -727,6 +751,13 @@ export default function HomeScreen({ navigation }) {
     inputRange: [0, 1],
     outputRange: ['0deg', '-30deg'],
   });
+
+  const refreshSpinAnim = useRef(new Animated.Value(0)).current;
+  const refreshSpin = refreshSpinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
   const selectBtnSkeletonOpacity = useRef(new Animated.Value(0.45)).current;
 
   useEffect(() => {
@@ -878,7 +909,9 @@ export default function HomeScreen({ navigation }) {
             </Text>
           </View>
           <View style={styles.currentLocationAction}>
-            <RefreshCw size={14} color={colors.primary} />
+            <Animated.View style={{ transform: [{ rotate: refreshSpin }] }}>
+              <RefreshCw size={14} color={colors.primary} />
+            </Animated.View>
           </View>
         </Pressable>
       </View>
@@ -888,14 +921,17 @@ export default function HomeScreen({ navigation }) {
         style={styles.sheetWrapper}
         pointerEvents="box-none"
       >
-        <BottomSheet
-          key="main-ride-sheet"
-          style={styles.sheet}
-          minHeight={destination ? SCREEN_HEIGHT * 0.52 : SHEET_COLLAPSED_HEIGHT}
-          maxHeight={SCREEN_HEIGHT * 0.85}
-          initialExpanded={false}
-          onExpandedChange={setSheetExpanded}
-          scrollEnabled={false}
+          <BottomSheet
+            key="main-ride-sheet"
+            style={styles.sheet}
+            minHeight={rideSheetHeight}
+            maxHeight={rideSheetHeight}
+            initialExpanded={false}
+            canExpand={false}
+            draggable={false}
+            onExpandedChange={setSheetExpanded}
+            contentScrollable={false}
+            scrollEnabled={false}
 
           onDragStart={() => setSheetDragging(true)}
           onDragEnd={() => setSheetDragging(false)}
