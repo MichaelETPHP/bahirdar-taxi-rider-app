@@ -77,10 +77,11 @@ function UberUserLocationMarker({ coordinate, avatarUrl, animated = true }) {
             <View style={styles.shell}>
               {avatarUrl ? (
                 <Image
+                  key={avatarUrl}
                   source={{ uri: avatarUrl }}
                   style={styles.avatar}
                   contentFit="cover"
-                  cachePolicy="disk"
+                  cachePolicy="none"
                   transition={150}
                   onLoad={() => setImageReady(true)}
                   onError={() => setImageReady(false)}

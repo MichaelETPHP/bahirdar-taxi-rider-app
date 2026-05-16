@@ -36,6 +36,7 @@ import { borderRadius, shadow } from '../../constants/layout';
 import useAuthStore from '../../store/authStore';
 import { updateProfile, uploadAvatar } from '../../services/authService';
 import { API_BASE_URL } from '../../config/api';
+import { buildAvatarUrl } from '../../utils/avatarUrl';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -98,7 +99,7 @@ function dateToIso(date) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ProfileScreen({ navigation }) {
   const { t } = useTranslation();
-  const { user, phone, token, updateUser, logout, deleteAccount } = useAuthStore();
+  const { user, phone, token, updateUser, logout, deleteAccount, loadProfile } = useAuthStore();
 
   // ── Edit mode
   const [editMode, setEditMode] = useState(false);
@@ -123,8 +124,23 @@ export default function ProfileScreen({ navigation }) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [pickerDate,     setPickerDate]     = useState(isoToDate(dateOfBirth));
 
-  // ── Avatar - always sync from DB, no local caching
-  const dbAvatarUrl = user?.avatarUrl || user?.avatar_url;
+  // ── Pull-to-refresh
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await loadProfile(); } catch (_) {}
+    finally { setRefreshing(false); }
+  }, [loadProfile]);
+
+  // ── Avatar - cache buster forces fresh image after upload
+  const dbAvatarUrl   = buildAvatarUrl(
+    user?.avatarUrl || user?.avatar_url,
+    user?.avatarUpdatedAt || user?.updated_at,
+  );
+  const avatarBuster  = useRef(0);
+  const avatarDisplayUrl = dbAvatarUrl
+    ? `${dbAvatarUrl}${dbAvatarUrl.includes('?') ? '&' : '?'}_v=${avatarBuster.current}`
+    : null;
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
 
@@ -226,11 +242,21 @@ export default function ProfileScreen({ navigation }) {
       setUploadingAvatar(true);
       try {
         const res = await uploadAvatar(form, token);
-        const url = res?.data?.avatar_url || res?.avatarUrl;
+        const payload = res?.data || res;
+        const url = payload?.avatar_url || payload?.avatarUrl;
         if (!url) throw new Error('Server did not return an avatar URL');
+        const version =
+          payload?.user?.updated_at ||
+          payload?.user?.updatedAt ||
+          payload?.updated_at ||
+          Date.now();
 
         // Update Zustand store with server URL (cache buster ensures fresh image from DB)
-        updateUser({ avatarUrl: url });
+        avatarBuster.current += 1;
+        updateUser({
+          avatarUrl: url,
+          avatarUpdatedAt: version,
+        });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast('Profile photo updated!', 'success');
       } catch (err) {
@@ -277,12 +303,7 @@ export default function ProfileScreen({ navigation }) {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast('Profile updated successfully!', 'success');
-
-      // Collapse the accordion
-      setAccordionOpen(false);
-      Animated.spring(accordionAnim, {
-        toValue: 0, useNativeDriver: false, speed: 18, bounciness: 2,
-      }).start();
+      setEditMode(false);
     } catch (err) {
       console.error('[Profile] Save error:', err);
       const msg = err?.message || 'Failed to save. Try again.';
@@ -343,8 +364,21 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* ── Main Content (Single Page, No Scroll) ── */}
-      <View style={styles.content}>
+      {/* ── Main Content ── */}
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
 
         {/* ── Profile Card ── */}
         <View style={styles.profileCard}>
@@ -356,13 +390,13 @@ export default function ProfileScreen({ navigation }) {
             style={styles.avatarCenter}
           >
             <View style={styles.avatarRing}>
-              {dbAvatarUrl ? (
+              {avatarDisplayUrl ? (
                 <Image
-                  source={{ uri: dbAvatarUrl }}
+                  source={{ uri: avatarDisplayUrl }}
                   style={styles.avatarImg}
                   contentFit="cover"
                   transition={200}
-                  cachePolicy="disk"
+                  cachePolicy="none"
                 />
               ) : (
                 <Avatar initials={user?.fullName?.slice(0, 2)?.toUpperCase() || '?'} size={80} />
@@ -408,10 +442,7 @@ export default function ProfileScreen({ navigation }) {
               </View>
               <TouchableOpacity
                 style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-                onPress={() => {
-                  handleSaveProfile();
-                  if (!saving) setEditMode(false);
-                }}
+                onPress={handleSaveProfile}
                 disabled={saving}
                 activeOpacity={0.8}
               >
@@ -498,7 +529,7 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
 
       {/* ── Settings Menu Modal ── */}
       <Modal
@@ -698,6 +729,7 @@ export default function ProfileScreen({ navigation }) {
 // ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F5F4F0' },
+  flex: { flex: 1 },
 
   // ── Header
   header: {
@@ -738,7 +770,7 @@ const styles = StyleSheet.create({
 
   // ── Content Container
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: PAD,
     paddingVertical: 12,
   },

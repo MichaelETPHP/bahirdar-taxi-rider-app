@@ -2,7 +2,7 @@ import { Car, DollarSign } from 'lucide-react-native';
 import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Animated, Alert, Easing, Vibration,
+  Animated, Alert, Easing, Vibration, BackHandler
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -126,14 +126,23 @@ export default function SearchingScreen({ navigation }) {
 
   const { playMatchFeedback, playActionHaptic, playErrorFeedback } = useSoundHaptics();
 
-  // Vibrate every 3 seconds while searching — stops when screen unmounts
+  // Subtle buzz during search
   useEffect(() => {
-    // Subtle buzz during search
     const id = setInterval(() => playActionHaptic(), 3000);
-    return () => {
-      clearInterval(id);
-    };
+    return () => clearInterval(id);
   }, []);
+
+  // ── Lock interaction during search ────────────────────
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: false });
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Return true to indicate we've handled the event (prevents going back)
+      return true;
+    });
+
+    return () => backHandler.remove();
+  }, [navigation]);
 
   // One-shot spin for the car icon when cancel is pressed
   const spinAnim = useRef(new Animated.Value(0)).current;

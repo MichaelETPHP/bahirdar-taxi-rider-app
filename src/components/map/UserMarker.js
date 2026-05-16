@@ -136,10 +136,11 @@ export default React.memo(function UserMarker({ coordinate, avatarUrl, name, lab
             <View style={styles.shell}>
               {avatarUrl ? (
                 <Image
+                  key={avatarUrl}
                   source={{ uri: avatarUrl }}
                   style={styles.avatar}
                   onLoad={() => setImageReady(true)}
-                  cachePolicy="disk"
+                  cachePolicy="none"
                 />
               ) : initials ? (
                 <View style={styles.initialsCircle}>

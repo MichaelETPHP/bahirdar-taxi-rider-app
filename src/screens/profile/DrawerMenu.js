@@ -7,6 +7,7 @@ import {
   Alert,
   Linking,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { DrawerContentScrollView } from '@react-navigation/drawer';
 import { useTranslation } from 'react-i18next';
 import {
@@ -18,15 +19,26 @@ import {
   LogOut,
   Users,
   Share2,
-  Music,
   Send,
-  Settings,
+  ChevronRight,
 } from 'lucide-react-native';
 import Avatar from '../../components/common/Avatar';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
 import useAuthStore from '../../store/authStore';
+import { API_BASE_URL } from '../../config/api';
+import { buildAvatarUrl } from '../../utils/avatarUrl';
+
+function resolveAvatarUrl(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('data:image/')) return s;
+  const origin = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+  return s.startsWith('/') ? `${origin}${s}` : `${origin}/${s}`;
+}
 import { changeLanguage } from '../../i18n';
 
 const MENU_ITEMS = [
@@ -53,6 +65,11 @@ const SOCIAL_ICON_MAP = {
 export default function DrawerMenu(props) {
   const { t, i18n } = useTranslation();
   const { user, phone, logout } = useAuthStore();
+  const avatarUrl = buildAvatarUrl(
+    resolveAvatarUrl(user?.avatarUrl || user?.avatar_url),
+    user?.avatarUpdatedAt || user?.updated_at || null,
+  );
+  const initials  = user?.fullName?.slice(0, 2)?.toUpperCase() || '?';
 
   // Format phone number correctly
   const formatPhoneNumber = (phoneStr) => {
@@ -93,16 +110,30 @@ export default function DrawerMenu(props) {
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={styles.container}>
       {/* Profile section */}
-      <View style={styles.profileSection}>
-        <Avatar
-          initials={user?.fullName?.slice(0, 2)?.toUpperCase() || '?'}
-          size={64}
-        />
-        <View style={styles.profileInfo}>
-          <Text style={styles.userName}>{user?.fullName || ''}</Text>
-          <Text style={styles.userPhone}>{displayPhone}</Text>
+      <TouchableOpacity
+        style={styles.profileSection}
+        onPress={() => props.navigation.navigate('Profile')}
+        activeOpacity={0.8}
+      >
+        <View style={styles.avatarRing}>
+          {avatarUrl ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={styles.avatarImg}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <Avatar initials={initials} size={60} />
+          )}
         </View>
-      </View>
+        <View style={styles.profileInfo}>
+          <Text style={styles.userName} numberOfLines={1}>{user?.fullName || 'Rider'}</Text>
+          <Text style={styles.userPhone}>{displayPhone}</Text>
+          <Text style={styles.editProfileLink}>Edit Profile</Text>
+        </View>
+        <ChevronRight size={16} color={colors.border} />
+      </TouchableOpacity>
 
       <View style={styles.divider} />
 
@@ -187,6 +218,23 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     gap: 14,
   },
+  avatarRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2.5,
+    borderColor: colors.primary,
+    backgroundColor: colors.backgroundAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  avatarImg: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
   profileInfo: {
     flex: 1,
   },
@@ -199,6 +247,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  editProfileLink: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: fontWeight.semibold,
+    marginTop: 4,
   },
   divider: {
     height: 1,

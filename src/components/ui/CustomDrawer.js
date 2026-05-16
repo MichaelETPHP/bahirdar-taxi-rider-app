@@ -27,6 +27,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { FacebookIcon, InstagramIcon, TiktokIcon, TelegramIcon } from '../common/BrandIcons';
 import Avatar from '../common/Avatar';
+import { buildAvatarUrl } from '../../utils/avatarUrl';
 
 // Google Play Store icon built from SVG paths (4-colour arrow)
 const PlayStoreIcon = ({ size = 22 }) => (
@@ -93,7 +94,10 @@ function CustomDrawer({ visible, onClose, navigation }) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const { user, phone, logout } = useAuthStore();
-  const avatarUrl = user?.avatarUrl || user?.avatar_url || null;
+  const avatarUrl = buildAvatarUrl(
+    user?.avatarUrl || user?.avatar_url || null,
+    user?.avatarUpdatedAt || user?.updated_at || null,
+  );
 
   const displayPhone = phone
     ? (phone.startsWith('+251') ? phone : `+251 ${phone.slice(1)}`)

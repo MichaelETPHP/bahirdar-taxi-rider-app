@@ -13,6 +13,7 @@ import DriverMarker from '../../components/map/DriverMarker';
 import UberDestinationMarker from '../../components/map/UberDestinationMarker';
 import UberUserLocationMarker from '../../components/map/UberUserLocationMarker';
 import ProfessionalRoutePolyline from '../../components/map/ProfessionalRoutePolyline';
+import { buildAvatarUrl } from '../../utils/avatarUrl';
 import {
   MapPin,
   Clock,
@@ -416,7 +417,10 @@ export default function HomeScreen({ navigation }) {
     setDrawerOpen(true);
   }, [drawerOpen, handleCloseDrawer]);
 
-  const avatarUrl = user?.avatarUrl || user?.avatar_url || null;
+  const avatarUrl = buildAvatarUrl(
+    user?.avatarUrl || user?.avatar_url || null,
+    user?.avatarUpdatedAt || user?.updated_at || null,
+  );
   const userName = user?.fullName ? `, ${user.fullName.split(' ')[0]}` : '';
 
   const [drivers, setDrivers] = useState([]);

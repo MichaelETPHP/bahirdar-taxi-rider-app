@@ -16,7 +16,7 @@ import { submitRating } from '../../services/tripService';
 export default function TripCompleteScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { tripId, tripData, driver, finalFare, fareAdjustment, clearFareAdjustment, reset } = useRideStore();
-  const pickupAddress  = tripData?.pickup_address  || null;
+  const pickupAddress = tripData?.pickup_address || null;
   const dropoffAddress = tripData?.dropoff_address || null;
   const { token } = useAuthStore();
   const { clearDestination, clearStops } = useLocationStore();
@@ -47,13 +47,26 @@ export default function TripCompleteScreen({ navigation }) {
     return () => backHandler.remove();
   }, []);
 
-  const fare          = fareAdjustment?.finalFare ?? finalFare?.amount ?? tripData?.estimated_fare_etb ?? 0;
-  const driverPayout  = fare * 0.9; // Deducting 10% platform commission
-  const confirmedFare = (fareAdjustment?.confirmedFare ?? fare) * 0.9;
-  const adjustment    = (fareAdjustment?.adjustment ?? 0) * 0.9;
-  const pricingModel  = fareAdjustment?.pricingModel ?? 'upfront';
+  const fare = finalFare?.amount
+    || tripData?.final_fare_etb
+    || tripData?.total_fare_etb
+    || tripData?.estimated_fare_etb
+    || fareAdjustment?.finalFare
+    || 0;
+  const confirmedFare = fareAdjustment?.confirmedFare || fare;
+  const adjustment = fareAdjustment?.adjustment ?? 0;
+  const pricingModel = fareAdjustment?.pricingModel ?? 'upfront';
   const distKm = finalFare?.distanceKm || tripData?.distance_km || 0;
   const durMin = finalFare?.durationMin || tripData?.duration_min || 0;
+
+  // ── Automatic navigation timer ─────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      finishFlow();
+    }, 20000); // 20 seconds
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // ── Checkmark animation ─────────────────────────────
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -64,10 +77,10 @@ export default function TripCompleteScreen({ navigation }) {
   const handleSubmit = async (selectedStars) => {
     setStars(selectedStars);
     setSubmitting(true);
-    
+
     // Small delay to allow user to see their selection (simulates "thinking")
     await new Promise(resolve => setTimeout(resolve, 800));
-    
+
     try {
       if (tripId) {
         await submitRating(tripId, { rating: selectedStars }, token);
@@ -87,14 +100,10 @@ export default function TripCompleteScreen({ navigation }) {
   };
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]}
-      keyboardShouldPersistTaps="handled"
-    >
+    <View style={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
       {/* Checkmark */}
       <Animated.View style={[styles.checkCircle, { transform: [{ scale: scaleAnim }] }]}>
-        <Check size={36} color={colors.white} />
+        <Check size={22} color={colors.white} />
       </Animated.View>
 
       <Text style={styles.title}>Trip Completed!</Text>
@@ -134,33 +143,9 @@ export default function TripCompleteScreen({ navigation }) {
             <Text style={styles.statValue}>{Math.round(durMin)} min</Text>
             <Text style={styles.statLabel}>Duration</Text>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.stat}>
-            <DollarSign size={20} color={colors.primary} />
-            <Text style={styles.statValue}>ETB {parseFloat(driverPayout).toFixed(0)}</Text>
-            <Text style={styles.statLabel}>Price</Text>
-          </View>
+
         </View>
       </View>
-
-      {/* Pricing model receipt */}
-      {pricingModel === 'upfront' && (
-        <View style={[styles.receiptCard, styles.receiptUpfront]}>
-          <Shield size={16} color={colors.primary} />
-          <Text style={styles.receiptText}>The driver received  ETB {parseFloat(confirmedFare).toFixed(2)}</Text>
-        </View>
-      )}
-      {pricingModel === 'hybrid' && adjustment > 0 && (
-        <View style={[styles.receiptCard, styles.receiptHybrid]}>
-          <AlertTriangle size={16} color='#B45309' />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.receiptHybridTitle}>Net payout calculation</Text>
-            <Text style={styles.receiptHybridRow}>Base payout:     ETB {parseFloat(confirmedFare).toFixed(2)}</Text>
-            <Text style={styles.receiptHybridRow}>Traffic bonus:   +ETB {parseFloat(adjustment).toFixed(2)}</Text>
-            <Text style={styles.receiptHybridTotal}>Net Payout:      ETB {parseFloat(driverPayout).toFixed(2)}</Text>
-          </View>
-        </View>
-      )}
 
       {/* Rating */}
       <View style={styles.ratingCard}>
@@ -172,7 +157,7 @@ export default function TripCompleteScreen({ navigation }) {
           {[1, 2, 3, 4, 5].map((n) => (
             <TouchableOpacity key={n} onPress={() => handleSubmit(n)} activeOpacity={0.7} disabled={submitting}>
               <Star
-                size={40}
+                size={24}
                 color={n <= stars ? '#F59E0B' : colors.border}
                 fill={n <= stars ? '#F59E0B' : 'none'}
               />
@@ -191,8 +176,8 @@ export default function TripCompleteScreen({ navigation }) {
       {/* Support Footer */}
       <View style={styles.supportFooter}>
         <Text style={styles.supportLabel}>Need help with this trip?</Text>
-        <TouchableOpacity 
-          style={styles.supportBtn} 
+        <TouchableOpacity
+          style={styles.supportBtn}
           onPress={() => Linking.openURL('tel:9040')}
           activeOpacity={0.7}
         >
@@ -200,26 +185,31 @@ export default function TripCompleteScreen({ navigation }) {
           <Text style={styles.supportText}>Call Support 9040</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: colors.white },
-  container: { alignItems: 'center', paddingHorizontal: 24 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
   checkCircle: {
-    width: 88, height: 88, borderRadius: 44,
+    width: 48, height: 48, borderRadius: 24,
     backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
-    marginBottom: 20, ...shadow.lg,
+    marginBottom: 12, ...shadow.lg,
   },
   title: {
-    fontSize: 24, fontWeight: fontWeight.bold,
-    color: colors.textPrimary, marginBottom: 6, textAlign: 'center',
+    fontSize: 18, fontWeight: fontWeight.bold,
+    color: colors.textPrimary, marginBottom: 2, textAlign: 'center',
   },
   subtitle: {
-    fontSize: fontSize.sm, color: colors.textSecondary,
-    textAlign: 'center', marginBottom: 28,
+    fontSize: 12, color: colors.textSecondary,
+    textAlign: 'center', marginBottom: 12,
   },
   routeCard: {
     width: '100%',
@@ -231,7 +221,7 @@ const styles = StyleSheet.create({
   },
   routeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 4 },
   routeDotGreen: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22C55E', marginTop: 4, flexShrink: 0 },
-  routeDotBlue:  { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginTop: 4, flexShrink: 0 },
+  routeDotBlue: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary, marginTop: 4, flexShrink: 0 },
   routeText: { flex: 1, fontSize: fontSize.sm, color: colors.textPrimary, fontWeight: fontWeight.medium, lineHeight: 20 },
   routeLine: { width: 1, height: 12, backgroundColor: colors.border, marginLeft: 4, marginVertical: 2 },
   routeDivider: { height: 1, backgroundColor: colors.border, marginVertical: 12 },
@@ -242,28 +232,28 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: colors.backgroundAlt,
     borderRadius: borderRadius.lg,
-    padding: 24, marginBottom: 24,
+    padding: 12, marginBottom: 12,
     borderWidth: 1, borderColor: colors.border,
     ...shadow.sm,
   },
   statRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   stat: { flex: 1, alignItems: 'center', gap: 6 },
-  statDivider: { width: 1, height: 40, backgroundColor: colors.border, marginHorizontal: 12 },
-  statValue: { fontSize: 20, fontWeight: fontWeight.bold, color: colors.textPrimary },
+  statDivider: { width: 1, height: 32, backgroundColor: colors.border, marginHorizontal: 12 },
+  statValue: { fontSize: 18, fontWeight: fontWeight.bold, color: colors.textPrimary },
   statLabel: { fontSize: fontSize.xs, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   ratingCard: {
     width: '100%',
     backgroundColor: colors.backgroundAlt,
     borderRadius: borderRadius.lg,
-    padding: 20, marginBottom: 16,
+    padding: 8, marginBottom: 12,
     borderWidth: 1, borderColor: colors.border,
     alignItems: 'center',
   },
   ratingTitle: {
-    fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.textPrimary, marginBottom: 4,
+    fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.textPrimary, marginBottom: 2,
   },
-  ratingDriver: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: 16 },
-  starsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  ratingDriver: { fontSize: fontSize.xs, color: colors.textSecondary, marginBottom: 6 },
+  starsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
   commentInput: {
     width: '100%',
     borderWidth: 1.5, borderColor: colors.border,
@@ -285,9 +275,9 @@ const styles = StyleSheet.create({
   skipBtn: { paddingVertical: 12 },
   skipText: { fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: fontWeight.medium },
   supportFooter: {
-    marginTop: 32,
+    marginTop: 16,
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
   supportLabel: {
     fontSize: fontSize.xs,
