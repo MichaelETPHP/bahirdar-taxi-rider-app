@@ -7,10 +7,10 @@ export default {
     slug: 'BahirdarRide',
     version: '1.0.0',
     orientation: 'portrait',
-    icon: './assets/Rider-AppIcon.png',
+    icon: './assets/icon.png',
     userInterfaceStyle: 'light',
     splash: {
-      image: './assets/Rider-AppIcon.png',
+      image: './assets/splash.png',
       resizeMode: 'contain',
       backgroundColor: '#00674F',
     },
@@ -28,7 +28,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: './assets/Rider-AppIcon.png',
+        foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#00674F',
       },
       package: 'com.bahirdar.ride',
@@ -52,19 +52,19 @@ export default {
       translucent: false,
     },
     web: {
-      favicon: './assets/favicon.png',
+      favicon: './assets/icon.png',
     },
     notification: {
-      icon: './assets/android-icon-monochrome.png',
+      icon: './assets/icon.png',
       color: '#00674F',
     },
     plugins: [
       [
         'expo-notifications',
         {
-          icon: './assets/android-icon-monochrome.png',
+          icon: './assets/icon.png',
           color: '#00674F',
-          defaultChannel: 'default',
+          defaultChannel: 'trip-updates',
         },
       ],
       [

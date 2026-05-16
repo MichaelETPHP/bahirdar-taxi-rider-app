@@ -314,7 +314,7 @@ export default function PhoneEntryScreen({ navigation }) {
                         <View style={styles.logoWrapper}>
                           <View style={[styles.logoCircle, { backgroundColor: colors.white }]}>
                             <Image 
-                              source={require('../../../assets/Rider-AppIcon.png')}
+                              source={require('../../../assets/icon.png')}
                               style={styles.logoImage}
                               resizeMode="contain"
                             />

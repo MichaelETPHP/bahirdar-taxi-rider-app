@@ -19,7 +19,7 @@ import useRideStore from '../../store/rideStore';
 import useAuthStore from '../../store/authStore';
 import useRoute from '../../hooks/useRoute';
 import { haversineDistance, estimateDuration } from '../../utils/distanceUtils';
-import { createTrip } from '../../services/tripService';
+import { createTrip, getWalletBalance } from '../../services/tripService';
 import { connectSocket, joinRiderRoom } from '../../services/socketService';
 import { getFareEstimateForCategory } from '../../utils/fareEstimates';
 
@@ -97,6 +97,26 @@ export default function ConfirmRideScreen({ navigation, route }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
 
+    // Pre-flight wallet check for non-cash payment methods.
+    const paymentMethod = 'cash'; // update here when digital payments are added
+    if (paymentMethod !== 'cash' && fare != null) {
+      try {
+        const walletRes = await getWalletBalance(token);
+        const balance = parseFloat(walletRes?.data?.balance ?? walletRes?.balance ?? 0);
+        if (balance < fare) {
+          setLoading(false);
+          Alert.alert(
+            'Insufficient Balance',
+            `Your wallet balance (ETB ${balance.toFixed(2)}) is less than the estimated fare (ETB ${Math.round(fare)}). Please top up before booking.`,
+            [{ text: 'OK' }],
+          );
+          return;
+        }
+      } catch (_) {
+        // Non-fatal — let the backend enforce the balance check on trip creation
+      }
+    }
+
     // ⚡ 1. Set OPTIMISTIC state immediately (no wait)
     const optimisticTripData = {
       id: `pending-${Date.now()}`,  // Temporary ID until backend responds
@@ -164,6 +184,9 @@ export default function ConfirmRideScreen({ navigation, route }) {
       if (status === 401) {
         title = 'Session Expired';
         msg = 'Please log in again.';
+      } else if (status === 402 || code === 'INSUFFICIENT_BALANCE' || code === 'LOW_BALANCE') {
+        title = 'Insufficient Balance';
+        msg = 'Your wallet balance is too low for this trip. Please top up and try again.';
       } else if (status === 403) {
         title = 'Access Denied';
       } else if (status === 409 || code === 'ACTIVE_TRIP_EXISTS') {

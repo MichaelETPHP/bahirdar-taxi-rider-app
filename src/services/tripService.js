@@ -19,6 +19,10 @@ export function createTrip(body, token) {
   return post('/trips', body, token);
 }
 
+export function getWalletBalance(token) {
+  return get('/payments/wallet/balance', token);
+}
+
 export function getTrip(tripId, token) {
   return get(`/trips/${tripId}`, token);
 }

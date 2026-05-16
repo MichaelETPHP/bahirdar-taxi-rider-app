@@ -91,6 +91,15 @@ const useAuthStore = create((set, get) => ({
             });
           }
         } catch (err) {
+          // 401/403 means the refresh token was revoked (another device logged in).
+          // Force logout so the user sees the login screen immediately.
+          const httpStatus = err?.status ?? err?.response?.status;
+          if (httpStatus === 401 || httpStatus === 403) {
+            await get().logout();
+            return false;
+          }
+          // Network error / server down — keep the existing token so the user
+          // isn't kicked out just because they're temporarily offline.
           set({
             token: status.accessToken,
             refreshToken: status.refreshToken,

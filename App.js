@@ -76,11 +76,14 @@ function isNotificationPermissionGranted(status) {
 
 async function ensureAndroidNotificationChannel() {
   if (Platform.OS !== 'android') return;
-  await Notifications.setNotificationChannelAsync('default', {
-    name: 'Bahirdar',
+  // 'default' is a reserved Android system channel whose importance cannot be overridden.
+  // Use a named channel so importance and sound settings actually take effect.
+  await Notifications.setNotificationChannelAsync('trip-updates', {
+    name: 'Trip Updates',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#00674F',
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     sound: 'default',
   });
 }
@@ -157,20 +160,6 @@ export default function App() {
         if (allowed) {
           await registerExpoPushTokenIfConfigured();
         }
-
-        if (!allowed) return;
-
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'Bahiran Ride',
-            body: 'Your driver is nearby. Open the app for live updates.',
-            data: { route: 'Notification' },
-            ...(Platform.OS === 'android' && {
-              android: { channelId: 'default' },
-            }),
-          },
-          trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 },
-        });
       } catch (e) {
         if (__DEV__) {
           console.warn('[notifications]', e?.message ?? e);

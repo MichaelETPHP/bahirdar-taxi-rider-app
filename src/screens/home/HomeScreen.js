@@ -55,7 +55,7 @@ import { diagnosticCheckApiKey } from '../../utils/diagnostics';
 
 // Addis Ababa city center — default when GPS not yet available
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
-const PROMO_BANNERS = [require('../../../assets/banner.gif')];
+const PROMO_BANNERS = [require('../../../assets/icon.png')];
 const BANNER_WIDTH = Dimensions.get('window').width - 40;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 // Bottom padding matches the collapsed sheet height so MapView centers the user marker

@@ -5,6 +5,7 @@ import AuthNavigator from './AuthNavigator';
 import AppNavigator from './AppNavigator';
 import useAuthStore from '../store/authStore';
 import useSessionManager from '../hooks/useSessionManager';
+import { connectSocket, disconnectSocket, joinRiderRoom } from '../services/socketService';
 
 import SplashScreen from '../screens/auth/SplashScreen';
 import NetworkBanner from '../components/common/NetworkBanner';
@@ -15,6 +16,7 @@ export const navigationRef = createNavigationContainerRef();
 export default function RootNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
   const loadTokens = useAuthStore((s) => s.loadTokens);
   const [bootstrapped, setBootstrapped] = useState(false);
   const [splashFinished, setSplashFinished] = useState(false);
@@ -36,6 +38,18 @@ export default function RootNavigator() {
 
     bootstrap();
   }, [loadTokens]);
+
+  // Keep the socket open whenever the rider is authenticated.
+  // This ensures auth:force_logout is received even when the user is idle
+  // on the home screen or any other screen — not just during an active trip.
+  useEffect(() => {
+    if (isAuthenticated && token && user?.id) {
+      connectSocket(token);
+      joinRiderRoom(user.id);
+    } else {
+      disconnectSocket();
+    }
+  }, [isAuthenticated, token, user?.id]);
 
   const handleSplashFinish = () => {
     setSplashFinished(true);
