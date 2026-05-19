@@ -26,62 +26,28 @@ import {
   Navigation,
   AlertCircle,
   ChevronRight,
-  Landmark,
-  GraduationCap,
-  Plane,
-  Hospital,
-  ShoppingBag,
-  Hotel,
   Home,
   Briefcase,
   Plus,
   Check,
 } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
-import { fontSize, fontWeight } from '../../constants/typography';
+import { fontSize, fontWeight, fontFamilySemiBold, fontFamilyMedium, fontFamilyRegular } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
 import useLocationStore from '../../store/locationStore';
 import { searchPlaces, getPlaceDetails, detectCity } from '../../services/locationServiceV2';
 import { saveSearchPlace, getSearchHistory, removeFromHistory, clearSearchHistory } from '../../services/searchHistoryService';
 
 const SEARCH_DEBOUNCE_MS = 280;
-const SEARCH_RADIUS_KM = 20; // tight city-level radius
-const OUT_OF_AREA_KM   = 40; // warn if destination is beyond this
+const SEARCH_RADIUS_KM = 20; // tight city-level radius for place search bias
 
 // City centers — used when userCoords not yet available
+// Keys match the area field returned by detectCity (city.toLowerCase().replace(/\s+/g,''))
 const CITY_CENTERS = {
-  bahirdar: { latitude: 11.5955, longitude: 37.3944 },
-  addis:    { latitude: 9.0192,  longitude: 38.7469 },
+  bahirdar:    { latitude: 11.5955, longitude: 37.3944 },
+  addisababa:  { latitude: 9.0192,  longitude: 38.7469 },
 };
 
-// Popular landmarks per city — shown when search is empty
-const POPULAR_PLACES = {
-  bahirdar: [
-    { id: 'bd-1', name: 'Lake Tana Shore',       address: 'Bahir Dar Lakeside',          lat: 11.5934, lng: 37.3873, icon: 'landmark' },
-    { id: 'bd-2', name: 'Bahir Dar University',  address: 'BDU Main Campus, Bahir Dar',  lat: 11.6009, lng: 37.3823, icon: 'education' },
-    { id: 'bd-3', name: 'Bahir Dar Airport',     address: 'Bahir Dar Airport (BJR)',     lat: 11.6080, lng: 37.3216, icon: 'transport' },
-    { id: 'bd-4', name: 'Blue Nile Falls Road',  address: 'Tis Abay, Bahir Dar',         lat: 11.4897, lng: 37.5900, icon: 'landmark' },
-    { id: 'bd-5', name: 'Ghion Hotel',           address: 'Ghion Hotel, Bahir Dar',      lat: 11.5974, lng: 37.3890, icon: 'hotel' },
-    { id: 'bd-6', name: 'Central Market',        address: 'Gebeya, Bahir Dar',           lat: 11.5916, lng: 37.3945, icon: 'shopping' },
-  ],
-  addis: [
-    { id: 'aa-1', name: 'Bole International Airport', address: 'Addis Ababa Airport (ADD)',     lat: 8.9779,  lng: 38.7993, icon: 'transport' },
-    { id: 'aa-2', name: 'Meskel Square',              address: 'Meskel Square, Addis Ababa',    lat: 9.0059,  lng: 38.7634, icon: 'landmark' },
-    { id: 'aa-3', name: 'Edna Mall',                  address: 'Bole, Addis Ababa',             lat: 9.0110,  lng: 38.7926, icon: 'shopping' },
-    { id: 'aa-4', name: 'Black Lion Hospital',        address: 'Lideta, Addis Ababa',           lat: 9.0213,  lng: 38.7424, icon: 'hospital' },
-    { id: 'aa-5', name: 'Unity Park',                 address: 'Piazza, Addis Ababa',           lat: 9.0338,  lng: 38.7621, icon: 'landmark' },
-    { id: 'aa-6', name: 'African Union',              address: 'AU Headquarters, Addis Ababa',  lat: 9.0212,  lng: 38.7559, icon: 'landmark' },
-  ],
-};
-
-const CATEGORY_ICONS = {
-  transport: Plane,
-  landmark:  Landmark,
-  shopping:  ShoppingBag,
-  education: GraduationCap,
-  hospital:  Hospital,
-  hotel:     Hotel,
-};
 
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
@@ -99,7 +65,6 @@ export default function SearchScreen({ navigation, route }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selecting, setSelecting] = useState(false);
-  const [outOfArea, setOutOfArea] = useState(false);
   const [searchHistory, setSearchHistory] = useState([]);
   const [detectedCity, setDetectedCity] = useState(null); // 'bahirdar' | 'addis' | null
   // Save-as sheet state
@@ -126,7 +91,7 @@ export default function SearchScreen({ navigation, route }) {
       return { lat: userCoords.latitude, lng: userCoords.longitude };
     }
     // fallback: use detected city or Addis (matches HomeScreen default)
-    const center = detectedCity ? CITY_CENTERS[detectedCity] : CITY_CENTERS.addis;
+    const center = (detectedCity && CITY_CENTERS[detectedCity]) ? CITY_CENTERS[detectedCity] : CITY_CENTERS.addisababa;
     return { lat: center.latitude, lng: center.longitude };
   }, [userCoords, detectedCity]);
 
@@ -167,7 +132,6 @@ export default function SearchScreen({ navigation, route }) {
 
   // Debounced search
   useEffect(() => {
-    setOutOfArea(false);
     if (!query.trim()) {
       setResults([]);
       return;
@@ -223,17 +187,8 @@ export default function SearchScreen({ navigation, route }) {
       let finalItem = await resolveCoords(item);
       if (!finalItem) { setSelecting(false); return; }
 
-      // Service area check
-      const { lat: biasLat, lng: biasLng } = getBiasCoords();
-      const distKm = haversineKm(biasLat, biasLng, finalItem.lat, finalItem.lng);
-      if (distKm > OUT_OF_AREA_KM) {
-        setOutOfArea(true);
-        shakeWarning();
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        setSelecting(false);
-        setTimeout(() => setOutOfArea(false), 4000);
-        return;
-      }
+      // Destination is never restricted — riders can go anywhere (airport, nearby town, etc.)
+      // The backend validates the PICKUP location against active service areas.
 
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -286,15 +241,9 @@ export default function SearchScreen({ navigation, route }) {
 
   const renderResult = useCallback(
     ({ item, section }) => {
-      const isRecent  = section?.key === 'recent' || section?.key === 'history';
-      const isPopular = section?.key === 'popular';
-      const IconComp  = isRecent
-        ? Clock
-        : isPopular
-        ? (CATEGORY_ICONS[item.icon] || MapPin)
-        : MapPin;
-
-      const needle = isRecent || isPopular ? '' : query.trim();
+      const isRecent = section?.key === 'recent' || section?.key === 'history';
+      const IconComp = isRecent ? Clock : MapPin;
+      const needle   = isRecent ? '' : query.trim();
 
       return (
         <TouchableOpacity
@@ -303,7 +252,7 @@ export default function SearchScreen({ navigation, route }) {
           activeOpacity={0.7}
           disabled={selecting}
         >
-          <View style={[styles.itemIcon, isRecent && styles.itemIconRecent, isPopular && styles.itemIconPopular]}>
+          <View style={[styles.itemIcon, isRecent && styles.itemIconRecent]}>
             <IconComp size={15} color={isRecent ? colors.textSecondary : colors.primary} />
           </View>
           <View style={styles.itemText}>
@@ -340,11 +289,6 @@ export default function SearchScreen({ navigation, route }) {
     </View>
   ), [handleClearHistory]);
 
-  // Popular places for detected city (or both if unknown)
-  const popularPlaces = detectedCity
-    ? POPULAR_PLACES[detectedCity] ?? []
-    : [...POPULAR_PLACES.bahirdar, ...POPULAR_PLACES.addis];
-
   // Build sections for empty-query view
   const sections = [];
   if (searchHistory.length > 0) {
@@ -353,19 +297,10 @@ export default function SearchScreen({ navigation, route }) {
   if (recentDestinations.length > 0) {
     sections.push({ key: 'recent', title: 'Recent Destinations', data: recentDestinations });
   }
-  if (popularPlaces.length > 0) {
-    sections.push({
-      key: 'popular',
-      title: detectedCity === 'bahirdar' ? 'Popular in Bahir Dar'
-           : detectedCity === 'addis'    ? 'Popular in Addis Ababa'
-           : 'Popular Places',
-      data: popularPlaces,
-    });
-  }
 
   const isSearching = query.trim().length > 0;
-  const cityLabel   = detectedCity === 'bahirdar' ? 'Bahir Dar'
-                    : detectedCity === 'addis'    ? 'Addis Ababa'
+  const cityLabel   = detectedCity === 'bahirdar'   ? 'Bahir Dar'
+                    : detectedCity === 'addisababa' ? 'Addis Ababa'
                     : 'your city';
 
   const hasSavedHome = !!savedPlaces?.home;
@@ -422,18 +357,6 @@ export default function SearchScreen({ navigation, route }) {
         </View>
       </View>
 
-      {/* Out-of-area warning */}
-      <Animated.View
-        style={[
-          styles.warningBanner,
-          { display: outOfArea ? 'flex' : 'none', transform: [{ translateX: shakeAnim }] },
-        ]}
-      >
-        <AlertCircle size={15} color="#92400E" />
-        <Text style={styles.warningText}>
-          That destination is outside the service area. Please choose a location within {cityLabel}.
-        </Text>
-      </Animated.View>
 
       {/* Selecting overlay */}
       {selecting && (
@@ -579,6 +502,7 @@ const styles = StyleSheet.create({
   pickupText: {
     flex: 1,
     fontSize: fontSize.sm,
+    fontFamily: fontFamilyMedium,
     color: colors.textSecondary,
     fontWeight: fontWeight.medium,
   },
@@ -596,7 +520,8 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     height: 44,
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamilyMedium,
     color: colors.textPrimary,
     fontWeight: fontWeight.medium,
   },
@@ -651,6 +576,7 @@ const styles = StyleSheet.create({
   },
   cityTagText: {
     fontSize: fontSize.xs,
+    fontFamily: fontFamilySemiBold,
     color: colors.primary,
     fontWeight: fontWeight.semibold,
   },
@@ -673,6 +599,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: fontSize.xs,
+    fontFamily: fontFamilySemiBold,
     fontWeight: fontWeight.bold,
     color: colors.textSecondary,
     textTransform: 'uppercase',
@@ -704,19 +631,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  itemIconPopular: {
-    backgroundColor: `${colors.primary}10`,
-    borderWidth: 1,
-    borderColor: `${colors.primary}20`,
-  },
   itemText: { flex: 1, minWidth: 0 },
   itemName: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
+    fontFamily: fontFamilySemiBold,
     fontWeight: fontWeight.semibold,
     color: colors.textPrimary,
   },
   highlight: {
     color: '#10b981',
+    fontFamily: fontFamilySemiBold,
     fontWeight: fontWeight.bold,
   },
   deleteBtn: {
@@ -724,15 +648,17 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   clearAllText: {
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamilyMedium,
     color: colors.textSecondary,
-    fontWeight: fontWeight.semibold,
+    fontWeight: fontWeight.medium,
   },
   itemAddress: {
-    fontSize: fontSize.xs,
+    fontSize: fontSize.sm,
+    fontFamily: fontFamilyRegular,
     color: colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 16,
+    marginTop: 3,
+    lineHeight: 18,
   },
 
   // ── Empty / loading states ──────────────────────────────────────────────
@@ -755,12 +681,14 @@ const styles = StyleSheet.create({
   },
   noResultsTitle: {
     fontSize: fontSize.md,
+    fontFamily: fontFamilySemiBold,
     fontWeight: fontWeight.bold,
     color: colors.textPrimary,
     textAlign: 'center',
   },
   noResultsSub: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
+    fontFamily: fontFamilyRegular,
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
@@ -773,7 +701,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   loadingText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
+    fontFamily: fontFamilyRegular,
     color: colors.textSecondary,
   },
   emptyHint: {
@@ -781,7 +710,8 @@ const styles = StyleSheet.create({
     paddingTop: 32,
   },
   emptyHintText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
+    fontFamily: fontFamilyRegular,
     color: colors.textSecondary,
   },
 

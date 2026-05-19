@@ -12,7 +12,7 @@ import useLocationStore from '../../store/locationStore';
 
 const MAX_STOPS = 2;
 
-function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
+function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress, isInServiceArea = true }) {
   const { t } = useTranslation();
   const { pickup, destination, stops, clearDestination, addStop, removeStop } = useLocationStore();
   const canAddStop = stops.length < MAX_STOPS;
@@ -179,7 +179,12 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
       <View style={styles.inputsColumn}>
         {/* Current location */}
         <View style={styles.inputRow}>
-          <TouchableOpacity style={styles.input} onPress={onFromPress} activeOpacity={0.7}>
+          <TouchableOpacity 
+            style={styles.input} 
+            onPress={isInServiceArea ? onFromPress : undefined} 
+            activeOpacity={isInServiceArea ? 0.7 : 1}
+            disabled={!isInServiceArea}
+          >
             <Text style={pickup ? styles.inputText : styles.inputPlaceholder} numberOfLines={1}>
               {pickup?.name || t('home.yourLocation')}
             </Text>
@@ -220,14 +225,17 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
           <>
             <View style={styles.divider} />
             <TouchableOpacity
-              style={styles.addStopRow}
-              onPress={addStop}
-              activeOpacity={0.7}
+              style={[styles.addStopRow, !isInServiceArea && { opacity: 0.4 }]}
+              onPress={isInServiceArea ? addStop : undefined}
+              activeOpacity={isInServiceArea ? 0.7 : 1}
+              disabled={!isInServiceArea}
             >
-              <View style={styles.addStopIcon}>
-                <Plus size={12} color={colors.primary} />
+              <View style={[styles.addStopIcon, !isInServiceArea && { backgroundColor: '#E5E7EB' }]}>
+                <Plus size={12} color={isInServiceArea ? colors.primary : colors.textSecondary} />
               </View>
-              <Text style={styles.addStopText}>{t('home.addStop')}</Text>
+              <Text style={[styles.addStopText, !isInServiceArea && { color: colors.textSecondary }]}>
+                {t('home.addStop')}
+              </Text>
             </TouchableOpacity>
           </>
         )}
@@ -244,9 +252,10 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
         >
           <Pressable 
             style={styles.input} 
-            onPress={onToPress} 
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
+            onPress={isInServiceArea ? onToPress : undefined} 
+            onPressIn={isInServiceArea ? handlePressIn : undefined}
+            onPressOut={isInServiceArea ? handlePressOut : undefined}
+            disabled={!isInServiceArea}
           >
             {({ pressed }) => (
               <>
@@ -260,10 +269,16 @@ function LocationBar({ onToPress, onFromPress, onStopPress, onAddStopPress }) {
                   ]} 
                 />
                 <View style={styles.whereToInline}>
-                  <Text style={destination ? styles.inputText : styles.inputPlaceholder} numberOfLines={1}>
-                    {destination?.name || t('home.whereTo')}
+                  <Text 
+                    style={[
+                      destination ? styles.inputText : styles.inputPlaceholder,
+                      !isInServiceArea && styles.outOfServiceText
+                    ]} 
+                    numberOfLines={1}
+                  >
+                    {destination?.name || (isInServiceArea ? t('home.whereTo') : 'Out of Service')}
                   </Text>
-                  {!destination && <Animated.View style={[styles.fakeCursor, { opacity: cursorBlink }]} />}
+                  {!destination && isInServiceArea && <Animated.View style={[styles.fakeCursor, { opacity: cursorBlink }]} />}
                 </View>
               </>
             )}
@@ -349,6 +364,10 @@ const styles = StyleSheet.create({
   inputPlaceholder: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
+  },
+  outOfServiceText: {
+    color: '#EF4444',
+    fontWeight: '600',
   },
   addStopRow: {
     flexDirection: 'row',

@@ -25,6 +25,8 @@ import {
   XCircle,
   Settings,
   Smile,
+  AlertTriangle,
+  ArrowLeft,
 } from 'lucide-react-native';
 import HamburgerButton from '../../components/ui/HamburgerButton';
 import LocationPinButton from '../../components/ui/LocationPinButton';
@@ -313,8 +315,8 @@ export default function HomeScreen({ navigation }) {
       const checkCity = async () => {
         try {
           const res = await detectCity(currentLocation.lat, currentLocation.lng);
-          const SUPPORTED_AREAS = ['addis', 'bahirdar'];
-          setIsInServiceArea(res?.area && SUPPORTED_AREAS.includes(res.area));
+          // isActive=true means the admin has enabled this service area
+          setIsInServiceArea(!!(res?.area && res?.isActive !== false));
         } catch (err) {
           console.error('City check failed:', err);
         }
@@ -925,6 +927,7 @@ export default function HomeScreen({ navigation }) {
         style={styles.sheetWrapper}
         pointerEvents="box-none"
       >
+        <View style={{ position: 'relative', width: '100%' }}>
           <BottomSheet
             key="main-ride-sheet"
             style={styles.sheet}
@@ -942,19 +945,13 @@ export default function HomeScreen({ navigation }) {
 
 
           header={!destination ? (
-            isInServiceArea ? (
-              <LocationBar
-                onToPress={() => navigation.navigate('Search', { mode: 'destination' })}
-                onFromPress={() => {}}
-                onStopPress={(index) => navigation.navigate('Search', { mode: 'stop', stopIndex: index })}
-                onAddStopPress={null}
-              />
-            ) : (
-              <View style={styles.outOfAreaBanner}>
-                <MapPin size={20} color={colors.textSecondary} />
-                <Text style={styles.outOfAreaText}>Service not available in your area yet</Text>
-              </View>
-            )
+            <LocationBar
+              onToPress={() => navigation.navigate('Search', { mode: 'destination' })}
+              onFromPress={() => {}}
+              onStopPress={(index) => navigation.navigate('Search', { mode: 'stop', stopIndex: index })}
+              onAddStopPress={null}
+              isInServiceArea={isInServiceArea}
+            />
           ) : (
             <View style={styles.destinationOnlyInput}>
               <Pressable
@@ -994,8 +991,14 @@ export default function HomeScreen({ navigation }) {
           )}
         </BottomSheet>
 
-
+        {!isInServiceArea && !destination && (
+          <View 
+            style={styles.outOfServiceOverlayGlobal} 
+            pointerEvents="auto"
+          />
+        )}
       </View>
+    </View>
 
       {destination && (
         <View 
@@ -1005,14 +1008,29 @@ export default function HomeScreen({ navigation }) {
           {!categoriesLoaded ? (
             <View style={styles.selectButtonSkeleton} />
           ) : (
-            <AppButton
-              title={selectedCategory ? `Select ${selectedCategory.name}` : 'Select a Category'}
-              onPress={handleFindDrivers}
-              loading={!categorySelectionReady}
-              disabled={!selectedCategory}
-              variant="primary"
-              shimmer={true}
-            />
+            <View style={styles.actionRow}>
+              <Pressable
+                style={styles.actionBackBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  handleClearDestinationFlow();
+                }}
+              >
+                <ArrowLeft size={22} color={colors.textPrimary} />
+              </Pressable>
+
+              <View style={{ flex: 1 }}>
+                <AppButton
+                  title={selectedCategory ? `Select ${selectedCategory.name}` : 'Select a Category'}
+                  onPress={handleFindDrivers}
+                  loading={!categorySelectionReady}
+                  disabled={!selectedCategory}
+                  variant="primary"
+                  shimmer={true}
+                  style={styles.confirmBtn}
+                />
+              </View>
+            </View>
           )}
         </View>
       )}
@@ -1055,6 +1073,50 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  locationContainer: {
+    position: 'relative',
+    width: '100%',
+  },
+  outOfServiceOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+    zIndex: 100,
+  },
+  outOfServiceOverlayGlobal: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.90)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    zIndex: 99999,
+    elevation: 200,
+  },
+  outOfServiceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderColor: '#EF4444',
+    borderWidth: 1.2,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 8,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  outOfServiceText: {
+    color: '#DC2626',
+    fontSize: 14,
+    fontWeight: 'bold',
+    letterSpacing: 0.1,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.backgroundAlt,
@@ -1208,6 +1270,27 @@ const styles = StyleSheet.create({
     borderRadius: 180,
     backgroundColor: '#F1F5F9',
     opacity: 0.6,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  actionBackBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmBtn: {
+    width: '100%',
+    minHeight: 52,
+    paddingVertical: 10,
+    marginTop: 0,
   },
 
   sheet: {

@@ -272,8 +272,38 @@ export async function getPlaceDetails(placeId) {
 }
 
 /**
- * HELPER: Detect which city user is in
- * Determines if in Addis Ababa or Bahir Dar
+ * HELPER: Fetch active service areas from admin-controlled API.
+ * Result is cached in module scope for 5 minutes to avoid per-render calls.
+ */
+let _serviceAreasCache = null;
+let _serviceAreasCachedAt = 0;
+const SERVICE_AREAS_TTL_MS = 5 * 60 * 1000;
+
+async function fetchActiveServiceAreas() {
+  const now = Date.now();
+  if (_serviceAreasCache && now - _serviceAreasCachedAt < SERVICE_AREAS_TTL_MS) {
+    return _serviceAreasCache;
+  }
+  try {
+    const { API_BASE_URL } = await import('../config/api');
+    const res = await fetch(`${API_BASE_URL}/cities`, { method: 'GET' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const areas = json?.data?.areas ?? [];
+    _serviceAreasCache = areas;
+    _serviceAreasCachedAt = now;
+    return areas;
+  } catch (err) {
+    console.warn('⚠️  Could not fetch service areas from API:', err.message);
+    // Return cache even if stale on network failure
+    return _serviceAreasCache ?? [];
+  }
+}
+
+/**
+ * HELPER: Detect which city user is in.
+ * Uses admin-controlled service areas (is_active = true in DB).
+ * Falls back to hardcoded bounds if the API is unreachable.
  */
 export async function detectCity(lat, lng) {
   try {
@@ -281,35 +311,45 @@ export async function detectCity(lat, lng) {
 
     if (!lat || !lng) {
       console.warn('⚠️  Missing coordinates for city detection');
-      return { city: 'unknown', area: null };
+      return { city: 'unknown', area: null, isActive: false };
     }
 
-    // Addis Ababa center: 9.0192°N, 38.7469°E
-    const ADDIS_CENTER = { lat: 9.0192, lng: 38.7469, radius: 0.5 };
-    const addisDistance = Math.hypot(lat - ADDIS_CENTER.lat, lng - ADDIS_CENTER.lng);
+    const areas = await fetchActiveServiceAreas();
 
-    // Bahir Dar center: 11.5955°N, 37.3944°E
-    const BAHIRDAR_CENTER = { lat: 11.5955, lng: 37.3944, radius: 0.5 };
-    const bahirdarDistance = Math.hypot(lat - BAHIRDAR_CENTER.lat, lng - BAHIRDAR_CENTER.lng);
+    if (areas.length > 0) {
+      for (const area of areas) {
+        const minLat = parseFloat(area.bounds?.minLat ?? area.min_lat);
+        const maxLat = parseFloat(area.bounds?.maxLat ?? area.max_lat);
+        const minLng = parseFloat(area.bounds?.minLng ?? area.min_lng);
+        const maxLng = parseFloat(area.bounds?.maxLng ?? area.max_lng);
 
-    console.log('🏙️  Distance to Addis:', addisDistance.toFixed(2));
-    console.log('🏙️  Distance to Bahir Dar:', bahirdarDistance.toFixed(2));
-
-    if (addisDistance < ADDIS_CENTER.radius) {
-      console.log('✅ City detected: Addis Ababa');
-      return { city: 'Addis Ababa', area: 'addis' };
+        if (lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng) {
+          // area.isActive is already filtered server-side (only active areas returned)
+          const areaKey = (area.city ?? '').toLowerCase().replace(/\s+/g, '');
+          console.log(`✅ City detected: ${area.city} (area key: ${areaKey})`);
+          return { city: area.city, area: areaKey, isActive: true };
+        }
+      }
+      // Coordinates not in ANY active area — service unavailable here
+      console.warn('⚠️  Location outside all active service areas');
+      return { city: 'unknown', area: null, isActive: false };
     }
 
-    if (bahirdarDistance < BAHIRDAR_CENTER.radius) {
-      console.log('✅ City detected: Bahir Dar');
-      return { city: 'Bahir Dar', area: 'bahirdar' };
+    // API returned no areas (e.g. all toggled off) — fallback to hardcoded bounds
+    console.warn('⚠️  No active service areas from API, using hardcoded fallback');
+    const FALLBACK = [
+      { city: 'Addis Ababa', area: 'addisababa', minLat: 8.85, maxLat: 9.15, minLng: 38.60, maxLng: 38.95 },
+      { city: 'Bahir Dar',   area: 'bahirdar',   minLat: 11.40, maxLat: 11.75, minLng: 37.20, maxLng: 37.55 },
+    ];
+    for (const f of FALLBACK) {
+      if (lat >= f.minLat && lat <= f.maxLat && lng >= f.minLng && lng <= f.maxLng) {
+        return { city: f.city, area: f.area, isActive: true };
+      }
     }
-
-    console.warn('⚠️  Outside service areas');
-    return { city: 'unknown', area: null };
+    return { city: 'unknown', area: null, isActive: false };
   } catch (error) {
     console.error('❌ City detection failed:', error.message);
-    return { city: 'unknown', area: null };
+    return { city: 'unknown', area: null, isActive: false };
   }
 }
 

@@ -154,7 +154,7 @@ function RideTypeCard({
               />
             ) : (
               <View style={styles.vehiclePlaceholder}>
-                <Car size={28} color={selected ? palette.color : colors.textSecondary} />
+                <Car size={36} color={selected ? palette.color : colors.textSecondary} />
               </View>
             )}
           </Animated.View>
@@ -179,19 +179,32 @@ function RideTypeCard({
                   <Text style={styles.etaText}>{arrivalEta} min</Text>
                 </View>
               )}
-
             </View>
-                <Text style={styles.description} numberOfLines={1}>
-                  {desc?.substring(0, 12)}
-                </Text>
-                {selected && (
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaItem}>
-                      <Car size={10} color={colors.textSecondary} />
-                      <Text style={styles.meta}>{category.per_km_rate} ETB/km</Text>
-                    </View>
-                  </View>
-                )}
+
+            <View style={styles.subRow}>
+              <View style={styles.seatsBlock}>
+                <Users size={11} color={colors.textSecondary} style={styles.seatsIcon} />
+                <Text style={styles.seatsText}>{category.capacity} seats</Text>
+              </View>
+              
+              {desc ? (
+                <>
+                  <Text style={styles.subDivider}>·</Text>
+                  <Text style={styles.italicDesc} numberOfLines={1}>
+                    {desc.split(/\s+/).slice(0, 34).join(' ')}
+                  </Text>
+                </>
+              ) : null}
+            </View>
+
+            {selected && (
+              <View style={styles.metaRow}>
+                <View style={styles.metaItem}>
+                  <Car size={10} color={colors.textSecondary} />
+                  <Text style={styles.meta}>{category.per_km_rate} ETB/km</Text>
+                </View>
+              </View>
+            )}
 
 
           </View>
@@ -243,6 +256,12 @@ function RideTypeCard({
           >
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{label} - Fare Details</Text>
+              
+              {desc ? (
+                <Text style={styles.modalDescription}>
+                  {desc}
+                </Text>
+              ) : null}
               
               <View style={styles.modalBreakdown}>
                 {serverBreakdown ? (
@@ -366,9 +385,9 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 78,
+    height: 78,
+    borderRadius: 39,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 0,
@@ -518,6 +537,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 3,
   },
+  subRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: 6,
+  },
+  seatsBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  seatsIcon: {
+    marginRight: 1,
+  },
+  seatsText: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: colors.textSecondary,
+  },
+  subDivider: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '300',
+  },
+  italicDesc: {
+    flex: 1,
+    fontSize: 11,
+    fontStyle: 'italic',
+    fontWeight: '300',
+    color: colors.textSecondary,
+  },
   etaBadge: {
     backgroundColor: '#F3F4F6',
     borderRadius: 4,
@@ -572,6 +622,15 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: 20,
     textAlign: 'center',
+  },
+  modalDescription: {
+    fontSize: fontSize.xs + 1,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: -14,
+    marginBottom: 20,
+    lineHeight: 18,
+    paddingHorizontal: 10,
   },
   modalBreakdown: {
     gap: 12,

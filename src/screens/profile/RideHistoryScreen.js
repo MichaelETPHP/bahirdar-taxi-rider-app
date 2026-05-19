@@ -1,6 +1,6 @@
 import { X, Star, Check, Phone, Car, Clock, DollarSign, Share2, AlertTriangle, User } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
@@ -47,6 +47,11 @@ const TripCard = React.memo(({ item }) => (
 export default function RideHistoryScreen({ navigation }) {
   const token = useAuthStore((state) => state.token);
   const [trips, setTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [limit, setLimit] = useState(5);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleBackPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -55,28 +60,88 @@ export default function RideHistoryScreen({ navigation }) {
 
   const { t } = useTranslation();
 
-  const loadTrips = useCallback(async () => {
+  const loadTrips = useCallback(async (currentLimit = 5, isInitial = true) => {
     if (!token) {
       setTrips([]);
+      setLoading(false);
       return;
     }
 
+    if (isInitial) {
+      setLoading(true);
+    }
+
     try {
-      const data = await getTripHistory(token);
+      const data = await getTripHistory(token, { limit: currentLimit });
       setTrips(data);
+      if (data.length < currentLimit) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
     } catch (err) {
       console.error('[RideHistory] Failed to load trip history:', err);
       setTrips([]);
+    } finally {
+      setLoading(false);
     }
   }, [token]);
 
   useFocusEffect(
     useCallback(() => {
-      loadTrips();
+      setLimit(5);
+      setHasMore(true);
+      loadTrips(5, true);
     }, [loadTrips])
   );
 
+  const handleLoadMore = async () => {
+    if (loading || loadingMore || !hasMore || trips.length < 5) return;
+
+    setLoadingMore(true);
+    const nextLimit = limit + 5;
+    try {
+      const data = await getTripHistory(token, { limit: nextLimit });
+      setTrips(data);
+      setLimit(nextLimit);
+      if (data.length < nextLimit) {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error('[RideHistory] Failed to load more trips:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setLimit(5);
+    setHasMore(true);
+    await loadTrips(5, false);
+    setRefreshing(false);
+  };
+
   const renderTrip = useCallback(({ item }) => <TripCard item={item} />, []);
+
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  };
+
+  const renderEmpty = () => {
+    if (loading) return null;
+    return (
+      <View style={styles.emptyContainer}>
+        <Clock size={48} color={colors.textSecondary} style={{ opacity: 0.5, marginBottom: 12 }} />
+        <Text style={styles.emptyText}>{t('history.noTrips', 'No trip history yet')}</Text>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -87,17 +152,29 @@ export default function RideHistoryScreen({ navigation }) {
         <Text style={styles.title}>{t('history.title')}</Text>
       </View>
 
-      <FlatList
-        data={trips}
-        keyExtractor={(item) => item.id}
-        renderItem={renderTrip}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        initialNumToRender={8}
-        maxToRenderPerBatch={6}
-        windowSize={5}
-        removeClippedSubviews={true}
-      />
+      {loading && trips.length === 0 ? (
+        <View style={styles.centerLoading}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={trips}
+          keyExtractor={(item) => item.id}
+          renderItem={renderTrip}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={3}
+          removeClippedSubviews={true}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.2}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={renderEmpty}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -166,4 +243,26 @@ const styles = StyleSheet.create({
   },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   ratingText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: fontWeight.semibold },
+  centerLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundAlt,
+  },
+  footerLoader: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    paddingVertical: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.semibold,
+  },
 });

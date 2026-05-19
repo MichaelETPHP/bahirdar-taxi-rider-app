@@ -10,7 +10,7 @@ import UberDestinationMarker from '../../components/map/UberDestinationMarker';
 import ProfessionalRoutePolyline from '../../components/map/ProfessionalRoutePolyline';
 import AppButton from '../../components/common/AppButton';
 import LocationPinButton from '../../components/ui/LocationPinButton';
-import { X, MapPin, Clock, Flag } from 'lucide-react-native';
+import { X, MapPin, Clock, Flag, ArrowLeft } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -293,14 +293,28 @@ export default function ConfirmRideScreen({ navigation, route }) {
           </View>
         </View>
 
-        <AppButton
-          title={loading ? 'Confirming…' : isRetry ? 'Find Again' : `Confirm ${selectedCategory?.name || 'Ride'}`}
-          onPress={handleConfirm}
-          disabled={loading || !destination || !selectedCategory || fare == null}
-          loading={loading}
-          shimmer={true}
-          style={styles.confirmBtn}
-        />
+        <View style={styles.actionRow}>
+          <Pressable
+            style={styles.actionBackBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.goBack();
+            }}
+          >
+            <ArrowLeft size={22} color={colors.textPrimary} />
+          </Pressable>
+
+          <View style={{ flex: 1 }}>
+            <AppButton
+              title={loading ? 'Confirming…' : isRetry ? 'Find Again' : `Confirm ${selectedCategory?.name || 'Ride'}`}
+              onPress={handleConfirm}
+              disabled={loading || !destination || !selectedCategory || fare == null}
+              loading={loading}
+              shimmer={true}
+              style={styles.confirmBtn}
+            />
+          </View>
+        </View>
       </View>
 
     </View>
@@ -355,10 +369,27 @@ const styles = StyleSheet.create({
   },
   tableDivider: { height: 1, backgroundColor: colors.border },
   priceValue: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.primary },
-  confirmBtn: {
-    minHeight: 48,
-    paddingVertical: 10,
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     marginTop: 6,
+  },
+  actionBackBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmBtn: {
+    width: '100%',
+    minHeight: 52,
+    paddingVertical: 10,
+    marginTop: 0,
   },
   liveTag: {
     backgroundColor: '#DCFCE7',
