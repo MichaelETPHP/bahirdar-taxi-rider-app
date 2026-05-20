@@ -18,12 +18,12 @@ function UberDestinationMarker({ coordinate, title, onPress }) {
           toValue: 1,
           duration: 2000,
           easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(pulseAnim, {
           toValue: 0,
           duration: 0,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     );
@@ -45,11 +45,11 @@ function UberDestinationMarker({ coordinate, title, onPress }) {
     <Marker
       coordinate={coordinate}
       onPress={onPress}
-      tracksViewChanges={true}
-      zIndex={499} // Above polyline
+      tracksViewChanges={false}
+      zIndex={499}
       anchor={{ x: 0.5, y: 0.5 }}
     >
-      <View style={styles.container}>
+      <View style={styles.container} collapsable={false}>
         {/* Pulsing light ring */}
         <Animated.View
           style={[

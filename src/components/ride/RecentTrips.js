@@ -1,34 +1,50 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
-import { Clock, MapPin, ChevronRight } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { MapPin, ChevronRight } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
 import { getSearchHistory } from '../../services/searchHistoryService';
 import { extractNeighborhoodName } from '../../services/addressParserService';
+import { getTripHistory } from '../../services/tripService';
+import useAuthStore from '../../store/authStore';
 
-export default function RecentTrips({ onSelectPlace, limit = 5 }) {
-  const [history, setHistory] = useState([]);
+export default function RecentTrips({ onSelectPlace }) {
+  const token = useAuthStore((state) => state.token);
+  const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadHistory();
-  }, []);
+  }, [token]);
 
   const loadHistory = async () => {
     try {
       setLoading(true);
-      const data = await getSearchHistory();
-      setHistory(data.slice(0, limit));
+      const [searches, trips] = await Promise.all([
+        getSearchHistory(),
+        token ? getTripHistory(token, { limit: 1 }).catch(() => []) : Promise.resolve([]),
+      ]);
+
+      const latestSearch = Array.isArray(searches) && searches.length > 0
+        ? { type: 'search', title: 'Last Search', payload: searches[0] }
+        : null;
+      const latestTrip = Array.isArray(trips) && trips.length > 0
+        ? { type: 'trip', title: 'Last Trip', payload: trips[0] }
+        : null;
+
+      setItem(latestSearch || latestTrip || null);
     } catch (err) {
       console.error('[RecentTrips] Failed to load history:', err);
+      setItem(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectPlace = (place) => {
-    onSelectPlace?.(place);
+  const handleSelectPlace = () => {
+    if (!item) return;
+    onSelectPlace?.(item);
   };
 
   if (loading) {
@@ -39,44 +55,37 @@ export default function RecentTrips({ onSelectPlace, limit = 5 }) {
     );
   }
 
-  if (history.length === 0) {
+  if (!item) {
     return null;
   }
 
-  const renderTrip = ({ item }) => {
-    const readableName = extractNeighborhoodName(item.address, item.lat, item.lng);
-
-    return (
-      <TouchableOpacity
-        style={styles.tripItem}
-        onPress={() => handleSelectPlace(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.tripIcon}>
-          <Clock size={16} color={colors.textSecondary} />
-        </View>
-        <View style={styles.tripContent}>
-          <Text style={styles.tripName} numberOfLines={1}>{item.name || readableName}</Text>
-          <Text style={styles.tripAddress} numberOfLines={1}>{item.address}</Text>
-        </View>
-        <ChevronRight size={16} color={colors.border} />
-      </TouchableOpacity>
-    );
-  };
+  const payload = item.payload;
+  const readableName = item.type === 'search'
+    ? extractNeighborhoodName(payload.address, payload.lat, payload.lng)
+    : null;
+  const primaryText = item.type === 'trip'
+    ? payload.destination || 'Last trip'
+    : (payload.name || readableName || 'Last search');
+  const secondaryText = item.type === 'trip'
+    ? payload.pickup || 'Trip history'
+    : payload.address;
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Clock size={16} color={colors.textSecondary} />
-        <Text style={styles.headerText}>Recent Destinations</Text>
-      </View>
-      <FlatList
-        data={history}
-        renderItem={renderTrip}
-        keyExtractor={(item, index) => item?.placeId ?? item?.id ?? `trip-${index}`}
-        scrollEnabled={false}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-      />
+      <TouchableOpacity
+        style={styles.tripItem}
+        onPress={handleSelectPlace}
+        activeOpacity={0.7}
+      >
+        <View style={styles.tripIcon}>
+          <MapPin size={16} color={colors.primary} />
+        </View>
+        <View style={styles.tripContent}>
+          <Text style={styles.tripName} numberOfLines={1}>{primaryText}</Text>
+          {!!secondaryText && <Text style={styles.tripAddress} numberOfLines={1}>{secondaryText}</Text>}
+        </View>
+        <ChevronRight size={16} color={colors.border} />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -84,20 +93,7 @@ export default function RecentTrips({ onSelectPlace, limit = 5 }) {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  headerText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    paddingVertical: 8,
   },
   tripItem: {
     flexDirection: 'row',
@@ -125,10 +121,5 @@ const styles = StyleSheet.create({
   tripAddress: {
     fontSize: fontSize.xs,
     color: colors.textSecondary,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 0,
   },
 });

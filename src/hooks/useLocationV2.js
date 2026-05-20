@@ -110,5 +110,37 @@ export default function useLocation() {
     };
   }, []); // run once — watchPositionAsync keeps it live
 
-  return { currentLocation, currentAddress, loading, error, permissionDenied };
+  const refresh = async () => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      if (loc && loc.coords) {
+        const { latitude, longitude, accuracy } = loc.coords;
+        setCurrentLocation({ lat: latitude, lng: longitude, accuracy });
+        setUserCoords({ latitude, longitude });
+
+        // Bypass throttle for forced refresh
+        const address = await reverseGeocode(latitude, longitude);
+        if (address) {
+          lastGeocodeAt.current = Date.now();
+          lastAddress.current = address;
+          setCurrentAddress(address);
+          setPickup({
+            name: address,
+            address,
+            lat: latitude,
+            lng: longitude,
+            latitude,
+            longitude,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[Location V2] refresh failed:', err);
+    }
+  };
+
+  return { currentLocation, currentAddress, loading, error, permissionDenied, refresh };
 }

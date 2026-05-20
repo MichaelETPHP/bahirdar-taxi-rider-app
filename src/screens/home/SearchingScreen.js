@@ -45,6 +45,7 @@ function normalizeDriverPoint(raw, idx) {
 
 // Poll every 2s as a tight fallback — socket is primary, poll is safety net
 const POLL_INTERVAL = 2000;
+const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
 
 // Dot loading animation — three dots that bounce in sequence
 function SearchDots() {
@@ -427,7 +428,18 @@ export default function SearchingScreen({ navigation }) {
   return (
     <View style={styles.root}>
       {/* ── Full-screen map ── */}
-      <ProfessionalRideMap mapRef={mapRef} style={StyleSheet.absoluteFill} showStreetNames={true} showRoadLines={true}>
+      <ProfessionalRideMap
+        mapRef={mapRef}
+        style={StyleSheet.absoluteFill}
+        showStreetNames={true}
+        showRoadLines={true}
+        initialRegion={{
+          latitude: pickupCoords?.latitude ?? ADDIS_ABABA_COORDS.latitude,
+          longitude: pickupCoords?.longitude ?? ADDIS_ABABA_COORDS.longitude,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        }}
+      >
         {pickupCoords && <UberPickupMarker coordinate={pickupCoords} title={tripData?.pickup_address || 'Your location'} animated={true} />}
         {dropoffCoords && <UberDestinationMarker coordinate={dropoffCoords} title={tripData?.dropoff_address || destination?.name || 'Destination'} />}
         <ProfessionalRoutePolyline coordinates={routeCoords} />

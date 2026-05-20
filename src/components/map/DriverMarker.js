@@ -1,129 +1,289 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, Animated, Easing } from 'react-native';
-import { Marker } from 'react-native-maps';
+import { View, Text, StyleSheet, Image, Animated, Easing, Platform } from 'react-native';
+import { Marker, AnimatedRegion } from 'react-native-maps';
 import { colors } from '../../constants/colors';
 import { shadow } from '../../constants/layout';
 
+const MarkerAnimated = Marker.Animated;
 const CAR_ON_MAP = require('../../../assets/carOnMap.png');
 
-// OSRM heading is degrees from north clockwise.
-// FA5 "car" icon faces right (east = 90°), so offset by -90°.
-function headingToDeg(deg) {
-  return (deg ?? 0) - 90;
-}
-
-// Show first name only — keeps bubble compact
 function firstName(fullName = '') {
   return fullName.trim().split(' ')[0] || '';
 }
 
-function ActivePulse() {
-  const scale = useRef(new Animated.Value(1)).current;
-  const opacity = useRef(new Animated.Value(0.4)).current;
+function findClosestIndex(path, target) {
+  if (!path || path.length === 0) return -1;
+  let minDist = Infinity, idx = -1;
+  for (let i = 0; i < path.length; i++) {
+    const d =
+      Math.pow((path[i].latitude ?? path[i].lat) - (target.latitude ?? target.lat), 2) +
+      Math.pow((path[i].longitude ?? path[i].lng) - (target.longitude ?? target.lng), 2);
+    if (d < minDist) { minDist = d; idx = i; }
+  }
+  return idx;
+}
 
+function getAngle(p1, p2) {
+  const dy = (p2.latitude ?? p2.lat) - (p1.latitude ?? p1.lat);
+  const dx = (p2.longitude ?? p2.lng) - (p1.longitude ?? p1.lng);
+  const a = Math.atan2(dx, dy) * (180 / Math.PI);
+  return a < 0 ? a + 360 : a;
+}
+
+function interpolatePathAndHeading(path, fraction, fallbackHeading) {
+  if (!path || path.length === 0) return null;
+  if (path.length === 1) return { coordinate: { latitude: path[0].latitude ?? path[0].lat, longitude: path[0].longitude ?? path[0].lng }, heading: fallbackHeading };
+  if (fraction <= 0) return { coordinate: { latitude: path[0].latitude ?? path[0].lat, longitude: path[0].longitude ?? path[0].lng }, heading: getAngle(path[0], path[1]) };
+
+  const last = path[path.length - 1];
+  if (fraction >= 1) return { coordinate: { latitude: last.latitude ?? last.lat, longitude: last.longitude ?? last.lng }, heading: fallbackHeading };
+
+  let totalDist = 0;
+  const segs = path.slice(0, -1).map((p1, i) => {
+    const p2 = path[i + 1];
+    const d = Math.sqrt(Math.pow((p2.latitude ?? p2.lat) - (p1.latitude ?? p1.lat), 2) + Math.pow((p2.longitude ?? p2.lng) - (p1.longitude ?? p1.lng), 2));
+    totalDist += d;
+    return d;
+  });
+  if (totalDist === 0) return { coordinate: { latitude: path[0].latitude ?? path[0].lat, longitude: path[0].longitude ?? path[0].lng }, heading: fallbackHeading };
+
+  let current = 0;
+  const target = fraction * totalDist;
+  for (let i = 0; i < segs.length; i++) {
+    if (current + segs[i] >= target) {
+      const t = (target - current) / segs[i];
+      const p1 = path[i], p2 = path[i + 1];
+      return {
+        coordinate: {
+          latitude: (p1.latitude ?? p1.lat) + ((p2.latitude ?? p2.lat) - (p1.latitude ?? p1.lat)) * t,
+          longitude: (p1.longitude ?? p1.lng) + ((p2.longitude ?? p2.lng) - (p1.longitude ?? p1.lng)) * t,
+        },
+        heading: getAngle(p1, p2),
+      };
+    }
+    current += segs[i];
+  }
+  return { coordinate: { latitude: last.latitude ?? last.lat, longitude: last.longitude ?? last.lng }, heading: fallbackHeading };
+}
+
+// ── Shared sub-components ─────────────────────────────────────────────────────
+
+function ActivePulse() {
+  const scale   = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.4)).current;
   useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(scale, {
-            toValue: 2.5,
-            duration: 2000,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacity, {
-            toValue: 0,
-            duration: 2000,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.parallel([
-          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 0.4, duration: 0, useNativeDriver: true }),
-        ]),
-      ])
-    );
+    const anim = Animated.loop(Animated.sequence([
+      Animated.parallel([
+        Animated.timing(scale,   { toValue: 2.5, duration: 2000, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+        Animated.timing(opacity, { toValue: 0,   duration: 2000, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      ]),
+      Animated.parallel([
+        Animated.timing(scale,   { toValue: 1,   duration: 0, useNativeDriver: false }),
+        Animated.timing(opacity, { toValue: 0.4, duration: 0, useNativeDriver: false }),
+      ]),
+    ]));
     anim.start();
     return () => anim.stop();
   }, []);
+  return <Animated.View renderToHardwareTextureAndroid style={[styles.pulse, { transform: [{ scale }], opacity }]} />;
+}
 
+function GPSRipple({ trigger }) {
+  const scale   = useRef(new Animated.Value(0.6)).current;
+  const opacity = useRef(new Animated.Value(0.8)).current;
+  useEffect(() => {
+    if (trigger === 0) return;
+    scale.setValue(0.6); opacity.setValue(0.8);
+    Animated.parallel([
+      Animated.timing(scale,   { toValue: 3.8, duration: 1400, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      Animated.timing(opacity, { toValue: 0,   duration: 1400, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+    ]).start();
+  }, [trigger]);
+  if (trigger === 0) return null;
+  return <Animated.View renderToHardwareTextureAndroid style={[styles.gpsRipple, { transform: [{ scale }], opacity }]} />;
+}
+
+function NameBubble({ name, carText }) {
   return (
-    <Animated.View 
-      style={[
-        styles.pulse, 
-        { transform: [{ scale }], opacity }
-      ]} 
-    />
+    <View style={styles.nameWrap}>
+      <View style={styles.nameBubble}>
+        <Text style={styles.nameText} numberOfLines={1}>{name}</Text>
+        {!!carText && <Text style={styles.carText} numberOfLines={1}>{carText}</Text>}
+      </View>
+      <View style={styles.nameTail} />
+    </View>
   );
 }
 
-export default React.memo(function DriverMarker({ driver, onPress }) {
-  // tracksViewChanges must be true on first render so the custom view renders,
-  // then set to false immediately for performance (stops re-rendering on map scroll).
-  const [tracks, setTracks] = useState(true);
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default React.memo(function DriverMarker({ driver, onPress, routeCoords }) {
+  const [rippleTrigger, setRippleTrigger] = useState(0);
+  const [imageLoaded,   setImageLoaded]   = useState(false);
+  // Android: heading state drives the native `rotation` prop on the car marker.
+  const [heading, setHeading] = useState(driver.heading || 0);
+
+  // AnimatedRegion drives smooth position for MarkerAnimated (both platforms)
+  const coordinate = useRef(new AnimatedRegion({
+    latitude:  driver.lat ?? 0,
+    longitude: driver.lng ?? 0,
+    latitudeDelta: 0,
+    longitudeDelta: 0,
+  })).current;
+
+  // iOS rotation via Animated.Value interpolation
+  const animHeading = useRef(new Animated.Value((driver.heading || 0) - 90)).current;
+  const rotateDeg   = animHeading.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] });
+
+  const animVal      = useRef(new Animated.Value(0)).current;
+  const prevCoordRef = useRef({ latitude: driver.lat, longitude: driver.lng });
+  const prevHeadRef  = useRef(driver.heading || 0);
+  const routeRef     = useRef([]);
+
+  if (routeCoords && routeCoords.length > 2 && routeCoords !== routeRef.current) {
+    routeRef.current = routeCoords;
+  }
+
   useEffect(() => {
-    const t = setTimeout(() => setTracks(false), 300);
-    return () => clearTimeout(t);
-  }, []);
+    const startLat = prevCoordRef.current.latitude;
+    const startLng = prevCoordRef.current.longitude;
+    const endLat   = driver.lat;
+    const endLng   = driver.lng;
+    const endHead  = driver.heading || 0;
 
-  const isLive   = !!driver?.live;
-  const name     = firstName(driver?.fullName || driver?.name || '');
-  const carText  = String(driver?.carLabel || '').trim();
-  const rotateDeg = `${headingToDeg(driver.heading)}deg`;
+    setRippleTrigger(n => n + 1);
 
-  return (
-    <Marker
-      coordinate={{ latitude: driver.lat, longitude: driver.lng }}
-      onPress={onPress}
-      tracksViewChanges={true}
-      anchor={{ x: 0.5, y: 1 }}
-      zIndex={50} // Above route, below user
-    >
-      <View style={styles.root}>
-        {/* Active Pulse Animation */}
-        {isLive && <ActivePulse />}
+    const dist = Math.sqrt(Math.pow(endLat - startLat, 2) + Math.pow(endLng - startLng, 2));
 
-        {/* Name bubble — only for live Redis drivers */}
-        {isLive && !!name && (
-          <View style={styles.nameWrap}>
-            <View style={styles.nameBubble}>
-              <Text style={styles.nameText} numberOfLines={1}>{name}</Text>
-              {!!carText && (
-                <Text style={styles.carText} numberOfLines={1}>
-                  {carText}
-                </Text>
-              )}
-            </View>
-            <View style={styles.nameTail} />
+    // Snap for large jumps or first render
+    if (dist > 0.005 || (startLat === 0 && startLng === 0)) {
+      coordinate.setValue({ latitude: endLat, longitude: endLng, latitudeDelta: 0, longitudeDelta: 0 });
+      animHeading.setValue(endHead - 90);
+      setHeading(endHead);
+      prevCoordRef.current = { latitude: endLat, longitude: endLng };
+      prevHeadRef.current  = endHead;
+      return;
+    }
+
+    const oldCoord = { latitude: startLat, longitude: startLng };
+    const newCoord = { latitude: endLat,   longitude: endLng   };
+    let animPath = [];
+
+    if (routeRef.current.length > 0) {
+      const si = findClosestIndex(routeRef.current, oldCoord);
+      const ei = findClosestIndex(routeRef.current, newCoord);
+      if (si !== -1 && ei !== -1 && si < ei) animPath = [oldCoord, ...routeRef.current.slice(si + 1, ei), newCoord];
+      else if (si !== -1 && ei !== -1 && si === ei) animPath = [oldCoord, newCoord];
+    }
+    if (animPath.length < 2) animPath = [oldCoord, newCoord];
+
+    animVal.setValue(0);
+    const id = animVal.addListener(({ value }) => {
+      const r = interpolatePathAndHeading(animPath, value, endHead);
+      if (!r) return;
+      coordinate.setValue({ latitude: r.coordinate.latitude, longitude: r.coordinate.longitude, latitudeDelta: 0, longitudeDelta: 0 });
+      animHeading.setValue(r.heading - 90);
+    });
+
+    Animated.timing(animVal, { toValue: 1, duration: 2800, easing: Easing.linear, useNativeDriver: false })
+      .start(() => {
+        setHeading(endHead);
+        prevCoordRef.current = { latitude: endLat, longitude: endLng };
+        prevHeadRef.current  = endHead;
+        animVal.removeListener(id);
+      });
+
+    return () => animVal.removeListener(id);
+  }, [driver.lat, driver.lng, driver.heading]);
+
+  if (!driver.lat || !driver.lng) return null;
+
+  const isLive  = !!driver?.live;
+  const name    = firstName(driver?.fullName || driver?.name || '');
+  const carText = String(driver?.carLabel || '').trim();
+
+  // ── Android: plain <Marker image> + separate animation overlay ────────────
+  if (Platform.OS === 'android') {
+    return (
+      <>
+        {/* Animation overlay — no image inside, pure views only */}
+        <MarkerAnimated
+          coordinate={coordinate}
+          anchor={{ x: 0.5, y: 0.5 }}
+          tracksViewChanges={true}
+          zIndex={100}
+        >
+          <View style={styles.root} collapsable={false}>
+            <ActivePulse />
+            <GPSRipple trigger={rippleTrigger} />
+            {isLive && !!name && <NameBubble name={name} carText={carText} />}
           </View>
-        )}
+        </MarkerAnimated>
 
-        <Image
-          source={CAR_ON_MAP}
-          resizeMode="contain"
-          style={[
-            styles.carImage,
-            { transform: [{ rotate: rotateDeg }] },
-          ]}
-        />
+        {/* Car icon — plain Marker so image prop works natively on Android */}
+        <MarkerAnimated
+          coordinate={coordinate}
+          rotation={heading - 90}
+          flat
+          anchor={{ x: 0.5, y: 0.5 }}
+          tracksViewChanges={!imageLoaded}
+          zIndex={101}
+          onPress={onPress}
+        >
+          <View style={styles.carContainer} collapsable={false}>
+            <Image
+              source={CAR_ON_MAP}
+              resizeMode="contain"
+              fadeDuration={0}
+              style={styles.carImage}
+              onLoad={() => setImageLoaded(true)}
+            />
+          </View>
+        </MarkerAnimated>
+      </>
+    );
+  }
 
-        {/* Pointer tip */}
-        <View style={[styles.tip, isLive && styles.tipLive]} />
+  // ── iOS: single MarkerAnimated, Animated.View rotation works fine ──────────
+  return (
+    <MarkerAnimated
+      coordinate={coordinate}
+      onPress={onPress}
+      tracksViewChanges={!imageLoaded}
+      anchor={{ x: 0.5, y: 0.5 }}
+      zIndex={100}
+    >
+      <View style={styles.root} collapsable={false}>
+        <ActivePulse />
+        <GPSRipple trigger={rippleTrigger} />
+        {isLive && !!name && <NameBubble name={name} carText={carText} />}
+        <Animated.View style={[styles.carContainer, { transform: [{ rotate: rotateDeg }] }]}>
+          <Image
+            source={CAR_ON_MAP}
+            resizeMode="contain"
+            fadeDuration={0}
+            style={styles.carImage}
+            onLoad={() => setImageLoaded(true)}
+          />
+        </Animated.View>
       </View>
-    </Marker>
+    </MarkerAnimated>
   );
 });
 
 const styles = StyleSheet.create({
   root: {
+    width: 140,
+    height: 140,
     alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
   },
-
-  // Name bubble
   nameWrap: {
+    position: 'absolute',
+    top: 4,
+    width: 140,
     alignItems: 'center',
-    marginBottom: 1,
   },
   nameBubble: {
     backgroundColor: colors.primary,
@@ -133,56 +293,29 @@ const styles = StyleSheet.create({
     maxWidth: 110,
     ...shadow.sm,
   },
-  nameText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  carText: {
-    marginTop: 1,
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 9,
-    fontWeight: '600',
-  },
+  nameText:  { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
+  carText:   { marginTop: 1, color: 'rgba(255,255,255,0.9)', fontSize: 9, fontWeight: '600' },
   nameTail: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 5,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
+    width: 0, height: 0,
+    borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 5,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent',
     borderTopColor: colors.primary,
-    marginTop: -2,
+    marginTop: -2, alignSelf: 'center',
   },
-
-  carImage: {
-    width: 60,
-    height: 60,
+  carContainer: {
+    width: 60, height: 60,
+    justifyContent: 'center', alignItems: 'center',
   },
+  carImage: { width: 55, height: 55 },
   pulse: {
-    position: 'absolute',
-    top: 15, // Adjust to center on car image
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.primary,
-    zIndex: -1,
+    position: 'absolute', top: 50, left: 50,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(0, 103, 79, 0.18)',
   },
-  // Pointer tip below card
-  tip: {
-    marginTop: -1,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: colors.border,
-  },
-  tipLive: {
-    borderTopColor: colors.primary,
+  gpsRipple: {
+    position: 'absolute', top: 50, left: 50,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'transparent',
+    borderWidth: 2.5, borderColor: 'rgba(0, 103, 79, 0.65)',
   },
 });

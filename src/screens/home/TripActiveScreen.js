@@ -228,13 +228,20 @@ export default function TripActiveScreen({ navigation }) {
     ? { latitude: destination.lat, longitude: destination.lng }
     : null;
 
-  // Road-following route from current position → destination
-  const { coordinates: routeCoords, distanceKm, durationMin } = useRoute(driverCoord, destCoord);
+  const pickupCoord = tripData?.pickup_lat && tripData?.pickup_lng
+    ? { latitude: tripData.pickup_lat, longitude: tripData.pickup_lng }
+    : userCoords ? { latitude: userCoords.latitude, longitude: userCoords.longitude } : null;
+
+  // Road-following route from pickup → destination (stable route)
+  const { coordinates: fullRouteCoords } = useRoute(pickupCoord, destCoord);
+
+  // Remaining route from driver position to destination (for distance/duration calculation)
+  const { distanceKm, durationMin } = useRoute(driverCoord, destCoord);
 
   // ── Fit Map to Route ────────────────────────────────
   const hasFitMap = useRef(false);
   useEffect(() => {
-    if (hasFitMap.current || !driverCoord || !destCoord || !mapRef.current || routeCoords.length < 2) return;
+    if (hasFitMap.current || !driverCoord || !destCoord || !mapRef.current || fullRouteCoords.length < 2) return;
     hasFitMap.current = true; // Only fit once when the route first loads
     setTimeout(() => {
       mapRef.current?.fitToCoordinates(
@@ -242,7 +249,7 @@ export default function TripActiveScreen({ navigation }) {
         { edgePadding: { top: 180, right: 40, bottom: 280, left: 40 }, animated: true }
       );
     }, 800);
-  }, [driverCoord?.latitude, destCoord?.latitude, routeCoords.length]);
+  }, [driverCoord?.latitude, destCoord?.latitude, fullRouteCoords.length]);
 
   const driverNameFull = driver?.name || driver?.full_name || driver?.fullName || 'Driver';
   const carMake = driver?.vehicle?.make || '';
@@ -255,22 +262,30 @@ export default function TripActiveScreen({ navigation }) {
     <View style={styles.container}>
       {/* Full screen map */}
       <View style={styles.mapWrap}>
-        <RideMap mapRef={mapRef} initialRegion={driverCoord ? {
-          latitude: driverCoord.latitude, longitude: driverCoord.longitude,
-          latitudeDelta: 0.01, longitudeDelta: 0.01,
-        } : undefined}>
+        <RideMap
+          mapRef={mapRef}
+          initialRegion={{
+            latitude: driverCoord?.latitude ?? userCoords?.latitude ?? 9.0192,
+            longitude: driverCoord?.longitude ?? userCoords?.longitude ?? 38.7525,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }}
+        >
           {destCoord && <DestMarker coordinate={destCoord} title={destination?.name} />}
           {driverCoord && driver && (
-            <DriverMarker driver={{
-              id: driver.id,
-              lat: driverCoord.latitude,
-              lng: driverCoord.longitude,
-              heading: driverLocation?.heading ?? 0,
-              live: true,
-            }} />
+            <DriverMarker 
+              driver={{
+                id: driver.id,
+                lat: driverCoord.latitude,
+                lng: driverCoord.longitude,
+                heading: driverLocation?.heading ?? 0,
+                live: true,
+              }}
+              routeCoords={fullRouteCoords}
+            />
           )}
-          {routeCoords.length >= 2 && (
-            <ProfessionalRoutePolyline coordinates={routeCoords} />
+          {fullRouteCoords.length >= 2 && (
+            <ProfessionalRoutePolyline coordinates={fullRouteCoords} />
           )}
         </RideMap>
       </View>

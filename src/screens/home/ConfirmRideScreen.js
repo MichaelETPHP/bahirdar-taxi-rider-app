@@ -212,7 +212,18 @@ export default function ConfirmRideScreen({ navigation, route }) {
 
       {/* Map — fills most of screen */}
       <View style={styles.mapContainer}>
-        <ProfessionalRideMap mapRef={mapRef} style={StyleSheet.absoluteFillObject} showStreetNames={true} showRoadLines={true}>
+        <ProfessionalRideMap
+          mapRef={mapRef}
+          style={StyleSheet.absoluteFillObject}
+          showStreetNames={true}
+          showRoadLines={true}
+          initialRegion={{
+            latitude: displayCoords.latitude,
+            longitude: displayCoords.longitude,
+            latitudeDelta: 0.005,
+            longitudeDelta: 0.005,
+          }}
+        >
           {userCoords && (
             <UberPickupMarker
               coordinate={userCoords}

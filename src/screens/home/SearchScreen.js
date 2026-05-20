@@ -59,7 +59,7 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export default function SearchScreen({ navigation, route }) {
+export default function SearchScreen({ navigation }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -77,13 +77,10 @@ export default function SearchScreen({ navigation, route }) {
   const saveSheetAnim = useRef(new Animated.Value(0)).current;
 
   const {
-    setDestination, setStop, addToRecentDestination,
+    setDestination, addToRecentDestination,
     recentDestinations, userCoords, pickup,
     savedPlaces, setSavedPlace,
   } = useLocationStore();
-
-  const searchMode = route?.params?.mode ?? 'destination';
-  const stopIndex  = route?.params?.stopIndex ?? -1;
 
   // Resolve which city center to bias searches towards
   const getBiasCoords = useCallback(() => {
@@ -201,11 +198,7 @@ export default function SearchScreen({ navigation, route }) {
         });
         addToRecentDestination(finalItem);
 
-        if (searchMode === 'stop' && stopIndex >= 0) {
-          setStop(stopIndex, finalItem);
-        } else {
-          setDestination(finalItem);
-        }
+        setDestination(finalItem);
 
         navigation.goBack();
       } catch {
@@ -215,8 +208,8 @@ export default function SearchScreen({ navigation, route }) {
       }
     },
     [
-      resolveCoords, addToRecentDestination, setDestination, setStop,
-      searchMode, stopIndex, navigation, getBiasCoords, shakeWarning,
+      resolveCoords, addToRecentDestination, setDestination,
+      navigation, getBiasCoords, shakeWarning,
     ],
 
   );

@@ -1,6 +1,7 @@
 import { X, Star, Check, Phone, Car, Clock, DollarSign, Share2, AlertTriangle, User } from 'lucide-react-native';
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import TripCardSkeletonList from '../../components/ride/TripCardSkeleton';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
@@ -153,9 +154,7 @@ export default function RideHistoryScreen({ navigation }) {
       </View>
 
       {loading && trips.length === 0 ? (
-        <View style={styles.centerLoading}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <TripCardSkeletonList count={5} />
       ) : (
         <FlatList
           data={trips}
@@ -243,12 +242,6 @@ const styles = StyleSheet.create({
   },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   ratingText: { fontSize: fontSize.xs, color: colors.primary, fontWeight: fontWeight.semibold },
-  centerLoading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundAlt,
-  },
   footerLoader: {
     paddingVertical: 16,
     alignItems: 'center',

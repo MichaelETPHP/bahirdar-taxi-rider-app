@@ -24,6 +24,7 @@ import useRoute from '../../hooks/useRoute';
 import { formatEthiopianPhone } from '../../utils/phoneFormatter';
 
 const LOCATION_POLL_MS = 3000;
+const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
 
 // Animated progress bar for ETA / distance
 
@@ -117,8 +118,18 @@ export default function DriverMatchedScreen({ navigation }) {
     initialDistRef.current = currentDist;
   }
 
-  // Driver → pickup route
-  const { coordinates: routeCoords } = useRoute(driverCoord, userCoords);
+  // Capture driver starting coordinate for stable full route
+  const [driverStartCoord, setDriverStartCoord] = useState(null);
+
+  useEffect(() => {
+    if (driverCoord && !driverStartCoord) {
+      setDriverStartCoord(driverCoord);
+    }
+  }, [driverCoord, driverStartCoord]);
+
+  // Driver → pickup stable route
+  const originCoord = driverStartCoord || driverCoord;
+  const { coordinates: fullRouteCoords } = useRoute(originCoord, userCoords);
 
   // Fit map to show driver + pickup
   useEffect(() => {
@@ -316,7 +327,16 @@ export default function DriverMatchedScreen({ navigation }) {
     <View style={styles.root}>
       {/* ── Background Map ── */}
       <View style={StyleSheet.absoluteFill}>
-        <RideMap mapRef={mapRef} style={StyleSheet.absoluteFill}>
+        <RideMap
+          mapRef={mapRef}
+          style={StyleSheet.absoluteFill}
+          initialRegion={{
+            latitude: driverCoord?.latitude ?? userCoords?.latitude ?? ADDIS_ABABA_COORDS.latitude,
+            longitude: driverCoord?.longitude ?? userCoords?.longitude ?? ADDIS_ABABA_COORDS.longitude,
+            latitudeDelta: 0.008,
+            longitudeDelta: 0.008,
+          }}
+        >
           {userCoords && (
             <PickupMarker coordinate={userCoords} title={tripData?.pickup_address || 'Your location'} />
           )}
@@ -330,9 +350,10 @@ export default function DriverMatchedScreen({ navigation }) {
                 fullName: driver.name,
                 live: true,
               }}
+              routeCoords={fullRouteCoords}
             />
           )}
-          <RoutePolyline coordinates={routeCoords} dashed />
+          <RoutePolyline coordinates={fullRouteCoords} dashed />
         </RideMap>
         {/* Emerald Overlay */}
         <View style={styles.mapOverlay} />
@@ -409,7 +430,7 @@ export default function DriverMatchedScreen({ navigation }) {
       </View>
 
       {/* Support Footer */}
-      <View style={styles.supportFooter}>
+      <View style={[styles.supportFooter, { bottom: Math.max(16, insets.bottom) + 12 }]}>
         <Text style={styles.supportLabel}>Need help?</Text>
         <TouchableOpacity 
           style={styles.supportBtn} 
@@ -547,7 +568,6 @@ const styles = StyleSheet.create({
   },
   supportFooter: {
     position: 'absolute',
-    bottom: 48,
     left: 0,
     right: 0,
     alignItems: 'center',

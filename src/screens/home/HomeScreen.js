@@ -181,7 +181,7 @@ export default function HomeScreen({ navigation }) {
   const token = useAuthStore((s) => s.token);
   const { destination, recentDestinations, setDestination, setPickup, pickup, userCoords, setUserCoords, clearStops } = useLocationStore();
   const resetRideState = useRideStore((s) => s.reset);
-  const { currentLocation, currentAddress, loading: locLoading, permissionDenied } = useLocationV2();
+  const { currentLocation, currentAddress, loading: locLoading, permissionDenied, refresh: refreshLocation } = useLocationV2();
   const displayCoords = useMemo(() => {
     if (currentLocation) {
       return {
@@ -337,6 +337,10 @@ export default function HomeScreen({ navigation }) {
       }
     }
   }, [currentLocation, readableLocationName, currentAddress, setPickup, setUserCoords]);
+
+  useEffect(() => {
+    clearStops();
+  }, [clearStops]);
   const lastDrawerCloseAt = useRef(0);
   const bannerMarqueeX = useRef(new Animated.Value(0)).current;
   const isLoggedInRef = useRef(!!user?.id);
@@ -699,6 +703,10 @@ export default function HomeScreen({ navigation }) {
       useNativeDriver: true,
     }).start();
 
+    if (typeof refreshLocation === 'function') {
+      refreshLocation();
+    }
+
     InteractionManager.runAfterInteractions(() => {
       if (mapRef.current) {
         mapRef.current.animateToRegion(
@@ -712,7 +720,7 @@ export default function HomeScreen({ navigation }) {
         );
       }
     });
-  }, [displayCoords.latitude, displayCoords.longitude, refreshSpinAnim]);
+  }, [displayCoords.latitude, displayCoords.longitude, refreshSpinAnim, refreshLocation]);
 
   const handlePickupDrag = useCallback((coord) => {
     // Update store with dragged position
@@ -764,6 +772,26 @@ export default function HomeScreen({ navigation }) {
     outputRange: ['0deg', '360deg'],
   });
 
+  // Auto-sync Rider current location coordinates & address reverse geocode every 4 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Trigger the spin animation for visual feedback (1.2s spin)
+      refreshSpinAnim.setValue(0);
+      Animated.timing(refreshSpinAnim, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }).start();
+
+      if (typeof refreshLocation === 'function') {
+        refreshLocation();
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [refreshLocation, refreshSpinAnim]);
+
   const selectBtnSkeletonOpacity = useRef(new Animated.Value(0.45)).current;
 
   useEffect(() => {
@@ -812,6 +840,12 @@ export default function HomeScreen({ navigation }) {
           showStreetNames={true}
           showRoadLines={true}
           scrollEnabled={mapScrollEnabled}
+          initialRegion={{
+            latitude: displayCoords.latitude,
+            longitude: displayCoords.longitude,
+            latitudeDelta: 0.005,
+            longitudeDelta: 0.005,
+          }}
         >
           {/* User location marker with professional styling */}
           <UberUserLocationMarker
@@ -948,8 +982,6 @@ export default function HomeScreen({ navigation }) {
             <LocationBar
               onToPress={() => navigation.navigate('Search', { mode: 'destination' })}
               onFromPress={() => {}}
-              onStopPress={(index) => navigation.navigate('Search', { mode: 'stop', stopIndex: index })}
-              onAddStopPress={null}
               isInServiceArea={isInServiceArea}
             />
           ) : (
@@ -984,6 +1016,22 @@ export default function HomeScreen({ navigation }) {
         >
           {/* Removed recentSection as requested */}
 
+          {!destination && (
+            <View style={[styles.recentSection, { paddingBottom: Math.max(8, insets.bottom + 6) }]}>
+              <RecentTrips
+                onSelectPlace={(entry) => {
+                  if (!entry?.payload) return;
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (entry.type === 'search') {
+                    setDestination(entry.payload);
+                    return;
+                  }
+                  navigation.navigate('RideHistory');
+                }}
+              />
+            </View>
+          )}
+
           {destination && (
             <View style={styles.categorySection}>
               <RideTypeSelector />
@@ -1002,7 +1050,7 @@ export default function HomeScreen({ navigation }) {
 
       {destination && (
         <View 
-          style={[styles.stickyButton, { paddingBottom: Math.max(16, insets.bottom) + 12 }]}
+          style={[styles.stickyButton, { paddingBottom: Math.max(10, insets.bottom) + 6 }]}
           pointerEvents="auto"
         >
           {!categoriesLoaded ? (
@@ -1307,23 +1355,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 54,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 103, 79, 0.16)',
+    borderRadius: 22,
+    backgroundColor: '#E8F6F0',
     paddingHorizontal: 12,
   },
   destinationOnlyMain: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 54,
   },
   destinationOnlyIcon: {
     marginRight: 10,
   },
   destinationOnlyText: {
     fontSize: fontSize.md,
-    color: colors.textPrimary,
+    color: '#0B3B2E',
     fontWeight: fontWeight.bold,
     lineHeight: 20,
   },
@@ -1361,12 +1410,13 @@ const styles = StyleSheet.create({
     height: 54,
   },
   categorySection: {
-    marginTop: 10,
-    paddingBottom: 20,
+    marginTop: 8,
+    paddingBottom: 8,
   },
   recentSection: {
-    marginTop: 10,
-    paddingHorizontal: 4,
+    marginTop: 8,
+    paddingHorizontal: 2,
+    paddingBottom: 4,
   },
   recentLabel: {
     fontSize: 11,

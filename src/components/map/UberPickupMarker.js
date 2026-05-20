@@ -1,19 +1,11 @@
-import { memo, useState, useEffect } from 'react';
+import { memo, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { MapPin } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
-import { fontSize, fontWeight } from '../../constants/typography';
 
-/**
- * Uber-Style Pickup Marker
- * - Green circular marker
- * - Pulsing animation
- * - Location label above
- * - Professional appearance
- */
 function UberPickupMarker({ coordinate, title, onPress, animated = true }) {
-  const pulseAnim = new Animated.Value(0);
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!animated) return;
@@ -24,13 +16,13 @@ function UberPickupMarker({ coordinate, title, onPress, animated = true }) {
           toValue: 1,
           duration: 1500,
           easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(pulseAnim, {
           toValue: 0,
           duration: 1500,
           easing: Easing.in(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     );
@@ -52,11 +44,11 @@ function UberPickupMarker({ coordinate, title, onPress, animated = true }) {
     <Marker
       coordinate={coordinate}
       onPress={onPress}
-      tracksViewChanges={true}
-      zIndex={500} // Above polyline
+      tracksViewChanges={false}
+      zIndex={500}
       anchor={{ x: 0.5, y: 0.5 }}
     >
-      <View style={styles.container}>
+      <View style={styles.container} collapsable={false}>
         {/* Pulse ring - animated */}
         <Animated.View
           style={[

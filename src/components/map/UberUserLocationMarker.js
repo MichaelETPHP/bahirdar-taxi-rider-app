@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Animated, Easing, Platform } from 'react-native';
-import { Image } from 'expo-image';
+import { View, StyleSheet, Animated, Easing, Platform, Image } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { colors } from '../../constants/colors';
 
@@ -20,18 +19,18 @@ function PulseRing({ delay = 0 }) {
             toValue: 2.2,
             duration: 1800,
             easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
           Animated.timing(opacity, {
             toValue: 0,
             duration: 1800,
             easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
+            useNativeDriver: false,
           }),
         ]),
         Animated.parallel([
-          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 0.55, duration: 0, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: false }),
+          Animated.timing(opacity, { toValue: 0.55, duration: 0, useNativeDriver: false }),
         ]),
       ])
     );
@@ -56,6 +55,10 @@ function PulseRing({ delay = 0 }) {
 function UberUserLocationMarker({ coordinate, avatarUrl, animated = true }) {
   const [imageReady, setImageReady] = useState(false);
 
+  useEffect(() => {
+    setImageReady(false);
+  }, [avatarUrl]);
+
   if (!coordinate) return null;
 
   return (
@@ -64,9 +67,9 @@ function UberUserLocationMarker({ coordinate, avatarUrl, animated = true }) {
       anchor={{ x: 0.5, y: 0.5 }}
       zIndex={99999}
       flat={false}
-      tracksViewChanges={Platform.OS === 'android' ? true : animated || !imageReady}
+      tracksViewChanges={Platform.OS === 'android' ? true : !imageReady}
     >
-      <View style={styles.column} collapsable={false}>
+      <View style={styles.column} collapsable={false} pointerEvents="none">
         <View style={styles.outer}>
           <PulseRing delay={0} />
           <PulseRing delay={900} />
@@ -80,9 +83,7 @@ function UberUserLocationMarker({ coordinate, avatarUrl, animated = true }) {
                   key={avatarUrl}
                   source={{ uri: avatarUrl }}
                   style={styles.avatar}
-                  contentFit="cover"
-                  cachePolicy="none"
-                  transition={150}
+                  resizeMode="cover"
                   onLoad={() => setImageReady(true)}
                   onError={() => setImageReady(false)}
                 />
