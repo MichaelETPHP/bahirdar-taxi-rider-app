@@ -25,10 +25,10 @@ import useRoute from '../../hooks/useRoute';
 import { formatEthiopianPhone } from '../../utils/phoneFormatter';
 import { haversineDistance, formatDistance } from '../../utils/distanceUtils';
 import { normalizeAvatarUrl } from '../../utils/avatarUrl';
+import { extractDriverMarkerMeta, resolveCategoryIconFromCategories } from '../../utils/driverCategoryIcon';
 
 const LOCATION_POLL_MS = 1500;
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
-const CAR_ON_MAP = require('../../../assets/carOnMap.png');
 
 // Animated progress bar for ETA / distance
 
@@ -54,8 +54,9 @@ function pickNumber(...values) {
   return null;
 }
 
-function extractDriverLocation(rawPayload) {
+function extractDriverLocation(rawPayload, categories = []) {
   const raw = rawPayload?.driver ?? rawPayload?.data ?? rawPayload ?? {};
+  const markerMeta = extractDriverMarkerMeta(raw);
   const lat = pickNumber(
     raw?.lat,
     raw?.latitude,
@@ -82,6 +83,9 @@ function extractDriverLocation(rawPayload) {
     heading: pickNumber(raw?.heading, raw?.bearing, raw?.course, 0) || 0,
     speed_kmh: pickNumber(raw?.speed_kmh, raw?.speedKmh, raw?.speed),
     driverId: raw?.driver_id ?? raw?.driverId ?? raw?.id ?? null,
+    carIconUrl: markerMeta.carIconUrl || resolveCategoryIconFromCategories(raw, categories),
+    carLabel: markerMeta.carLabel,
+    fullName: markerMeta.fullName,
   };
 }
 
@@ -102,10 +106,11 @@ export default function DriverMatchedScreen({ navigation }) {
 
   const {
     tripId, tripData, driver, driverLocation, setDriverLocation,
-    setTripStatus, setFinalFare, resetTrip, mergeTripData,
+    setTripStatus, setFinalFare, resetTrip, mergeTripData, setDriver,
   } = useRideStore();
   const { token } = useAuthStore();
   const { userCoords, destination } = useLocationStore();
+  const categories = useRideStore((s) => s.categories);
 
   const [cancelLoading, setCancelLoading]       = useState(false);
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
@@ -254,8 +259,20 @@ export default function DriverMatchedScreen({ navigation }) {
     const syncDriverLocation = async () => {
       try {
         const res = await getDriverLocation(driver.id, token);
-        const nextLocation = extractDriverLocation(res?.data ?? res);
+        const nextLocation = extractDriverLocation(res?.data ?? res, categories);
         if (!nextLocation) return;
+        if (nextLocation.carIconUrl || nextLocation.carLabel || nextLocation.fullName) {
+          setDriver({
+            ...driver,
+            ...(nextLocation.fullName ? { name: nextLocation.fullName, full_name: nextLocation.fullName } : {}),
+            ...(nextLocation.carIconUrl ? { car_icon_url: nextLocation.carIconUrl, carIconUrl: nextLocation.carIconUrl } : {}),
+            vehicle: {
+              ...(driver?.vehicle || {}),
+              ...(nextLocation.carLabel ? { category: nextLocation.carLabel } : {}),
+              ...(nextLocation.carIconUrl ? { categoryIconUrl: nextLocation.carIconUrl } : {}),
+            },
+          });
+        }
         setDriverLocation(nextLocation);
       } catch (_) {}
     };
@@ -265,7 +282,7 @@ export default function DriverMatchedScreen({ navigation }) {
       syncDriverLocation();
     }, LOCATION_POLL_MS);
     return () => clearInterval(driverPollRef.current);
-  }, [driver?.id, token, setDriverLocation]);
+  }, [categories, driver, driver?.id, token, setDriver, setDriverLocation]);
 
   // Fallback: poll trip status — only listen for forward transitions, never overwrite matched driver
   useEffect(() => {
@@ -328,10 +345,22 @@ export default function DriverMatchedScreen({ navigation }) {
       Alert.alert('Trip Cancelled', reason || 'Driver cancelled.', [{ text: 'OK', onPress: goHome }]);
     };
     const onDriverLocation = (payload) => {
-      const nextLocation = extractDriverLocation(payload);
+      const nextLocation = extractDriverLocation(payload, categories);
       if (!nextLocation) return;
       const rawId = nextLocation.driverId ? String(nextLocation.driverId) : '';
       if (rawId && String(driver?.id) !== rawId) return;
+      if (nextLocation.carIconUrl || nextLocation.carLabel || nextLocation.fullName) {
+        setDriver({
+          ...driver,
+          ...(nextLocation.fullName ? { name: nextLocation.fullName, full_name: nextLocation.fullName } : {}),
+          ...(nextLocation.carIconUrl ? { car_icon_url: nextLocation.carIconUrl, carIconUrl: nextLocation.carIconUrl } : {}),
+          vehicle: {
+            ...(driver?.vehicle || {}),
+            ...(nextLocation.carLabel ? { category: nextLocation.carLabel } : {}),
+            ...(nextLocation.carIconUrl ? { categoryIconUrl: nextLocation.carIconUrl } : {}),
+          },
+        });
+      }
       setDriverLocation(nextLocation);
     };
     socket.on('trip:driver_arrived', onArrived);
@@ -346,7 +375,7 @@ export default function DriverMatchedScreen({ navigation }) {
       socket.off('driver:location', onDriverLocation);
       socket.off('driver:updated', onDriverLocation);
     };
-  }, [driver?.id, navigate, goHome, setTripStatus, setDriverLocation]);
+  }, [categories, driver, driver?.id, navigate, goHome, setDriver, setTripStatus, setDriverLocation]);
 
   const handleCall = () => {
     const phone = formatEthiopianPhone(driver?.phone);
@@ -392,6 +421,7 @@ export default function DriverMatchedScreen({ navigation }) {
 
   const driverNameFull = driver?.name || driver?.full_name || driver?.fullName || 'Driver';
   const driverFirstName = String(driverNameFull).split(' ')[0] || 'Driver';
+  const progressCarIconUrl = driver?.carIconUrl || driver?.car_icon_url || driver?.vehicle?.categoryIconUrl || null;
   const carMake = driver?.vehicle?.make || '';
   const carModel = driver?.vehicle?.model || driver?.vehicle_model || driver?.vehicle_category || driver?.car_type || '';
   const carColor = driver?.vehicle?.color || '';
@@ -437,6 +467,8 @@ export default function DriverMatchedScreen({ navigation }) {
                 lng: driverCoord.longitude,
                 heading: driverLocation?.heading ?? 0,
                 fullName: driver.name,
+                carLabel: driver?.vehicle?.category || driver?.vehicle_category || driver?.car_type || '',
+                carIconUrl: driver?.carIconUrl || driver?.car_icon_url || driver?.vehicle?.categoryIconUrl,
                 live: true,
               }}
               routeCoords={fullRouteCoords}
@@ -481,11 +513,17 @@ export default function DriverMatchedScreen({ navigation }) {
               <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
               {progressReady ? (
                 <Animated.View style={[styles.progressCarWrap, { left: progressWidth }]}>
-                  <Image
-                    source={CAR_ON_MAP}
-                    resizeMode="contain"
-                    style={styles.progressCar}
-                  />
+                  {progressCarIconUrl ? (
+                    <Image
+                      source={{ uri: progressCarIconUrl }}
+                      resizeMode="contain"
+                      style={styles.progressCar}
+                    />
+                  ) : (
+                    <View style={styles.progressCarFallback}>
+                      <Car size={16} color={colors.primary} strokeWidth={2.2} />
+                    </View>
+                  )}
                 </Animated.View>
               ) : null}
             </View>
@@ -660,6 +698,16 @@ const styles = StyleSheet.create({
   progressCar: {
     width: 28,
     height: 28,
+  },
+  progressCarFallback: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 103, 79, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   progressCaption: {
     marginTop: 8,

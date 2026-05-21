@@ -27,6 +27,10 @@ export function getTrip(tripId, token) {
   return get(`/trips/${tripId}`, token);
 }
 
+export function getActiveTrip(token) {
+  return get('/trips/active', token);
+}
+
 function toTripHistoryItem(raw) {
   const timestamp =
     raw.completed_at ||

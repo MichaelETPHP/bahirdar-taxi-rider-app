@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Image, Animated, Easing, Platform } from 'react-native';
 import { Marker, AnimatedRegion } from 'react-native-maps';
+import { Car } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { shadow } from '../../constants/layout';
+import { normalizeDriverCarIconUrl } from '../../utils/driverCategoryIcon';
 
 const MarkerAnimated = Marker.Animated;
-const CAR_ON_MAP = require('../../../assets/carOnMap.png');
 
 function firstName(fullName = '') {
   return fullName.trim().split(' ')[0] || '';
@@ -139,10 +140,24 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
   const prevCoordRef = useRef({ latitude: driver.lat, longitude: driver.lng });
   const prevHeadRef  = useRef(driver.heading || 0);
   const routeRef     = useRef([]);
-
+  const carIconUrl = useMemo(
+    () => normalizeDriverCarIconUrl(
+      driver?.carIconUrl ??
+      driver?.car_icon_url ??
+      driver?.vehicle?.categoryIconUrl ??
+      driver?.vehicle?.car_icon_url
+    ),
+    [driver?.carIconUrl, driver?.car_icon_url, driver?.vehicle?.categoryIconUrl, driver?.vehicle?.car_icon_url]
+  );
   if (routeCoords && routeCoords.length > 2 && routeCoords !== routeRef.current) {
     routeRef.current = routeCoords;
   }
+
+  useEffect(() => {
+    setImageLoaded(false);
+    if (!carIconUrl) return;
+    Image.prefetch(carIconUrl).catch(() => {});
+  }, [carIconUrl]);
 
   useEffect(() => {
     const startLat = prevCoordRef.current.latitude;
@@ -201,6 +216,25 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
   const isLive  = !!driver?.live;
   const name    = firstName(driver?.fullName || driver?.name || '');
   const carText = String(driver?.carLabel || '').trim();
+  const renderCarVisual = () => {
+    if (carIconUrl) {
+      return (
+        <Image
+          source={{ uri: carIconUrl }}
+          resizeMode="contain"
+          fadeDuration={0}
+          style={styles.carImage}
+          onLoad={() => setImageLoaded(true)}
+        />
+      );
+    }
+
+    return (
+      <View style={styles.carFallback}>
+        <Car size={26} color={colors.primary} strokeWidth={2.2} />
+      </View>
+    );
+  };
 
   // ── Android: plain <Marker image> + separate animation overlay ────────────
   if (Platform.OS === 'android') {
@@ -231,13 +265,7 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
           onPress={onPress}
         >
           <View style={styles.carContainer} collapsable={false}>
-            <Image
-              source={CAR_ON_MAP}
-              resizeMode="contain"
-              fadeDuration={0}
-              style={styles.carImage}
-              onLoad={() => setImageLoaded(true)}
-            />
+            {renderCarVisual()}
           </View>
         </MarkerAnimated>
       </>
@@ -258,13 +286,7 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
         <GPSRipple trigger={rippleTrigger} />
         {isLive && !!name && <NameBubble name={name} carText={carText} />}
         <Animated.View style={[styles.carContainer, { transform: [{ rotate: rotateDeg }] }]}>
-          <Image
-            source={CAR_ON_MAP}
-            resizeMode="contain"
-            fadeDuration={0}
-            style={styles.carImage}
-            onLoad={() => setImageLoaded(true)}
-          />
+          {renderCarVisual()}
         </Animated.View>
       </View>
     </MarkerAnimated>
@@ -307,6 +329,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   carImage: { width: 55, height: 55 },
+  carFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 103, 79, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.sm,
+  },
   pulse: {
     position: 'absolute', top: 50, left: 50,
     width: 40, height: 40, borderRadius: 20,

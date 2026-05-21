@@ -19,9 +19,10 @@ import useRideStore from '../../store/rideStore';
 import useAuthStore from '../../store/authStore';
 import useRoute from '../../hooks/useRoute';
 import { haversineDistance, estimateDuration } from '../../utils/distanceUtils';
-import { createTrip, getWalletBalance } from '../../services/tripService';
+import { createTrip, getActiveTrip, getWalletBalance } from '../../services/tripService';
 import { connectSocket, joinRiderRoom } from '../../services/socketService';
 import { getFareEstimateForCategory } from '../../utils/fareEstimates';
+import { parseTripPollResponse } from '../../utils/tripLifecycle';
 
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
 const formatDistance = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
@@ -39,7 +40,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
 
   const { userCoords, pickup, destination } = useLocationStore();
-  const { categories, selectedCategoryId, setTripData, setTripStatus, fareEstimates, routeInfo } = useRideStore();
+  const { categories, selectedCategoryId, setTripData, setTripStatus, fareEstimates, routeInfo, hydrateActiveTrip } = useRideStore();
   const { token, user } = useAuthStore();
 
   const displayCoords = userCoords ?? ADDIS_ABABA_COORDS;
@@ -195,6 +196,19 @@ export default function ConfirmRideScreen({ navigation, route }) {
       } else if (status === 422 && code === 'OUTSIDE_SERVICE_AREA') {
         title = 'Service Unavailable';
         msg = 'Service not available in your area yet.';
+      }
+
+      if (status === 409 || code === 'ACTIVE_TRIP_EXISTS') {
+        try {
+          const activeRes = await getActiveTrip(token);
+          const root = activeRes?.data ?? activeRes;
+          const { status: activeStatus, trip: activeTrip, driver: activeDriver } = parseTripPollResponse(root);
+          if (activeTrip && activeStatus) {
+            hydrateActiveTrip({ trip: activeTrip, status: activeStatus, driver: activeDriver });
+            navigation.replace('ActiveTripResume');
+            return;
+          }
+        } catch (_) {}
       }
 
       // Show error alert while still on SearchingScreen

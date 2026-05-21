@@ -13,6 +13,10 @@ export default {
       image: './assets/splash.png',
       resizeMode: 'contain',
       backgroundColor: '#00674F',
+      android12: {
+        image: './assets/adaptive-icon.png',
+        backgroundColor: '#00674F',
+      },
     },
     ios: {
       supportsTablet: true,

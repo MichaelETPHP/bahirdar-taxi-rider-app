@@ -55,6 +55,7 @@ import { useNearbyDrivers } from '../../hooks/useTripQueries';
 import Button from '../../components/design-system/Button';
 import { connectSocket, getSocket, joinRiderRoom } from '../../services/socketService';
 import { diagnosticCheckApiKey } from '../../utils/diagnostics';
+import { extractDriverMarkerMeta, resolveCategoryIconFromCategories } from '../../utils/driverCategoryIcon';
 
 // Addis Ababa city center — default when GPS not yet available
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
@@ -90,7 +91,7 @@ function getGreeting() {
   return 'greetingEvening';
 }
 
-function normalizeDriverPoint(raw, idx) {
+function normalizeDriverPoint(raw, idx, categories = []) {
   const rawLat =
     raw?.lat ??
     raw?.latitude ??
@@ -121,34 +122,15 @@ function normalizeDriverPoint(raw, idx) {
   const lat = Number(rawLat);
   const lng = Number(rawLng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  const fullName =
-    raw?.full_name ??
-    raw?.fullName ??
-    raw?.name ??
-    raw?.driver_name ??
-    raw?.driverName ??
-    raw?.user?.full_name ??
-    raw?.user?.fullName ??
-    raw?.user?.name ??
-    '';
-  const carLabel =
-    raw?.vehicle_category ??
-    raw?.vehicleType ??
-    raw?.car_type ??
-    raw?.carType ??
-    raw?.vehicle?.type ??
-    raw?.vehicle?.model ??
-    raw?.vehicle_model ??
-    raw?.plate_number ??
-    raw?.vehicle?.plate ??
-    '';
+  const markerMeta = extractDriverMarkerMeta(raw);
   return {
     id: String(raw?.driver_id ?? raw?.id ?? raw?.driverId ?? raw?.user_id ?? `redis-${idx}`),
     lat,
     lng,
     heading: Number(raw?.heading ?? raw?.bearing ?? 0) || 0,
-    fullName: String(fullName).trim(),
-    carLabel: String(carLabel).trim(),
+    fullName: markerMeta.fullName,
+    carLabel: markerMeta.carLabel,
+    carIconUrl: markerMeta.carIconUrl || resolveCategoryIconFromCategories(raw, categories),
     live: true,
   };
 }
@@ -167,6 +149,7 @@ function areDriverListsEqual(prev, next) {
       a?.heading !== b?.heading ||
       a?.fullName !== b?.fullName ||
       a?.carLabel !== b?.carLabel ||
+      a?.carIconUrl !== b?.carIconUrl ||
       a?.live !== b?.live
     ) {
       return false;
@@ -200,6 +183,8 @@ export default function HomeScreen({ navigation }) {
   const categoriesLoaded = useRideStore((s) => s.categoriesLoaded);
   const fareEstimateLoading = useRideStore((s) => s.fareEstimateLoading);
   const selectedCategoryId = useRideStore((s) => s.selectedCategoryId);
+  const tripStatus = useRideStore((s) => s.tripStatus);
+  const tripId = useRideStore((s) => s.tripId);
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId) || null;
   const categorySelectionReady =
     !categoriesLoading &&
@@ -447,13 +432,19 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     if (nearbyDriversRes) {
       const list = Array.isArray(nearbyDriversRes?.data) ? nearbyDriversRes.data : [];
-      const mapped = list.map((d, idx) => normalizeDriverPoint(d, idx)).filter(Boolean);
+      const mapped = list.map((d, idx) => normalizeDriverPoint(d, idx, categories)).filter(Boolean);
       if (!areDriverListsEqual(driversRef.current, mapped)) {
         driversRef.current = mapped;
         setDrivers(mapped);
       }
     }
-  }, [nearbyDriversRes]);
+  }, [categories, nearbyDriversRes]);
+
+  useEffect(() => {
+    if (!tripId) return;
+    if (!['searching', 'matched', 'driver_arrived', 'in_progress'].includes(tripStatus)) return;
+    navigation.replace('ActiveTripResume');
+  }, [navigation, tripId, tripStatus]);
 
   // Socket live updates for active drivers on Home map.
   useEffect(() => {
@@ -467,7 +458,7 @@ export default function HomeScreen({ navigation }) {
 
     const mergeDrivers = (incoming) => {
       const list = Array.isArray(incoming) ? incoming : [];
-      const mapped = list.map((d, idx) => normalizeDriverPoint(d, idx)).filter(Boolean);
+      const mapped = list.map((d, idx) => normalizeDriverPoint(d, idx, categories)).filter(Boolean);
       if (mapped.length === 0) return;
       const prevMap = new Map(driversRef.current.map((d) => [d.id, d]));
       mapped.forEach((d) => prevMap.set(d.id, { ...(prevMap.get(d.id) || {}), ...d }));
@@ -489,7 +480,7 @@ export default function HomeScreen({ navigation }) {
     };
 
     const handleDriverLocation = (payload) => {
-      const point = normalizeDriverPoint(payload?.driver ?? payload?.data ?? payload, 0);
+      const point = normalizeDriverPoint(payload?.driver ?? payload?.data ?? payload, 0, categories);
       if (!point) return;
       const base = driversRef.current;
       const idx = base.findIndex((d) => d.id === point.id);
@@ -509,7 +500,7 @@ export default function HomeScreen({ navigation }) {
     const onDriverLocation = throttleLocationUpdates(handleDriverLocation);
 
     const handleDriverOnline = (payload) => {
-      const point = normalizeDriverPoint(payload?.driver ?? payload?.data ?? payload, 0);
+      const point = normalizeDriverPoint(payload?.driver ?? payload?.data ?? payload, 0, categories);
       if (!point) return;
       const base = driversRef.current;
       const idx = base.findIndex((d) => d.id === point.id);
@@ -608,7 +599,7 @@ export default function HomeScreen({ navigation }) {
       s?.off('driver:online', onDriverOnline);
       s?.off('driver:offline', onDriverOffline);
     };
-  }, [token, user?.id]);
+  }, [categories, token, user?.id]);
 
 
   const hasInitialRegion = useRef(false);

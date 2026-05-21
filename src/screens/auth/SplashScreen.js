@@ -36,30 +36,11 @@ export default function SplashScreen({ onFinish }) {
       setIsLocationDenied(false);
       const state = await Network.getNetworkStateAsync();
       console.log('[Network] State:', JSON.stringify(state));
-      
-      let isActuallyConnected = state.isConnected;
 
-      // If state says connected, do a "real world" ping check to be 100% sure
-      if (isActuallyConnected) {
-        try {
-          console.log('[Network] Pinging 8.8.8.8...');
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3000);
-          
-          const response = await fetch('https://8.8.8.8', { 
-            method: 'HEAD', 
-            mode: 'no-cors',
-            signal: controller.signal 
-          });
-          
-          clearTimeout(timeoutId);
-          console.log('[Network] Ping success');
-          isActuallyConnected = true;
-        } catch (e) {
-          console.log('[Network] Ping failed:', e.message);
-          isActuallyConnected = false;
-        }
-      }
+      // Rely on the platform reachability signal. The previous HTTPS probe targeted
+      // 8.8.8.8, which fails TLS validation on real devices and incorrectly blocks startup.
+      const isActuallyConnected =
+        state.isConnected === true && state.isInternetReachable !== false;
       
       console.log('[Network] Final decision - isOffline:', !isActuallyConnected);
       setIsOffline(!isActuallyConnected);

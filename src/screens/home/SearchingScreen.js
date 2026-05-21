@@ -26,19 +26,22 @@ import { haversineDistance, estimateDuration } from '../../utils/distanceUtils';
 import DriverMarker from '../../components/map/DriverMarker';
 import { useNearbyDrivers } from '../../hooks/useTripQueries';
 import { getFareEstimateForCategory } from '../../utils/fareEstimates';
+import { extractDriverMarkerMeta, resolveCategoryIconFromCategories } from '../../utils/driverCategoryIcon';
 
-function normalizeDriverPoint(raw, idx) {
+function normalizeDriverPoint(raw, idx, categories = []) {
   const rawLat = raw?.lat ?? raw?.latitude ?? raw?.driver_lat ?? raw?.current_lat ?? raw?.location?.lat ?? raw?.location?.latitude ?? raw?.coords?.lat ?? raw?.coords?.latitude;
   const rawLng = raw?.lng ?? raw?.lon ?? raw?.longitude ?? raw?.driver_lng ?? raw?.current_lng ?? raw?.location?.lng ?? raw?.location?.longitude ?? raw?.coords?.lng ?? raw?.coords?.longitude;
   const lat = Number(rawLat);
   const lng = Number(rawLng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const markerMeta = extractDriverMarkerMeta(raw);
   return {
     id: String(raw?.driver_id ?? raw?.id ?? raw?.driverId ?? raw?.user_id ?? `redis-${idx}`),
     lat, lng,
     heading: Number(raw?.heading ?? raw?.bearing ?? 0) || 0,
-    fullName: String(raw?.full_name ?? raw?.name ?? '').trim(),
-    carLabel: String(raw?.vehicle_category ?? raw?.car_type ?? '').trim(),
+    fullName: markerMeta.fullName,
+    carLabel: markerMeta.carLabel,
+    carIconUrl: markerMeta.carIconUrl || resolveCategoryIconFromCategories(raw, categories),
     live: true,
   };
 }
@@ -240,8 +243,8 @@ export default function SearchingScreen({ navigation }) {
   const { data: nearbyRes } = useNearbyDrivers(pickupCoords, 10);
   const drivers = useMemo(() => {
     const list = Array.isArray(nearbyRes?.data) ? nearbyRes.data : [];
-    return list.map((d, idx) => normalizeDriverPoint(d, idx)).filter(Boolean);
-  }, [nearbyRes]);
+    return list.map((d, idx) => normalizeDriverPoint(d, idx, categories)).filter(Boolean);
+  }, [categories, nearbyRes]);
 
   const fitOverview = useCallback(() => {
     if (!mapRef.current || routeCoords.length < 2) return;

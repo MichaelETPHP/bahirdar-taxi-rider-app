@@ -19,6 +19,7 @@ import useRoute from '../../hooks/useRoute';
 import { Image, LinearGradient } from 'react-native';
 import DriverProfileCard from '../../components/ride/DriverProfileCard';
 import { normalizeAvatarUrl } from '../../utils/avatarUrl';
+import { extractDriverMarkerMeta, resolveCategoryIconFromCategories } from '../../utils/driverCategoryIcon';
 
 /**
  * Resolve avatar URL to absolute URL with proper protocol
@@ -39,6 +40,8 @@ export default function TripActiveScreen({ navigation }) {
   const handledRef = useRef(false);
 
   const { tripId, tripData, driver, driverLocation, setDriverLocation, setTripStatus, setFinalFare, setFareAdjustment, resetTrip, mergeTripData } = useRideStore();
+  const setDriver = useRideStore((s) => s.setDriver);
+  const categories = useRideStore((s) => s.categories);
   const { token } = useAuthStore();
   const { userCoords, destination } = useLocationStore();
 
@@ -82,11 +85,25 @@ export default function TripActiveScreen({ navigation }) {
         const res = await getDriverLocation(driver.id, token);
         const d = res?.data;
         if (!d?.lat) return;
+        const markerMeta = extractDriverMarkerMeta(d);
+        const categoryIconUrl = markerMeta.carIconUrl || resolveCategoryIconFromCategories(d, categories);
+        if (categoryIconUrl || markerMeta.carLabel || markerMeta.fullName) {
+          setDriver({
+            ...driver,
+            ...(markerMeta.fullName ? { name: markerMeta.fullName, full_name: markerMeta.fullName } : {}),
+            ...(categoryIconUrl ? { car_icon_url: categoryIconUrl, carIconUrl: categoryIconUrl } : {}),
+            vehicle: {
+              ...(driver?.vehicle || {}),
+              ...(markerMeta.carLabel ? { category: markerMeta.carLabel } : {}),
+              ...(categoryIconUrl ? { categoryIconUrl } : {}),
+            },
+          });
+        }
         setDriverLocation({ lat: d.lat, lng: d.lng, heading: d.heading ?? 0 });
       } catch (_) {}
     }, LOCATION_POLL_MS);
     return () => clearInterval(locationPollRef.current);
-  }, [driver?.id, token, setDriverLocation]);
+  }, [categories, driver, driver?.id, token, setDriver, setDriverLocation]);
 
   // ── Fallback poll: PATCH /complete updates trip before socket ──────
   useEffect(() => {
@@ -267,6 +284,8 @@ export default function TripActiveScreen({ navigation }) {
                 lat: driverCoord.latitude,
                 lng: driverCoord.longitude,
                 heading: driverLocation?.heading ?? 0,
+                carLabel: driver?.vehicle?.category || driver?.vehicle_category || driver?.car_type || '',
+                carIconUrl: driver?.carIconUrl || driver?.car_icon_url || driver?.vehicle?.categoryIconUrl,
                 live: true,
               }}
               routeCoords={fullRouteCoords}

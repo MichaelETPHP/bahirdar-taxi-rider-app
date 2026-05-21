@@ -10,6 +10,7 @@ import DriverMatchedScreen from '../screens/home/DriverMatchedScreen';
 import TripActiveScreen from '../screens/home/TripActiveScreen';
 import TripCompleteScreen from '../screens/home/TripCompleteScreen';
 import DriverArrivedScreen from '../screens/home/DriverArrivedScreen';
+import ActiveTripResumeScreen from '../screens/home/ActiveTripResumeScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import RideHistoryScreen from '../screens/profile/RideHistoryScreen';
 import NotificationScreen from '../screens/profile/NotificationScreen';
@@ -26,7 +27,7 @@ const screenOptions = {
   animationEnabled: true,
 };
 
-export default function AppNavigator() {
+export default function AppNavigator({ initialRouteName = 'Home' }) {
   useEffect(() => {
     // Request location permission when app loads
     (async () => {
@@ -42,8 +43,9 @@ export default function AppNavigator() {
   }, []);
 
   return (
-    <Stack.Navigator screenOptions={screenOptions}>
+    <Stack.Navigator screenOptions={screenOptions} initialRouteName={initialRouteName}>
       <Stack.Screen name="Home" component={HomeScreen} options={{ lazy: false }} />
+      <Stack.Screen name="ActiveTripResume" component={ActiveTripResumeScreen} />
       <Stack.Screen
         name="Search"
         component={SearchScreen}

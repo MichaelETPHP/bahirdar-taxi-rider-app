@@ -49,10 +49,6 @@ function applyGlobalFont() {
   TextInput.defaultProps.style = baseTextStyle;
 }
 
-// Load fonts and apply globally
-loadCustomFonts();
-applyGlobalFont();
-
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
@@ -119,16 +115,25 @@ export default function App() {
   const { isMaintenanceMode, maintenanceData, setMaintenance } = useMaintenanceStore();
 
   const runMaintenanceCheck = async () => {
-    const status = await checkMaintenanceStatus();
-    if (status.maintenance) {
-      setMaintenance(true, status);
-    } else {
+    try {
+      const status = await checkMaintenanceStatus();
+      if (status.maintenance) {
+        setMaintenance(true, status);
+      } else {
+        setMaintenance(false);
+      }
+    } catch {
       setMaintenance(false);
     }
   };
 
   useEffect(() => {
     runMaintenanceCheck();
+  }, []);
+
+  useEffect(() => {
+    loadCustomFonts();
+    applyGlobalFont();
   }, []);
 
   useEffect(() => {

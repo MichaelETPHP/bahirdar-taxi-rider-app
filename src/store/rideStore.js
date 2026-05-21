@@ -99,6 +99,15 @@ const useRideStore = create(
   mergeTripData: (partial) =>
     set((s) => (partial && s.tripData ? { tripData: { ...s.tripData, ...partial } } : {})),
 
+  hydrateActiveTrip: ({ trip, status, driver } = {}) =>
+    set((s) => ({
+      tripId: trip?.id ?? s.tripId ?? null,
+      tripData: trip ?? s.tripData ?? null,
+      tripStatus: status ?? s.tripStatus ?? 'idle',
+      driver: driver ?? s.driver ?? null,
+      driverLocation: s.driverLocation ?? null,
+    })),
+
   setDriver: (driver) => set({ driver }),
 
   setDriverLocation: (loc) => set({ driverLocation: loc }),
