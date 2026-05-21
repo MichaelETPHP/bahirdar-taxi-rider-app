@@ -2,7 +2,7 @@ import { Car, Star, Phone, AlertTriangle } from 'lucide-react-native';
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  Alert, Linking, Vibration, BackHandler
+  Alert, Linking, Vibration, BackHandler, Animated
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,13 +18,17 @@ import useRideStore from '../../store/rideStore';
 import useAuthStore from '../../store/authStore';
 import useLocationStore from '../../store/locationStore';
 import { getSocket, disconnectSocket } from '../../services/socketService';
-import { cancelTrip, getDriverLocation, getTrip } from '../../services/tripService';
+import { cancelTrip, getCancelReasons, getDriverLocation, getTrip } from '../../services/tripService';
+import CancelReasonModal from '../../components/ride/CancelReasonModal';
 import { parseTripPollResponse, TRIP_STATUS_POLL_MS } from '../../utils/tripLifecycle';
 import useRoute from '../../hooks/useRoute';
 import { formatEthiopianPhone } from '../../utils/phoneFormatter';
+import { haversineDistance, formatDistance } from '../../utils/distanceUtils';
+import { normalizeAvatarUrl } from '../../utils/avatarUrl';
 
-const LOCATION_POLL_MS = 3000;
+const LOCATION_POLL_MS = 1500;
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
+const CAR_ON_MAP = require('../../../assets/carOnMap.png');
 
 // Animated progress bar for ETA / distance
 
@@ -33,29 +37,59 @@ const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
  * Resolve avatar URL to absolute URL with proper protocol
  * Handles relative paths, data URLs, and URL normalization
  */
-import { API_BASE_URL } from '../../config/api';
-
 /**
  * Resolve avatar URL to absolute URL with proper protocol
  */
 function resolveAvatarUrl(rawUrl) {
-  if (!rawUrl) return null;
-  const normalized = String(rawUrl).trim();
-  if (!normalized) return null;
+  return normalizeAvatarUrl(rawUrl);
+}
 
-  if (/^https?:\/\//i.test(normalized)) return normalized;
-  if (normalized.startsWith('//')) return `https:${normalized}`;
-  if (normalized.startsWith('data:image/')) return normalized;
+const APPROACH_FALLBACK_SPEED_KMH = 24;
 
-  try {
-    const origin = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
-    if (normalized.startsWith('/')) {
-      return `${origin}${normalized}`;
-    }
-    return new URL(normalized, `${origin}/`).toString();
-  } catch (e) {
-    return null;
+function pickNumber(...values) {
+  for (const value of values) {
+    const num = Number(value);
+    if (Number.isFinite(num)) return num;
   }
+  return null;
+}
+
+function extractDriverLocation(rawPayload) {
+  const raw = rawPayload?.driver ?? rawPayload?.data ?? rawPayload ?? {};
+  const lat = pickNumber(
+    raw?.lat,
+    raw?.latitude,
+    raw?.current_lat,
+    raw?.currentLat,
+    raw?.location?.lat,
+    raw?.location?.latitude
+  );
+  const lng = pickNumber(
+    raw?.lng,
+    raw?.lon,
+    raw?.longitude,
+    raw?.current_lng,
+    raw?.currentLng,
+    raw?.location?.lng,
+    raw?.location?.longitude
+  );
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return {
+    lat,
+    lng,
+    heading: pickNumber(raw?.heading, raw?.bearing, raw?.course, 0) || 0,
+    speed_kmh: pickNumber(raw?.speed_kmh, raw?.speedKmh, raw?.speed),
+    driverId: raw?.driver_id ?? raw?.driverId ?? raw?.id ?? null,
+  };
+}
+
+function estimateEtaMinutes(distanceKm, speedKmh) {
+  if (!Number.isFinite(distanceKm)) return null;
+  if (distanceKm <= 0.05) return 0;
+  const kmh = Number.isFinite(speedKmh) && speedKmh > 3 ? speedKmh : APPROACH_FALLBACK_SPEED_KMH;
+  return Math.max(1, Math.round((distanceKm / kmh) * 60));
 }
 
 export default function DriverMatchedScreen({ navigation }) {
@@ -73,8 +107,10 @@ export default function DriverMatchedScreen({ navigation }) {
   const { token } = useAuthStore();
   const { userCoords, destination } = useLocationStore();
 
-  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelLoading, setCancelLoading]       = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [avatarBust, setAvatarBust] = useState(Date.now()); // Cache buster for avatar refresh
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   // Refresh avatar cache when driver changes
   useEffect(() => {
@@ -107,10 +143,16 @@ export default function DriverMatchedScreen({ navigation }) {
     ? { latitude: driverLocation.lat, longitude: driverLocation.lng }
     : (driver?.currentLat ?? driver?.lat ?? driver?.location?.lat) != null
       ? {
-          latitude: Number(driver?.currentLat ?? driver?.lat ?? driver?.location?.lat),
-          longitude: Number(driver?.currentLng ?? driver?.lng ?? driver?.location?.lng),
+          latitude: pickNumber(driver?.currentLat, driver?.lat, driver?.location?.lat, driver?.location?.latitude),
+          longitude: pickNumber(driver?.currentLng, driver?.lng, driver?.location?.lng, driver?.location?.longitude),
         }
       : null;
+  const etaRaw = Number(driver?.etaMinutes ?? driver?.eta_minutes);
+  const liveSpeedKmh = pickNumber(driverLocation?.speed_kmh, driverLocation?.speedKmh, driverLocation?.speed);
+  const distKmRaw = Number(driver?.distanceKm);
+  const distKm = Number.isFinite(distKmRaw) ? distKmRaw : null;
+  const ratingRaw = Number(driver?.rating);
+  const rating = Number.isFinite(ratingRaw) ? ratingRaw : 0;
 
   // Capture initial distance on first render
   const currentDist = driver?.distanceKm ?? null;
@@ -130,6 +172,49 @@ export default function DriverMatchedScreen({ navigation }) {
   // Driver → pickup stable route
   const originCoord = driverStartCoord || driverCoord;
   const { coordinates: fullRouteCoords } = useRoute(originCoord, userCoords);
+  const distanceToPickupKm = driverCoord && userCoords
+    ? haversineDistance(
+        driverCoord.latitude,
+        driverCoord.longitude,
+        userCoords.latitude,
+        userCoords.longitude
+      )
+    : distKm;
+
+  if (initialDistRef.current === null && Number.isFinite(distanceToPickupKm) && distanceToPickupKm > 0) {
+    initialDistRef.current = distanceToPickupKm;
+  }
+
+  const baselineDistanceKm = Number.isFinite(initialDistRef.current) && initialDistRef.current > 0
+    ? initialDistRef.current
+    : (Number.isFinite(distKm) && distKm > 0 ? distKm : null);
+  const progressReady = Number.isFinite(distanceToPickupKm);
+  const arrivalProgress = baselineDistanceKm && Number.isFinite(distanceToPickupKm)
+    ? Math.max(0, Math.min(1, 1 - (distanceToPickupKm / baselineDistanceKm)))
+    : 0;
+  const etaMin = Number.isFinite(etaRaw) ? etaRaw : estimateEtaMinutes(distanceToPickupKm, liveSpeedKmh);
+  const etaText = etaMin != null ? `${Math.max(1, Math.round(etaMin))} min away` : 'Driver en route';
+  const approachText = Number.isFinite(distanceToPickupKm)
+    ? `${formatDistance(distanceToPickupKm)} to pickup`
+    : 'Driver location updating...';
+  const arrivalStatusText = arrivalProgress >= 0.92
+    ? 'Driver is almost here'
+    : arrivalProgress >= 0.55
+      ? 'Driver is getting closer'
+      : 'Driver is coming';
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: arrivalProgress,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
+  }, [arrivalProgress, progressAnim]);
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
 
   // Fit map to show driver + pickup
   useEffect(() => {
@@ -163,16 +248,21 @@ export default function DriverMatchedScreen({ navigation }) {
     navigation.replace('Home');
   }, [navigation, resetTrip, clearPolls]);
 
-  // Poll driver location every 3 s
+  // Poll driver location as a fallback when trip-room socket updates lag
   useEffect(() => {
     if (!driver?.id || !token) return;
-    driverPollRef.current = setInterval(async () => {
+    const syncDriverLocation = async () => {
       try {
         const res = await getDriverLocation(driver.id, token);
-        const d = res?.data;
-        if (!d?.lat) return;
-        setDriverLocation({ lat: d.lat, lng: d.lng, heading: d.heading ?? 0 });
+        const nextLocation = extractDriverLocation(res?.data ?? res);
+        if (!nextLocation) return;
+        setDriverLocation(nextLocation);
       } catch (_) {}
+    };
+
+    syncDriverLocation();
+    driverPollRef.current = setInterval(async () => {
+      syncDriverLocation();
     }, LOCATION_POLL_MS);
     return () => clearInterval(driverPollRef.current);
   }, [driver?.id, token, setDriverLocation]);
@@ -237,13 +327,26 @@ export default function DriverMatchedScreen({ navigation }) {
     const onCancelled = ({ reason }) => {
       Alert.alert('Trip Cancelled', reason || 'Driver cancelled.', [{ text: 'OK', onPress: goHome }]);
     };
+    const onDriverLocation = (payload) => {
+      const nextLocation = extractDriverLocation(payload);
+      if (!nextLocation) return;
+      const rawId = nextLocation.driverId ? String(nextLocation.driverId) : '';
+      if (rawId && String(driver?.id) !== rawId) return;
+      setDriverLocation(nextLocation);
+    };
     socket.on('trip:driver_arrived', onArrived);
     socket.on('trip:cancelled', onCancelled);
+    socket.on('trip:driver:location', onDriverLocation);
+    socket.on('driver:location', onDriverLocation);
+    socket.on('driver:updated', onDriverLocation);
     return () => {
       socket.off('trip:driver_arrived', onArrived);
       socket.off('trip:cancelled', onCancelled);
+      socket.off('trip:driver:location', onDriverLocation);
+      socket.off('driver:location', onDriverLocation);
+      socket.off('driver:updated', onDriverLocation);
     };
-  }, [navigate, goHome, setTripStatus]);
+  }, [driver?.id, navigate, goHome, setTripStatus, setDriverLocation]);
 
   const handleCall = () => {
     const phone = formatEthiopianPhone(driver?.phone);
@@ -263,30 +366,16 @@ export default function DriverMatchedScreen({ navigation }) {
     );
   };
 
-  const handleCancel = () => {
-    Alert.alert(
-      'Cancel Trip',
-      'Are you sure you want to cancel this trip?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            setCancelLoading(true);
-            try { if (tripId) await cancelTrip(tripId, 'Changed my mind', token); } catch (_) {}
-            goHome();
-          },
-        },
-      ]
-    );
-  };
+  const handleCancel = () => setCancelModalVisible(true);
 
-  const etaMin = driver?.etaMinutes ?? null;
-  const distKmRaw = Number(driver?.distanceKm);
-  const distKm = Number.isFinite(distKmRaw) ? distKmRaw : null;
-  const ratingRaw = Number(driver?.rating);
-  const rating = Number.isFinite(ratingRaw) ? ratingRaw : 0;
+  const handleCancelConfirm = async (reason) => {
+    setCancelLoading(true);
+    try {
+      if (tripId) await cancelTrip(tripId, reason.label, token, { reason_id: reason.id });
+    } catch (_) {}
+    setCancelModalVisible(false);
+    goHome();
+  };
 
   // Extract avatar from multiple possible sources (same as driver app)
   const rawAvatarUrl =
@@ -383,6 +472,28 @@ export default function DriverMatchedScreen({ navigation }) {
           <View style={styles.cardDivider} />
 
           {/* 2. Trip Details Section */}
+          <View style={styles.progressSection}>
+            <View style={styles.progressTopRow}>
+              <Text style={styles.progressTitle}>{arrivalStatusText}</Text>
+              <Text style={styles.progressEta}>{etaText}</Text>
+            </View>
+            <View style={styles.progressTrack}>
+              <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
+              {progressReady ? (
+                <Animated.View style={[styles.progressCarWrap, { left: progressWidth }]}>
+                  <Image
+                    source={CAR_ON_MAP}
+                    resizeMode="contain"
+                    style={styles.progressCar}
+                  />
+                </Animated.View>
+              ) : null}
+            </View>
+            <Text style={styles.progressCaption}>{approachText}</Text>
+          </View>
+
+          <View style={styles.cardDivider} />
+
           <View style={styles.locationSection}>
             <View style={styles.locationItem}>
               <View style={[styles.locationDot, { backgroundColor: colors.success }]} />
@@ -441,13 +552,21 @@ export default function DriverMatchedScreen({ navigation }) {
           <Text style={styles.supportText}>Call Support 9040</Text>
         </TouchableOpacity>
       </View>
+
+      <CancelReasonModal
+        visible={cancelModalVisible}
+        onClose={() => setCancelModalVisible(false)}
+        onConfirm={handleCancelConfirm}
+        fetchReasons={() => getCancelReasons(token, 'rider')}
+        loading={cancelLoading}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { 
-    flex: 1, 
+  root: {
+    flex: 1,
     backgroundColor: '#000',
   },
   mapOverlay: {
@@ -493,6 +612,60 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     marginHorizontal: 16,
     marginVertical: 4,
+  },
+  progressSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  progressTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 10,
+  },
+  progressTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: fontWeight.bold,
+    color: '#0F172A',
+  },
+  progressEta: {
+    fontSize: 12,
+    fontWeight: fontWeight.semibold,
+    color: colors.primary,
+  },
+  progressTrack: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#DCEFE7',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+  },
+  progressCarWrap: {
+    position: 'absolute',
+    top: -13,
+    marginLeft: -14,
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressCar: {
+    width: 28,
+    height: 28,
+  },
+  progressCaption: {
+    marginTop: 8,
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: fontWeight.medium,
   },
   locationSection: {
     padding: 16,

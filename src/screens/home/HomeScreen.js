@@ -35,6 +35,7 @@ import CustomDrawer from '../../components/ui/CustomDrawer';
 import RideTypeSelector from '../../components/ride/RideTypeSelector';
 import LocationBar from '../../components/ride/LocationBar';
 import RecentTrips from '../../components/ride/RecentTrips';
+import PromoBanner from '../../components/home/PromoBanner';
 import AppButton from '../../components/common/AppButton';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
@@ -65,6 +66,7 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 // Bottom padding matches the collapsed sheet height so MapView centers the user marker
 // in the visible map area above the sheet, not behind it.
 const SHEET_COLLAPSED_HEIGHT = 320;
+const SHEET_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.52;
 
 
 const MAP_PADDING = { top: 0, right: 0, bottom: SHEET_COLLAPSED_HEIGHT, left: 0 };
@@ -262,6 +264,7 @@ export default function HomeScreen({ navigation }) {
     const isMapScrollEnabledStore = useRideStore((state) => state.isMapScrollEnabled);
     const mapScrollEnabled = !destination && !sheetDragging && isMapScrollEnabledStore;
     const rideSheetHeight = destination ? SCREEN_HEIGHT * 0.58 : SHEET_COLLAPSED_HEIGHT;
+    const homeSheetCanExpand = !destination;
   const [isInServiceArea, setIsInServiceArea] = useState(true);
 
   // Get readable neighborhood name instead of full address
@@ -559,9 +562,9 @@ export default function HomeScreen({ navigation }) {
         const currentToken = useAuthStore.getState().token;
         const currentRefreshToken = useAuthStore.getState().refreshToken;
 
-        // Skip refresh for mock/local tokens — they are not real JWTs
+        // Skip refresh for placeholder/local tokens because they are not real JWTs
         if (!currentToken || !currentToken.startsWith('eyJ')) {
-          console.warn(`${riderTag} Mock token detected — skipping socket refresh.`);
+          console.warn(`${riderTag} Placeholder token detected — skipping socket refresh.`);
           return;
         }
 
@@ -966,10 +969,10 @@ export default function HomeScreen({ navigation }) {
             key="main-ride-sheet"
             style={styles.sheet}
             minHeight={rideSheetHeight}
-            maxHeight={rideSheetHeight}
+            maxHeight={destination ? rideSheetHeight : SHEET_EXPANDED_HEIGHT}
             initialExpanded={false}
-            canExpand={false}
-            draggable={false}
+            canExpand={homeSheetCanExpand}
+            draggable={homeSheetCanExpand}
             onExpandedChange={setSheetExpanded}
             contentScrollable={false}
             scrollEnabled={false}
@@ -1093,6 +1096,9 @@ export default function HomeScreen({ navigation }) {
         onClose={handleCloseDrawer}
         navigation={navigation}
       />
+
+      {/* Promotional overlay — slides up on first open */}
+      <PromoBanner />
 
       {/* Location permission gate — blocks the screen until user enables location */}
       {permissionDenied && (

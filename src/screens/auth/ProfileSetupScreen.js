@@ -10,20 +10,26 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import AppButton from '../../components/common/AppButton';
 import AppInput from '../../components/common/AppInput';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
+import { shadow } from '../../constants/layout';
 import useAuthStore from '../../store/authStore';
 import { updateProfile } from '../../services/authService';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
 export default function ProfileSetupScreen({ navigation }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
   const token = useAuthStore((s) => s.token);
   const updateUser = useAuthStore((s) => s.updateUser);
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
@@ -46,30 +52,54 @@ export default function ProfileSetupScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.flex}>
+    <View style={styles.flex}>
+      {/* Full-screen background — sits behind everything */}
+      <View style={styles.bgContainer}>
         <Image
-          source={require('../../../assets/splash.png')}
-          style={styles.backgroundImage}
+          source={require('../../../assets/bg-pattern.png')}
+          style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, position: 'absolute' }}
           resizeMode="cover"
         />
-        <KeyboardAvoidingView
-          style={styles.overlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={0}
-          enabled={Platform.OS === 'ios'}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false} delayPressIn={0}>
-            <View style={[styles.flex, styles.centered]}>
-              <View style={styles.content}>
-                <View style={styles.avatarSection}>
-                  <View style={styles.avatarCircle}>
-                    <User size={44} color={colors.primary} />
-                  </View>
-                </View>
+        <View style={StyleSheet.absoluteFill}>
+          <Svg width={SCREEN_WIDTH} height={SCREEN_HEIGHT}>
+            <Defs>
+              <LinearGradient id="nameGrad" x1="0" y1="1" x2="0" y2="0">
+                <Stop offset="0"   stopColor={colors.primaryDark}  stopOpacity="0.92" />
+                <Stop offset="0.5" stopColor={colors.primary}      stopOpacity="0.87" />
+                <Stop offset="1"   stopColor={colors.primaryLight} stopOpacity="0.82" />
+              </LinearGradient>
+            </Defs>
+            <Rect width="100%" height="100%" fill="url(#nameGrad)" />
+          </Svg>
+        </View>
+      </View>
 
-                <Text style={styles.heading}>{t('auth.nameTitle')}</Text>
-                <Text style={styles.sub}>{t('auth.nameSub')}</Text>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <SafeAreaView style={styles.safe} edges={['top']}>
+          <KeyboardAvoidingView
+            style={styles.kav}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+            enabled={Platform.OS === 'ios'}
+          >
+            <View style={[styles.center, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+              {/* Logo */}
+              <View style={styles.logoCircle}>
+                <Image
+                  source={require('../../../assets/icon.png')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              </View>
+
+              <Text style={styles.heading}>{t('auth.nameTitle')}</Text>
+              <Text style={styles.sub}>{t('auth.nameSub')}</Text>
+
+              {/* Card */}
+              <View style={styles.card}>
+                <View style={styles.avatarCircle}>
+                  <User size={36} color={colors.primary} />
+                </View>
 
                 <AppInput
                   placeholder={t('auth.namePlaceholder')}
@@ -77,6 +107,7 @@ export default function ProfileSetupScreen({ navigation }) {
                   onChangeText={setName}
                   autoCapitalize="words"
                   autoFocus
+                  style={styles.input}
                 />
 
                 <AppButton
@@ -84,68 +115,102 @@ export default function ProfileSetupScreen({ navigation }) {
                   onPress={handleContinue}
                   loading={loading}
                   disabled={!isNameValid || loading}
+                  shimmer
                   style={styles.button}
                 />
               </View>
             </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
-      </View>
-    </SafeAreaView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </TouchableWithoutFeedback>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+    backgroundColor: colors.primaryDark,
+  },
+  bgContainer: {
+    ...StyleSheet.absoluteFillObject,
+  },
   safe: {
     flex: 1,
+    backgroundColor: 'transparent',
+  },
+  kav: {
+    flex: 1,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  logoCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: colors.white,
-  },
-  backgroundImage: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  flex: { flex: 1 },
-  centered: {
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  content: {
-    padding: 24,
-    paddingTop: 40,
-    paddingBottom: 32,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderRadius: 16,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  avatarCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
+    marginBottom: 20,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  logoImage: {
+    width: 88,
+    height: 88,
   },
   heading: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
+    color: colors.white,
+    textAlign: 'center',
+    letterSpacing: -0.5,
     marginBottom: 8,
   },
   sub: {
     fontSize: fontSize.md,
-    color: colors.textSecondary,
-    marginBottom: 28,
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
     lineHeight: 22,
+    marginBottom: 28,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: 28,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    ...shadow.lg,
+  },
+  avatarCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2.5,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    marginBottom: 20,
+  },
+  input: {
+    width: '100%',
+    marginBottom: 4,
   },
   button: {
-    marginTop: 12,
+    width: '100%',
+    marginTop: 16,
+    height: 56,
+    borderRadius: 16,
   },
 });

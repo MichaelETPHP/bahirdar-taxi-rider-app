@@ -101,7 +101,7 @@ export async function apiRequest(method, path, body, options = {}) {
     if (res.status === 401 && retryCount === 0 && !_isRefreshing) {
       const refreshToken = _refreshTokenGetter();
       
-      // Don't attempt refresh if no refresh token or if it's a mock token (doesn't start with eyJ)
+      // Don't attempt refresh if no refresh token or if it's only a local placeholder token
       if (refreshToken && activeToken?.startsWith('eyJ')) {
         _isRefreshing = true;
         try {
@@ -134,6 +134,15 @@ export async function apiRequest(method, path, body, options = {}) {
       throw { status: 401, message: 'Session expired' };
     }
     // ──────────────────────────────────────────────────────────────────
+
+    // 204/205 No Content — no body to parse
+    if (res.status === 204 || res.status === 205) {
+      if (__DEV__ && !_quiet) {
+        const dur = `${Date.now() - _t0}ms`.padEnd(6);
+        console.log(`[API] ←  ${_label}  ${res.status}  ${dur}`);
+      }
+      return null;
+    }
 
     const data = await res.json();
 

@@ -86,7 +86,7 @@ export default function TripCompleteScreen({ navigation }) {
         await submitRating(tripId, { rating: selectedStars }, token);
       }
     } catch (_) {
-      // Mock success even if network fails
+      // Rating should never trap the rider on this screen
     }
     finishFlow();
   };

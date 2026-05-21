@@ -81,6 +81,10 @@ export function patchTripComplete(tripId, token, extra = {}) {
   return patch(`/trips/${tripId}/complete`, Object.keys(extra).length ? extra : {}, token);
 }
 
+export function getCancelReasons(token, role = 'rider') {
+  return get(`/trips/cancel-reasons?role=${role}`, token);
+}
+
 export function cancelTrip(tripId, reason, token, meta = {}) {
   if (!tripId) throw new Error('tripId is required');
   

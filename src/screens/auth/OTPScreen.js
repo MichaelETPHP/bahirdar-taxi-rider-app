@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
+import Constants from 'expo-constants';
 import OTPInput from '../../components/common/OTPInput';
 import AppButton from '../../components/common/AppButton';
 import { X, MessageCircle } from 'lucide-react-native';
@@ -24,6 +25,11 @@ import { fontSize, fontWeight } from '../../constants/typography';
 import { formatPhoneDisplay } from '../../utils/formatters';
 import useOTPTimer from '../../hooks/useOTPTimer';
 import useAuthStore from '../../store/authStore';
+
+const AUTH_DEVICE_ID =
+  Constants?.installationId ||
+  Constants?.deviceId ||
+  `auth-device-${Platform.OS}`;
 import { verifyOtp, sendOtp } from '../../services/authService';
 
 const OTP_LENGTH = 4;
@@ -65,7 +71,10 @@ export default function OTPScreen({ navigation, route }) {
     if (code.length < OTP_LENGTH || loading) return;
     setLoading(true);
     try {
-      const res = await verifyOtp(phone, code);
+      const res = await verifyOtp(phone, code, {
+        device_id: AUTH_DEVICE_ID,
+        platform: Platform.OS,
+      });
       const { accessToken, refreshToken, user, expiresIn } = res.data;
 
       const mappedUser = {

@@ -6,12 +6,7 @@ import useRideStore from '../../store/rideStore';
 function MapSkeleton({ opacity }) {
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.skeleton, { opacity }]}>
-      {/* Fake road lines for instant visual feedback */}
-      <View style={[styles.fakeRoad, { top: '38%', left: 0, right: 0, height: 3 }]} />
-      <View style={[styles.fakeRoad, { top: '62%', left: 0, right: 0, height: 2 }]} />
-      <View style={[styles.fakeRoad, { left: '35%', top: 0, bottom: 0, width: 3 }]} />
-      <View style={[styles.fakeRoad, { left: '65%', top: 0, bottom: 0, width: 2 }]} />
-      {/* Center pin shadow */}
+      <View style={styles.skeletonHalo} />
       <View style={styles.skeletonPin}>
         <View style={styles.skeletonPinDot} />
         <View style={styles.skeletonPinShadow} />
@@ -126,11 +121,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     pointerEvents: 'none',
   },
-  fakeRoad: {
+  skeletonHalo: {
     position: 'absolute',
-    backgroundColor: '#FFFFFF',
-    opacity: 0.8,
-    borderRadius: 2,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    transform: [{ scaleX: 1.15 }],
   },
   skeletonPin: {
     alignItems: 'center',

@@ -14,27 +14,15 @@ import { getSocket, disconnectSocket } from '../../services/socketService';
 import { getTrip } from '../../services/tripService';
 import { parseTripPollResponse, TRIP_STATUS_POLL_MS } from '../../utils/tripLifecycle';
 import { Image } from 'react-native';
-import { API_BASE_URL } from '../../config/api';
 import DriverProfileCard from '../../components/ride/DriverProfileCard';
+import { normalizeAvatarUrl } from '../../utils/avatarUrl';
 
 /**
  * Resolve avatar URL to absolute URL with proper protocol
  */
 
 function resolveAvatarUrl(rawUrl) {
-  if (!rawUrl) return null;
-  const normalized = String(rawUrl).trim();
-  if (!normalized) return null;
-  if (/^https?:\/\//i.test(normalized)) return normalized;
-  if (normalized.startsWith('//')) return `https:${normalized}`;
-  if (normalized.startsWith('data:image/')) return normalized;
-  try {
-    const origin = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
-    if (normalized.startsWith('/')) return `${origin}${normalized}`;
-    return new URL(normalized, `${origin}/`).toString();
-  } catch (e) {
-    return null;
-  }
+  return normalizeAvatarUrl(rawUrl);
 }
 
 

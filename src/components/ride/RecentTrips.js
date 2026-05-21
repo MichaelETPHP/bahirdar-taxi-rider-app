@@ -92,18 +92,18 @@ export default function RecentTrips({ onSelectPlace }) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
   tripItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: 8,
+    gap: 10,
   },
   tripIcon: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
@@ -113,13 +113,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tripName: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     fontWeight: fontWeight.medium,
     color: colors.textPrimary,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   tripAddress: {
-    fontSize: fontSize.xs,
+    fontSize: 11,
     color: colors.textSecondary,
   },
 });

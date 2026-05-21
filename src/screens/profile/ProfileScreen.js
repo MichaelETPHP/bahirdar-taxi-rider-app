@@ -147,6 +147,7 @@ export default function ProfileScreen({ navigation }) {
   // ── Delete modal
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleteReason,       setDeleteReason]       = useState('');
+  const [deleteLoading,      setDeleteLoading]      = useState(false);
 
 
   // ── Toast
@@ -206,7 +207,14 @@ export default function ProfileScreen({ navigation }) {
         permResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       }
       if (permResult.status !== 'granted') {
-        showToast('Permission required to access ' + source, 'error');
+        Alert.alert(
+          'Permission Required',
+          `Allow CityBird to access your ${source === 'camera' ? 'camera' : 'photo library'} in Settings.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
         return;
       }
 
@@ -214,7 +222,8 @@ export default function ProfileScreen({ navigation }) {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 1,       // pick at full quality; sharp on server handles final compression
+        exif: false,
       };
 
       const result = source === 'camera'
@@ -225,18 +234,18 @@ export default function ProfileScreen({ navigation }) {
 
       const asset = result.assets[0];
 
-      // Compress & resize to 800px max
+      // Resize to 1024px max and convert to WebP — server sharp will do final 1600px/quality-80 pass
       const compressed = await ImageManipulator.manipulateAsync(
         asset.uri,
-        [{ resize: { width: 800 } }],
-        { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG }
+        [{ resize: { width: 1024 } }],
+        { compress: 0.88, format: ImageManipulator.SaveFormat.WEBP }
       );
 
       const form = new FormData();
       form.append('avatar', {
         uri:  compressed.uri,
-        name: 'avatar.jpg',
-        type: 'image/jpeg',
+        name: 'avatar.webp',
+        type: 'image/webp',
       });
 
       setUploadingAvatar(true);
@@ -713,10 +722,27 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.modalBtnCancelText}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.modalBtnDelete}
-            onPress={() => { setDeleteModalVisible(false); deleteAccount(); }}
+            style={[styles.modalBtnDelete, deleteLoading && { opacity: 0.6 }]}
+            disabled={deleteLoading}
+            onPress={async () => {
+              setDeleteLoading(true);
+              try {
+                await deleteAccount(deleteReason.trim());
+              } catch (err) {
+                setDeleteLoading(false);
+                setDeleteModalVisible(false);
+                Alert.alert(
+                  'Deletion Failed',
+                  err?.message || 'Something went wrong. Please try again.',
+                  [{ text: 'OK' }]
+                );
+              }
+            }}
           >
-            <Text style={styles.modalBtnDeleteText}>{t('profile.deleteAccount')}</Text>
+            {deleteLoading
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={styles.modalBtnDeleteText}>{t('profile.deleteAccount')}</Text>
+            }
           </TouchableOpacity>
         </View>
       </KeyboardAwareModal>

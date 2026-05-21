@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, memo, useCallback } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing, Pressable } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MapPin, XCircle } from 'lucide-react-native';
@@ -13,28 +13,7 @@ import useLocationStore from '../../store/locationStore';
 function LocationBar({ onToPress, onFromPress, isInServiceArea = true }) {
   const { t } = useTranslation();
   const { pickup, destination, clearDestination } = useLocationStore();
-  const whereToPulse = useRef(new Animated.Value(0)).current;
-  const cursorBlink = useRef(new Animated.Value(1)).current;
-  const liquidAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
   const dashOffset = useRef(new Animated.Value(0)).current;
-
-
-  const handlePressIn = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(liquidAnim, {
-        toValue: 1,
-        duration: 400,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 0.98,
-        duration: 150,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [liquidAnim, scaleAnim]);
 
   useEffect(() => {
     // Matrix-style flowing dots animation
@@ -47,80 +26,6 @@ function LocationBar({ onToPress, onFromPress, isInServiceArea = true }) {
       })
     ).start();
   }, [dashOffset]);
-
-  const handlePressOut = useCallback(() => {
-
-    Animated.parallel([
-      Animated.timing(liquidAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 100,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [liquidAnim, scaleAnim]);
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(whereToPulse, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(whereToPulse, {
-          toValue: 0,
-          duration: 900,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [whereToPulse]);
-
-  useEffect(() => {
-    const blinkLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(cursorBlink, {
-          toValue: 0,
-          duration: 420,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-        Animated.timing(cursorBlink, {
-          toValue: 1,
-          duration: 420,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    blinkLoop.start();
-    return () => blinkLoop.stop();
-  }, [cursorBlink]);
-
-  const whereToAnimatedStyle = {
-    transform: [
-      {
-        scale: whereToPulse.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 1.02],
-        }),
-      },
-    ],
-    opacity: whereToPulse.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.96, 1],
-    }),
-  };
 
   return (
     <View style={styles.container}>
@@ -169,46 +74,23 @@ function LocationBar({ onToPress, onFromPress, isInServiceArea = true }) {
         <View style={styles.divider} />
 
         {/* Destination */}
-        <Animated.View 
-          style={[
-            styles.inputRow, 
-            styles.whereToRow,
-            !destination && whereToAnimatedStyle,
-            { transform: [...(!destination ? whereToAnimatedStyle.transform : []), { scale: scaleAnim }] }
-          ]}
-        >
+        <View style={[styles.inputRow, styles.whereToRow]}>
           <Pressable 
             style={[styles.input, styles.whereToInput]} 
             onPress={isInServiceArea ? onToPress : undefined} 
-            onPressIn={isInServiceArea ? handlePressIn : undefined}
-            onPressOut={isInServiceArea ? handlePressOut : undefined}
             disabled={!isInServiceArea}
           >
-            {({ pressed }) => (
-              <>
-                <Animated.View 
-                  style={[
-                    styles.liquidFill,
-                    {
-                      transform: [{ scale: liquidAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 2.5] }) }],
-                      opacity: liquidAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.45] }),
-                    }
-                  ]} 
-                />
-                <View style={styles.whereToInline}>
-                  <Text 
-                    style={[
-                      destination ? styles.inputText : styles.whereToPlaceholder,
-                      !isInServiceArea && styles.outOfServiceText
-                    ]} 
-                    numberOfLines={1}
-                  >
-                    {destination?.name || (isInServiceArea ? t('home.whereTo') : 'Out of Service')}
-                  </Text>
-                  {!destination && isInServiceArea && <Animated.View style={[styles.fakeCursor, { opacity: cursorBlink }]} />}
-                </View>
-              </>
-            )}
+            <View style={styles.whereToInline}>
+              <Text 
+                style={[
+                  destination ? styles.whereToText : styles.whereToPlaceholder,
+                  !isInServiceArea && styles.outOfServiceText
+                ]} 
+                numberOfLines={1}
+              >
+                {destination?.name || (isInServiceArea ? t('home.whereTo') : 'Out of Service')}
+              </Text>
+            </View>
           </Pressable>
           {destination ? (
             <TouchableOpacity
@@ -221,7 +103,7 @@ function LocationBar({ onToPress, onFromPress, isInServiceArea = true }) {
           ) : (
             <View style={styles.inputAction} />
           )}
-        </Animated.View>
+        </View>
       </View>
     </View>
   );
@@ -305,16 +187,21 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   whereToRow: {
-    backgroundColor: '#E8F6F0',
+    backgroundColor: '#F2F7F5',
     borderWidth: 1,
-    borderColor: 'rgba(0, 103, 79, 0.16)',
+    borderColor: 'rgba(0, 103, 79, 0.08)',
   },
   whereToInput: {
     borderRadius: 18,
   },
+  whereToText: {
+    fontSize: fontSize.sm,
+    color: '#38584E',
+    fontWeight: fontWeight.medium,
+  },
   whereToPlaceholder: {
     fontSize: fontSize.sm,
-    color: 'rgba(11, 122, 90, 0.78)',
+    color: 'rgba(56, 88, 78, 0.72)',
     fontWeight: fontWeight.medium,
   },
   outOfServiceText: {
@@ -325,21 +212,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-  },
-  fakeCursor: {
-    width: 2,
-    height: 16,
-    borderRadius: 1,
-    backgroundColor: '#0B7A5A',
-  },
-  liquidFill: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#BEE7D7',
-    top: -34,
-    left: '8%',
-    zIndex: -1,
   },
 });

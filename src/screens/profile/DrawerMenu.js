@@ -27,17 +27,11 @@ import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
 import useAuthStore from '../../store/authStore';
-import { API_BASE_URL } from '../../config/api';
 import { buildAvatarUrl } from '../../utils/avatarUrl';
+import { normalizeAvatarUrl } from '../../utils/avatarUrl';
 
 function resolveAvatarUrl(raw) {
-  if (!raw) return null;
-  const s = String(raw).trim();
-  if (!s) return null;
-  if (/^https?:\/\//i.test(s)) return s;
-  if (s.startsWith('data:image/')) return s;
-  const origin = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
-  return s.startsWith('/') ? `${origin}${s}` : `${origin}/${s}`;
+  return normalizeAvatarUrl(raw);
 }
 import { changeLanguage } from '../../i18n';
 

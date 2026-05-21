@@ -247,7 +247,6 @@ export default function PhoneEntryScreen({ navigation }) {
       }
 
       // Step 2: Navigate to OTP screen for verification
-      // (The OTP screen will handle the visible '1234' auto-verify in Demo mode)
       navigation.navigate('OTP', { isNewUser: !exists });
     } catch (err) {
       console.error('[PhoneEntry] Auth error:', err);

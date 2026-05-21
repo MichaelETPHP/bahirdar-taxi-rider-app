@@ -5,9 +5,10 @@ import { apiRequest } from '../lib/apiClient';
  * Auth Service — Refactored to use decoupled apiClient.
  */
 
-const get   = (path, token)       => apiRequest('GET',   path, undefined, { customToken: token });
-const post  = (path, body, token) => apiRequest('POST',  path, body, { customToken: token });
-const patch = (path, body, token) => apiRequest('PATCH', path, body, { customToken: token });
+const get    = (path, token)       => apiRequest('GET',    path, undefined, { customToken: token });
+const post   = (path, body, token) => apiRequest('POST',   path, body,      { customToken: token });
+const patch  = (path, body, token) => apiRequest('PATCH',  path, body,      { customToken: token });
+const del    = (path, body, token) => apiRequest('DELETE', path, body,      { customToken: token });
 
 export async function checkPhoneExistence(phone, role = 'rider') {
   return get(`/auth/check-phone?phone=${encodeURIComponent(phone)}&role=${role}`);
@@ -21,8 +22,13 @@ export async function sendOtp(phone) {
   return post('/auth/rider/otp/send', { phone });
 }
 
-export async function verifyOtp(phone, otp) {
-  return post('/auth/rider/otp/verify', { phone, otp });
+export async function verifyOtp(phone, otp, deviceInfo = {}) {
+  return post('/auth/rider/otp/verify', {
+    phone,
+    otp,
+    device_id: deviceInfo.device_id,
+    platform: deviceInfo.platform,
+  });
 }
 
 export async function fetchVehicleCategories() {
@@ -66,4 +72,8 @@ export async function logoutRider(accessToken) {
 
 export async function refreshTokens(refreshToken) {
   return post('/auth/rider/refresh', { refreshToken });
+}
+
+export async function deleteAccount(reason, accessToken) {
+  return del('/users/me', reason ? { reason } : undefined, accessToken);
 }

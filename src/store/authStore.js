@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { saveTokens, getTokens, clearTokens, updateTokensOnly, getStoredPhone } from '../utils/tokenStorage';
 import { getSessionStatus, updateLastActivity } from '../utils/sessionManager';
-import { fetchProfile, refreshTokens } from '../services/authService';
+import { fetchProfile, refreshTokens, deleteAccount as deleteAccountApi } from '../services/authService';
 import useLocationStore from './locationStore';
 import useRideStore from './rideStore';
 import { initApiClient } from '../lib/apiClient';
@@ -127,6 +127,25 @@ const useAuthStore = create((set, get) => ({
   },
 
   logout: async () => {
+    await clearTokens();
+    useLocationStore.getState().clearAll();
+    useRideStore.getState().reset();
+    set({
+      user: null,
+      phone: '',
+      token: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      isNewUser: false,
+      sessionExpiresAt: null,
+    });
+  },
+
+  deleteAccount: async (reason = '') => {
+    const token = get().token;
+    // Call the API — 204 means success; anything else throws
+    await deleteAccountApi(reason, token);
+    // Wipe local state and stored tokens exactly like logout
     await clearTokens();
     useLocationStore.getState().clearAll();
     useRideStore.getState().reset();

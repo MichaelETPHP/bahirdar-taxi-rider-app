@@ -16,6 +16,12 @@ import { colors } from '../../constants/colors';
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const MIN_HEIGHT = 220;
 const MAX_HEIGHT = SCREEN_HEIGHT * 0.52;
+const SHEET_SNAP_CONFIG = {
+  tension: 42,
+  friction: 9,
+  restSpeedThreshold: 0.4,
+  restDisplacementThreshold: 0.4,
+};
 
 export default function BottomSheet({
   children,
@@ -116,11 +122,11 @@ export default function BottomSheet({
         if (lockExpanded || !draggable || !canExpand) return false;
         // Increase ratio to 3.0 to ensure horizontal swipes (like the car selector)
         // are not intercepted by the vertical sheet.
-        return Math.abs(dy) > Math.abs(dx) * 3.0 && Math.abs(dy) > 10;
+        return Math.abs(dy) > Math.abs(dx) * 2.4 && Math.abs(dy) > 6;
       },
       onMoveShouldSetPanResponderCapture: (_evt, { dx, dy }) => {
         if (lockExpanded || !draggable || !canExpand) return false;
-        return Math.abs(dy) > Math.abs(dx) * 3.0 && Math.abs(dy) > 10;
+        return Math.abs(dy) > Math.abs(dx) * 2.4 && Math.abs(dy) > 6;
       },
       onPanResponderTerminationRequest: () => true,
       onPanResponderGrant: () => {
@@ -153,11 +159,7 @@ export default function BottomSheet({
         Animated.spring(sheetAnim, {
           toValue: target,
           useNativeDriver: true,
-          tension: 65,
-          friction: 11,
-          restSpeedThreshold: 10,
-          restDisplacementThreshold: 10,
-
+          ...SHEET_SNAP_CONFIG,
         }).start(() => {
           if (!shouldExpand) startBounce();
         });
