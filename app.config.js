@@ -14,7 +14,7 @@ export default {
       resizeMode: 'contain',
       backgroundColor: '#00674F',
       android12: {
-        image: './assets/adaptive-icon.png',
+        image: './assets/icon.png',
         backgroundColor: '#00674F',
       },
     },
@@ -32,7 +32,7 @@ export default {
     },
     android: {
       adaptiveIcon: {
-        foregroundImage: './assets/adaptive-icon.png',
+        foregroundImage: './assets/icon.png',
         backgroundColor: '#00674F',
       },
       package: 'com.bahirdar.ride',

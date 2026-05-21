@@ -121,6 +121,7 @@ function NameBubble({ name, carText }) {
 export default React.memo(function DriverMarker({ driver, onPress, routeCoords }) {
   const [rippleTrigger, setRippleTrigger] = useState(0);
   const [imageLoaded,   setImageLoaded]   = useState(false);
+  const [imageFailed,   setImageFailed]   = useState(false);
   // Android: heading state drives the native `rotation` prop on the car marker.
   const [heading, setHeading] = useState(driver.heading || 0);
 
@@ -155,6 +156,7 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
 
   useEffect(() => {
     setImageLoaded(false);
+    setImageFailed(false);
     if (!carIconUrl) return;
     Image.prefetch(carIconUrl).catch(() => {});
   }, [carIconUrl]);
@@ -217,7 +219,7 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
   const name    = firstName(driver?.fullName || driver?.name || '');
   const carText = String(driver?.carLabel || '').trim();
   const renderCarVisual = () => {
-    if (carIconUrl) {
+    if (carIconUrl && !imageFailed) {
       return (
         <Image
           source={{ uri: carIconUrl }}
@@ -225,6 +227,10 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
           fadeDuration={0}
           style={styles.carImage}
           onLoad={() => setImageLoaded(true)}
+          onError={() => {
+            setImageFailed(true);
+            setImageLoaded(true);
+          }}
         />
       );
     }
@@ -260,7 +266,7 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
           rotation={heading - 90}
           flat
           anchor={{ x: 0.5, y: 0.5 }}
-          tracksViewChanges={!imageLoaded}
+          tracksViewChanges={!!carIconUrl && !imageFailed ? true : !imageLoaded}
           zIndex={101}
           onPress={onPress}
         >

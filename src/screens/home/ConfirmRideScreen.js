@@ -27,6 +27,15 @@ import { parseTripPollResponse } from '../../utils/tripLifecycle';
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
 const formatDistance = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
 
+function resolveVehicleCategoryRequestValue(category) {
+  return (
+    category?.slug ||
+    category?.vehicle_category ||
+    category?.name ||
+    ''
+  );
+}
+
 /**
  * Maps any vehicle category display name → valid backend enum value.
  * Backend only accepts: economy | comfort | business
@@ -45,6 +54,10 @@ export default function ConfirmRideScreen({ navigation, route }) {
 
   const displayCoords = userCoords ?? ADDIS_ABABA_COORDS;
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId) || null;
+  const requestedVehicleCategory = useMemo(
+    () => resolveVehicleCategoryRequestValue(selectedCategory),
+    [selectedCategory]
+  );
 
   const distKm = routeInfo?.distance_km
     || (userCoords && destination
@@ -94,7 +107,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
   }, [userCoords?.latitude, destination?.lat, handleRecenter]);
 
   const handleConfirm = async () => {
-    if (!destination || !selectedCategory) return;
+    if (!destination || !selectedCategory || !requestedVehicleCategory) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
 
@@ -128,7 +141,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
       pickup_lng: displayCoords.longitude,
       dropoff_lat: destination.lat,
       dropoff_lng: destination.lng,
-      vehicle_category: selectedCategory.name, // Use raw name from DB
+      vehicle_category: requestedVehicleCategory,
       payment_method: 'cash',
       estimated_fare_etb: Number(fare) || 0,
       distance_km: distKm,
@@ -156,7 +169,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
           dropoff_lat: destination.lat,
           dropoff_lng: destination.lng,
           dropoff_address: destination.name || destination.address || 'Destination',
-          vehicle_category: selectedCategory.name, // Use raw name from DB
+          vehicle_category: requestedVehicleCategory,
           payment_method: 'cash',
           distance_km: distKm,
           duration_min: durMin,

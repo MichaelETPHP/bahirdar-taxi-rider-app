@@ -183,8 +183,6 @@ export default function HomeScreen({ navigation }) {
   const categoriesLoaded = useRideStore((s) => s.categoriesLoaded);
   const fareEstimateLoading = useRideStore((s) => s.fareEstimateLoading);
   const selectedCategoryId = useRideStore((s) => s.selectedCategoryId);
-  const tripStatus = useRideStore((s) => s.tripStatus);
-  const tripId = useRideStore((s) => s.tripId);
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId) || null;
   const categorySelectionReady =
     !categoriesLoading &&
@@ -439,12 +437,6 @@ export default function HomeScreen({ navigation }) {
       }
     }
   }, [categories, nearbyDriversRes]);
-
-  useEffect(() => {
-    if (!tripId) return;
-    if (!['searching', 'matched', 'driver_arrived', 'in_progress'].includes(tripStatus)) return;
-    navigation.replace('ActiveTripResume');
-  }, [navigation, tripId, tripStatus]);
 
   // Socket live updates for active drivers on Home map.
   useEffect(() => {
@@ -766,7 +758,7 @@ export default function HomeScreen({ navigation }) {
     outputRange: ['0deg', '360deg'],
   });
 
-  // Auto-sync Rider current location coordinates & address reverse geocode every 4 seconds
+  // Auto-sync rider current location coordinates and address every 10 seconds.
   useEffect(() => {
     const interval = setInterval(() => {
       // Trigger the spin animation for visual feedback (1.2s spin)
@@ -781,7 +773,7 @@ export default function HomeScreen({ navigation }) {
       if (typeof refreshLocation === 'function') {
         refreshLocation();
       }
-    }, 4000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [refreshLocation, refreshSpinAnim]);

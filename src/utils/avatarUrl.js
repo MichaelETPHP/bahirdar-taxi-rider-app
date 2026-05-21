@@ -8,11 +8,9 @@ function getImageOrigin() {
   const apiOrigin = getApiOrigin();
   if (!apiOrigin) return '';
   try {
-    const parsed = new URL(apiOrigin);
-    parsed.protocol = 'http:';
-    return parsed.origin;
+    return new URL(apiOrigin).origin;
   } catch {
-    return apiOrigin.replace(/^https:/i, 'http:');
+    return apiOrigin;
   }
 }
 
@@ -28,7 +26,7 @@ export function normalizeAvatarUrl(rawUrl) {
 
   try {
     if (url.startsWith('//')) {
-      const protocol = imageOrigin ? new URL(imageOrigin).protocol : 'http:';
+      const protocol = imageOrigin ? new URL(imageOrigin).protocol : 'https:';
       return `${protocol}${url}`;
     }
 
