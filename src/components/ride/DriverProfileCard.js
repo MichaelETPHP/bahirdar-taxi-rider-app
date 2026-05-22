@@ -7,6 +7,8 @@ import { shadow, borderRadius } from '../../constants/layout';
 import { formatEthiopianPhone } from '../../utils/phoneFormatter';
 
 export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, hideCallButton = false }) {
+  const [avatarError, setAvatarError] = React.useState(false);
+  React.useEffect(() => { setAvatarError(false); }, [avatarUrl]);
   const driverNameFull = driver?.name || driver?.full_name || driver?.fullName || 'Driver';
   const carMake = driver?.vehicle?.make || '';
   const carModel = driver?.vehicle?.model || driver?.vehicle_model || driver?.vehicle_category || driver?.car_type || '';
@@ -45,8 +47,12 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
       {/* Top Row: Avatar & Basic Info */}
       <View style={styles.topRow}>
         <View style={styles.avatarWrap}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+          {avatarUrl && !avatarError ? (
+            <Image
+              source={{ uri: avatarUrl }}
+              style={styles.avatar}
+              onError={() => setAvatarError(true)}
+            />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback]}>
               <Text style={styles.avatarEmoji}>👤</Text>

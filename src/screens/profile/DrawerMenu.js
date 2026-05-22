@@ -64,6 +64,7 @@ export default function DrawerMenu(props) {
     user?.avatarUpdatedAt || user?.updated_at || null,
   );
   const initials  = user?.fullName?.slice(0, 2)?.toUpperCase() || '?';
+  const [avatarError, setAvatarError] = React.useState(false);
 
   // Format phone number correctly
   const formatPhoneNumber = (phoneStr) => {
@@ -110,12 +111,13 @@ export default function DrawerMenu(props) {
         activeOpacity={0.8}
       >
         <View style={styles.avatarRing}>
-          {avatarUrl ? (
+          {avatarUrl && !avatarError ? (
             <Image
               source={{ uri: avatarUrl }}
               style={styles.avatarImg}
               contentFit="cover"
               cachePolicy="memory-disk"
+              onError={() => setAvatarError(true)}
             />
           ) : (
             <Avatar initials={initials} size={60} />

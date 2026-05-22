@@ -447,6 +447,9 @@ export default function HomeScreen({ navigation }) {
     const riderTag = `[RIDER_SOCKET user:${user.id}]`;
 
     const throttleLocationUpdates = createThrottle(throttleMs);
+    // Separate throttle for online events — sharing one throttle with location
+    // causes online events to be silently dropped when a location event just fired.
+    const throttleOnlineUpdates = createThrottle(throttleMs);
 
     const mergeDrivers = (incoming) => {
       const list = Array.isArray(incoming) ? incoming : [];
@@ -509,7 +512,7 @@ export default function HomeScreen({ navigation }) {
       }
     };
 
-    const onDriverOnline = throttleLocationUpdates(handleDriverOnline);
+    const onDriverOnline = throttleOnlineUpdates(handleDriverOnline);
 
     const onDriverOffline = (payload) => {
       const id = String(

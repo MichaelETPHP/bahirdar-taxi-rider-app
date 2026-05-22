@@ -1,18 +1,20 @@
 import { env } from '../config/env';
 
 export const checkMaintenanceStatus = async () => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
   try {
-    // Health check endpoint usually on the base URL or /api/v1/maintenance/status
-    const baseUrl = env.apiUrl.includes('/api/v1') 
-      ? env.apiUrl.replace('/api/v1', '') 
+    const baseUrl = env.apiUrl.includes('/api/v1')
+      ? env.apiUrl.replace('/api/v1', '')
       : env.apiUrl;
-      
-    const response = await fetch(`${baseUrl}/api/v1/maintenance/status`);
+    const response = await fetch(`${baseUrl}/api/v1/maintenance/status`, {
+      signal: controller.signal,
+    });
     if (!response.ok) return { maintenance: false };
-    
     return await response.json();
-  } catch (error) {
-    console.error('Maintenance check failed:', error);
+  } catch {
     return { maintenance: false };
+  } finally {
+    clearTimeout(timer);
   }
 };
