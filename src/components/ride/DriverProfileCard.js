@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Linking, Animated, Easing } from 'react-native';
+import { Image } from 'expo-image';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Animated, Easing } from 'react-native';
 import { Phone, Star, AlertTriangle } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
@@ -51,6 +52,8 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
             <Image
               source={{ uri: avatarUrl }}
               style={styles.avatar}
+              contentFit="cover"
+              cachePolicy="memory-disk"
               onError={() => setAvatarError(true)}
             />
           ) : (
