@@ -120,6 +120,10 @@ const useRideStore = create(
   setFareAdjustment: (adj) => set({ fareAdjustment: adj }),
   clearFareAdjustment: () => set({ fareAdjustment: null }),
 
+  liveFare: null,   // { liveFareEtb, gpsKm, elapsedMin, confirmedFare } — updated via trip:fare_update socket
+  setLiveFare: (data) => set({ liveFare: data }),
+  clearLiveFare: () => set({ liveFare: null }),
+
   resetTrip: () =>
     set({
       tripId: null,
@@ -131,6 +135,7 @@ const useRideStore = create(
       driverLocation: null,
       fareEstimates: [],
       routeInfo: null,
+      liveFare: null,
     }),
 
   // ── Legacy helpers (kept for backwards compat) ───────

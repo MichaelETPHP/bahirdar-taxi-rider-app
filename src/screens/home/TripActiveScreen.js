@@ -12,7 +12,7 @@ import { shadow, borderRadius } from '../../constants/layout';
 import useRideStore from '../../store/rideStore';
 import useAuthStore from '../../store/authStore';
 import useLocationStore from '../../store/locationStore';
-import { getSocket, disconnectSocket, listenForFareAdjustment, removeFareAdjustmentListener } from '../../services/socketService';
+import { getSocket, disconnectSocket, listenForFareAdjustment, removeFareAdjustmentListener, listenForLiveFareUpdate, removeLiveFareUpdateListener } from '../../services/socketService';
 import { getDriverLocation, getTrip } from '../../services/tripService';
 import { parseTripPollResponse, TRIP_STATUS_POLL_MS } from '../../utils/tripLifecycle';
 import useRoute from '../../hooks/useRoute';
@@ -39,7 +39,7 @@ export default function TripActiveScreen({ navigation }) {
   const timerRef = useRef(null);
   const handledRef = useRef(false);
 
-  const { tripId, tripData, driver, driverLocation, setDriverLocation, setTripStatus, setFinalFare, setFareAdjustment, resetTrip, mergeTripData } = useRideStore();
+  const { tripId, tripData, driver, driverLocation, setDriverLocation, setTripStatus, setFinalFare, setFareAdjustment, setLiveFare, clearLiveFare, resetTrip, mergeTripData } = useRideStore();
   const setDriver = useRideStore((s) => s.setDriver);
   const categories = useRideStore((s) => s.categories);
   const { token } = useAuthStore();
@@ -53,8 +53,9 @@ export default function TripActiveScreen({ navigation }) {
     clearInterval(locationPollRef.current);
     clearInterval(tripStatusPollRef.current);
     clearInterval(timerRef.current);
+    clearLiveFare();
     navigation.replace(screen);
-  }, [navigation]);
+  }, [navigation, clearLiveFare]);
 
   // ── Trip timer ──────────────────────────────────────
   useEffect(() => {
@@ -191,6 +192,16 @@ export default function TripActiveScreen({ navigation }) {
     socket.on('trip:completed', onCompleted);
     socket.on('trip:cancelled', onCancelled);
 
+    // Live fare updates: accumulate GPS-based running fare meter
+    listenForLiveFareUpdate((data) => {
+      setLiveFare({
+        liveFareEtb:   data.live_fare_etb,
+        gpsKm:         data.gps_km,
+        elapsedMin:    data.elapsed_min,
+        confirmedFare: data.confirmed_fare,
+      });
+    });
+
     // Hybrid pricing: store fare adjustment data so TripCompleteScreen can render it
     listenForFareAdjustment((adj) => {
       setFareAdjustment({
@@ -207,9 +218,10 @@ export default function TripActiveScreen({ navigation }) {
     return () => {
       socket.off('trip:completed', onCompleted);
       socket.off('trip:cancelled', onCancelled);
+      removeLiveFareUpdateListener();
       removeFareAdjustmentListener();
     };
-  }, [navigate, setFinalFare, setFareAdjustment, setTripStatus, resetTrip, navigation]);
+  }, [navigate, setFinalFare, setFareAdjustment, setLiveFare, setTripStatus, resetTrip, navigation]);
 
   const formatTime = (secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');

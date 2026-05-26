@@ -26,6 +26,7 @@ import { parseTripPollResponse } from '../../utils/tripLifecycle';
 
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
 const formatDistance = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function resolveVehicleCategoryRequestValue(category) {
   return (
@@ -222,6 +223,22 @@ export default function ConfirmRideScreen({ navigation, route }) {
             return;
           }
         } catch (_) {}
+      }
+
+      if (status === 408 || code === 'TIMEOUT') {
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          try {
+            await sleep(1500);
+            const activeRes = await getActiveTrip(token);
+            const root = activeRes?.data ?? activeRes;
+            const { status: activeStatus, trip: activeTrip, driver: activeDriver } = parseTripPollResponse(root);
+            if (activeTrip && activeStatus) {
+              hydrateActiveTrip({ trip: activeTrip, status: activeStatus, driver: activeDriver });
+              return;
+            }
+          } catch (_) {}
+        }
+        return;
       }
 
       // Show error alert while still on SearchingScreen

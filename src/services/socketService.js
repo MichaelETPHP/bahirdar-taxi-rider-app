@@ -103,6 +103,18 @@ export function removeFareAdjustmentListener() {
   _socket?.off('trip:fare_adjustment');
 }
 
+export function listenForLiveFareUpdate(onUpdate) {
+  if (!_socket) return;
+  _socket.off('trip:fare_update');
+  _socket.on('trip:fare_update', (data) => {
+    onUpdate?.(data);
+  });
+}
+
+export function removeLiveFareUpdateListener() {
+  _socket?.off('trip:fare_update');
+}
+
 export function joinRiderRoom(riderId) {
   if (!_socket) return;
 

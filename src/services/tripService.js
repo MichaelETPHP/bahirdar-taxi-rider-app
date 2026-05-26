@@ -4,9 +4,9 @@ import { apiRequest } from '../lib/apiClient';
  * Trip Service — Refactored to use decoupled apiClient.
  */
 
-const get   = (path, token)       => apiRequest('GET',   path, undefined, { customToken: token });
-const post  = (path, body, token) => apiRequest('POST',  path, body, { customToken: token });
-const patch = (path, body, token) => apiRequest('PATCH', path, body, { customToken: token });
+const get   = (path, token, options = {})       => apiRequest('GET',   path, undefined, { customToken: token, ...options });
+const post  = (path, body, token, options = {}) => apiRequest('POST',  path, body, { customToken: token, ...options });
+const patch = (path, body, token, options = {}) => apiRequest('PATCH', path, body, { customToken: token, ...options });
 
 export function normalizeTripStatus(status) {
   if (status == null) return null;
@@ -16,7 +16,9 @@ export function normalizeTripStatus(status) {
 }
 
 export function createTrip(body, token) {
-  return post('/trips', body, token);
+  // Trip creation can include service-area checks, route/fare work, and matching kickoff.
+  // Keep this longer than the rider-facing search countdown so the UI does not fail early.
+  return post('/trips', body, token, { timeout: 65000 });
 }
 
 export function getWalletBalance(token) {
@@ -32,6 +34,12 @@ export function getActiveTrip(token) {
 }
 
 function toTripHistoryItem(raw) {
+  const rawStatus = String(raw.status ?? '').toLowerCase();
+  const cancelledByRole =
+    rawStatus.includes('driver') ? 'driver'
+      : rawStatus.includes('rider') ? 'rider'
+        : rawStatus.includes('system') || rawStatus === 'no_drivers_found' ? 'system'
+          : null;
   const timestamp =
     raw.completed_at ||
     raw.cancelled_at ||
@@ -63,6 +71,8 @@ function toTripHistoryItem(raw) {
     rideType: raw.vehicle_category || raw.ride_type || 'economy',
     status: normalizeTripStatus(raw.status) || 'completed',
     userRating: raw.rider_rating ?? raw.user_rating ?? raw.rating ?? '-',
+    cancelReason: raw.cancel_reason || raw.cancellation_reason || null,
+    cancelledBy: cancelledByRole,
     driver: raw.driver || null,
   };
 }
