@@ -35,7 +35,7 @@ export default {
         foregroundImage: './assets/icon.png',
         backgroundColor: '#00674F',
       },
-      package: 'com.bahirdar.ride',
+      package: 'com.bahirdar.rider',
       usesCleartextTraffic: true,
       minSdkVersion: 21,
       targetSdkVersion: 34,
