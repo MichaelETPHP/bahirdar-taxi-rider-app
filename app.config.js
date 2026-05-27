@@ -2,7 +2,7 @@
 // All EXPO_PUBLIC_* vars are available here via process.env.
 export default {
   expo: {
-    owner: "michaelexpo12",
+    owner: "zmichaeleth",
     name: 'Bahiran Ride',
     slug: 'BahirdarRide',
     version: '1.0.0',
@@ -86,8 +86,8 @@ export default {
       googleMapsKey:  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       osrmAddisUrl:   process.env.EXPO_PUBLIC_OSRM_ADDIS_URL,
       osrmBahirdarUrl: process.env.EXPO_PUBLIC_OSRM_BAHIRDAR_URL,
-      eas: {
-        projectId: "0e88c993-9f78-4d5e-86fa-face25d64343"
+      "eas": {
+        "projectId": "2fe9c462-da5d-437a-91bb-b56a4c48e258"
       }
     },
   },

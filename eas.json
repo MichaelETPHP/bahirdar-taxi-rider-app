@@ -30,8 +30,7 @@
     "production": {
       "distribution": "store",
       "android": {
-        "buildType": "app-bundle",
-        "bundleIdentifier": "com.bahirdar.rider"
+        "buildType": "app-bundle"
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://taxiapi.zmichael.click/api/v1",
