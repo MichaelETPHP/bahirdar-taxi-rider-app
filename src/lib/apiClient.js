@@ -131,7 +131,7 @@ export async function apiRequest(method, path, body, options = {}) {
       }
       // If we reach here, refresh failed or was skipped
       await _onSessionExpired();
-      throw { status: 401, message: 'Session expired' };
+      throw { status: 401, message: 'Session expired', code: 'UNAUTHORIZED', response: { status: 401, data: null } };
     }
     // ──────────────────────────────────────────────────────────────────
 
@@ -159,7 +159,9 @@ export async function apiRequest(method, path, body, options = {}) {
       throw {
         status: res.status,
         message: data?.error?.message || data?.message || 'Request failed',
-        code: data?.error?.code
+        code: data?.error?.code,
+        response: { status: res.status, data },
+        data,
       };
     }
 

@@ -1,23 +1,22 @@
 import { useMemo } from 'react';
 import { Polyline } from 'react-native-maps';
-import { colors } from '../../constants/colors';
 
 /**
  * Premium Route Polyline - Professional styling like Yango/Uber
  *
  * Features:
- * - Dual-layer effect: white glow + vibrant blue route
+ * - Dual-layer effect: white glow + vibrant emerald route
  * - Road-snapped geometry with 50-100+ waypoints
  * - Proper coordinate format: [latitude, longitude]
  * - Smooth rounded line caps and joins
- * - Professional color palette: blue (#3B82F6) with white halo
+ * - Professional color palette: emerald (primary color) with white halo
  */
 export default function RoutePolyline({
   coordinates,
   dashed = false,
   strokeWidth = 2,
   glowWidth = 4,
-  strokeColor = '#3B82F6',
+  strokeColor = '#10B981',
   glowColor = 'rgba(255, 255, 255, 0.85)',
 }) {
   // Validate and log route data
@@ -88,7 +87,7 @@ export default function RoutePolyline({
         Matches Yango/Uber aesthetic: clean, modern, professional
 
         Note: With OSRM geometry (50-100 waypoints), this creates a smooth,
-        road-following line instead of direct straight line between endpoints.
+        road-following emerald line instead of direct straight line between endpoints.
       */}
       <Polyline
         coordinates={validCoordinates}

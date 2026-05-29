@@ -64,6 +64,29 @@ function toLocalEthiopianDigits(raw) {
   return '';
 }
 
+function formatRoleConflictMessage(existingRole, requestedRole = 'rider') {
+  const role = existingRole === 'driver' || existingRole === 'rider' ? existingRole : requestedRole;
+  if (role === requestedRole) {
+    return `You are already registered as a ${role}.\nPlease login instead.`;
+  }
+  return `This phone number is already registered as a ${role}.\nPlease login as a ${role} instead.`;
+}
+
+function extractExistingRole(error) {
+  const details = error?.response?.data?.error?.details;
+  if (Array.isArray(details)) {
+    const match = details.find((item) => item?.existing_role);
+    if (match?.existing_role) return String(match.existing_role);
+  }
+  const response = error?.response?.data?.error || error?.response?.data || {};
+  if (response.registered_role) return String(response.registered_role);
+  if (response.existing_role) return String(response.existing_role);
+  const message = String(response.message || error?.message || '').toLowerCase();
+  if (message.includes('registered as a driver')) return 'driver';
+  if (message.includes('registered as a rider')) return 'rider';
+  return null;
+}
+
 export default function PhoneEntryScreen({ navigation }) {
   const { t, i18n } = useTranslation();
 
@@ -86,6 +109,7 @@ export default function PhoneEntryScreen({ navigation }) {
   const [termsModalVisible, setTermsModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [inlineError, setInlineError] = useState('');
+  const [supportPhone, setSupportPhone] = useState('');
   const [recentPhone, setRecentPhone] = useState('');
   const [testApiLoading, setTestApiLoading] = useState(false);
   const [testApiSuccess, setTestApiSuccess] = useState(null);
@@ -165,6 +189,7 @@ export default function PhoneEntryScreen({ navigation }) {
     }
     setPhone(formatPhone(digits));
     if (inlineError) setInlineError('');
+    if (supportPhone) setSupportPhone('');
   };
 
   const rawDigits = phone.replace(/\D/g, '');
@@ -237,10 +262,20 @@ export default function PhoneEntryScreen({ navigation }) {
       const { exists } = checkRes.data;
       
       if (!exists) {
+        if (checkRes.data?.message || checkRes.data?.registered_role) {
+          setInlineError(checkRes.data.message || formatRoleConflictMessage(checkRes.data.registered_role, 'rider'));
+          setSupportPhone('');
+          return;
+        }
         console.log('[PhoneEntry] User does not exist. Attempting to register rider...');
         await registerRider(intlPhone);
         console.log('[PhoneEntry] Rider registered - OTP sent');
       } else {
+        if (checkRes.data?.can_login === false) {
+          setInlineError(checkRes.data.message || 'Your account is suspended. Please contact support.');
+          setSupportPhone(checkRes.data?.support_phone || '+251 916182957');
+          return;
+        }
         console.log('[PhoneEntry] User exists. Sending OTP...');
         await sendOtp(intlPhone);
         console.log('[PhoneEntry] OTP sent successfully');
@@ -250,8 +285,16 @@ export default function PhoneEntryScreen({ navigation }) {
       navigation.navigate('OTP', { isNewUser: !exists });
     } catch (err) {
       console.error('[PhoneEntry] Auth error:', err);
-      const msg = err?.message || 'Something went wrong. Please try again.';
+      const existingRole = extractExistingRole(err);
+      const code = err?.response?.data?.error?.code || err?.code;
+      const message = err?.response?.data?.error?.message || err?.message || '';
+      const serverSupportPhone = err?.response?.data?.error?.support_phone || err?.response?.data?.support_phone || '';
+      const msg =
+        (code === 'CONFLICT' || String(message).toLowerCase().includes('already registered'))
+          ? formatRoleConflictMessage(existingRole, 'rider')
+          : message || 'Something went wrong. Please try again.';
       setInlineError(msg);
+      setSupportPhone(serverSupportPhone);
     } finally {
       setLoading(false);
     }
@@ -400,7 +443,17 @@ export default function PhoneEntryScreen({ navigation }) {
                           {!!inlineError && (
                             <View style={styles.suspendedBanner}>
                               <Ban size={13} color={colors.error} style={{ marginRight: 7 }} />
-                              <Text style={styles.suspendedText}>{inlineError}</Text>
+                              <View style={styles.suspendedCopy}>
+                                <Text style={styles.suspendedText}>{inlineError}</Text>
+                                {!!supportPhone && (
+                                  <TouchableOpacity
+                                    onPress={() => Linking.openURL(`tel:${supportPhone.replace(/[^\d+]/g, '')}`)}
+                                    activeOpacity={0.75}
+                                  >
+                                    <Text style={styles.supportPhoneLink}>{supportPhone}</Text>
+                                  </TouchableOpacity>
+                                )}
+                              </View>
                             </View>
                           )}
 
@@ -681,8 +734,8 @@ const styles = StyleSheet.create({
   },
   suspendedBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center', // Center content
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
     marginTop: 12,
     backgroundColor: 'rgba(239,68,68,0.08)',
     borderBottomWidth: 1, // Only bottom border for a flat look
@@ -691,6 +744,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     width: '100%',
+    gap: 8,
+  },
+  suspendedCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
   },
   recentPhoneChip: {
     marginTop: 12,
@@ -714,6 +773,13 @@ const styles = StyleSheet.create({
     color: colors.error,
     lineHeight: 18,
     fontWeight: fontWeight.semibold,
+  },
+  supportPhoneLink: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    lineHeight: 18,
+    fontWeight: fontWeight.bold,
+    textDecorationLine: 'underline',
   },
   langBtn: {
     position: 'absolute',

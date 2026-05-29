@@ -21,6 +21,13 @@ function youtubeId(url) {
   return m?.[1] ?? null;
 }
 
+function versionedUrl(url, version) {
+  if (!url) return url;
+  const v = encodeURIComponent(String(version ?? ''));
+  const joiner = url.includes('?') ? '&' : '?';
+  return `${url}${joiner}v=${v}`;
+}
+
 function MediaContent({ promo }) {
   if (promo.media_type === 'video' && promo.video_url) {
     const ytId = youtubeId(promo.video_url);
@@ -59,7 +66,13 @@ function MediaContent({ promo }) {
   }
 
   if (promo.image_url) {
-    return <Image source={{ uri: promo.image_url }} style={styles.media} resizeMode="cover" />;
+    return (
+      <Image
+        source={{ uri: versionedUrl(promo.image_url, promo.updated_at || promo.id) }}
+        style={styles.media}
+        resizeMode="cover"
+      />
+    );
   }
 
   return <View style={[styles.media, { backgroundColor: colors.primaryLight }]} />;

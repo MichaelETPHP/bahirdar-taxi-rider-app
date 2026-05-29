@@ -12,7 +12,7 @@ import { Polyline } from 'react-native-maps';
  */
 function ProfessionalRoutePolyline({
   coordinates,
-  strokeColor = '#0066CC',
+  strokeColor = '#10B981',
   glowColor = 'transparent',
   strokeWidth = 3,
   glowWidth = 0,
@@ -59,7 +59,7 @@ function ProfessionalRoutePolyline({
 
   return (
     <>
-      {/* Main route line - thin professional blue */}
+      {/* Main route line - thin professional emerald */}
       <Polyline
         coordinates={validCoordinates}
         strokeColor={strokeColor}

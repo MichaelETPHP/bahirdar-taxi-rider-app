@@ -13,6 +13,11 @@ import {
   Easing,
   Dimensions,
 } from 'react-native';
+
+// ── Google Play / App Store test account ─────────────────────────────────────
+// Phone: 0919333399  |  OTP: 1234
+const TEST_ACCOUNT_PHONES = ['0919333399', '+251919333399'];
+const isTestAccount = (phone) => TEST_ACCOUNT_PHONES.some(t => (phone || '').replace(/\s/g, '') === t);
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
@@ -164,6 +169,16 @@ export default function OTPScreen({ navigation, route }) {
                   <Text style={styles.phoneBold}>{formatPhoneDisplay(phone)}</Text>
                 </Text>
 
+                {/* Test account hint — visible only for the Play Store review number */}
+                {isTestAccount(phone) && (
+                  <View style={styles.testBanner}>
+                    <Text style={styles.testBannerText}>
+                      🧪 Test account — enter{' '}
+                      <Text style={styles.testBannerCode}>1234</Text>
+                    </Text>
+                  </View>
+                )}
+
                 <View style={styles.otpWrapper}>
                   <OTPInput key={inputKey} value={otp} onChange={handleOTPChange} hasError={hasError} />
                 </View>
@@ -247,6 +262,27 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   phoneBold: { fontWeight: fontWeight.bold, color: colors.textPrimary },
+  testBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1,
+    borderColor: '#FFD54F',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginBottom: 16,
+  },
+  testBannerText: {
+    fontSize: 13,
+    color: '#795548',
+    fontWeight: '500',
+  },
+  testBannerCode: {
+    fontWeight: '800',
+    color: '#E65100',
+    letterSpacing: 2,
+  },
   otpWrapper: { marginBottom: 12 },
   errorText: { fontSize: fontSize.sm, color: colors.error, marginBottom: 12 },
   button: { marginTop: 8, marginBottom: 20 },
