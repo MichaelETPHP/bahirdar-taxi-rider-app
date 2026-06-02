@@ -4,56 +4,69 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WifiOff } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontWeight } from '../../constants/typography';
-import { env } from '../../config/env';
 
 const BASE_BANNER_HEIGHT = 40;
+
+// Checks REAL internet connectivity — not the local API server.
+// Uses a reliable public DNS endpoint so it works regardless of API server state.
+const INTERNET_CHECK_URL = 'https://dns.google/resolve?name=example.com&type=A';
+const CHECK_TIMEOUT_MS   = 4000;
+const CHECK_INTERVAL_MS  = 8000;  // every 8s is enough — was 5s which was too aggressive
+
+async function hasRealInternet() {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+    const res = await fetch(INTERNET_CHECK_URL, { method: 'GET', signal: controller.signal });
+    clearTimeout(timer);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
 export default function NetworkBanner() {
   const insets = useSafeAreaInsets();
   const [isOffline, setIsOffline] = useState(false);
   const [showConnected, setShowConnected] = useState(false);
-  
-  const TOTAL_HEIGHT = BASE_BANNER_HEIGHT + insets.top;
-  const slideAnim = useRef(new Animated.Value(-TOTAL_HEIGHT)).current;
   const prevOffline = useRef(false);
+  const mountedRef  = useRef(true);
+
+  const TOTAL_HEIGHT = BASE_BANNER_HEIGHT + insets.top;
+  const slideAnim   = useRef(new Animated.Value(-TOTAL_HEIGHT)).current;
 
   useEffect(() => {
+    mountedRef.current = true;
+
     const checkNetwork = async () => {
-      try {
-        const healthUrl = env.apiUrl.includes('/api/v1') 
-          ? env.apiUrl.replace('/api/v1', '/api/v1/health')
-          : `${env.apiUrl}/health`;
+      const online = await hasRealInternet();
+      if (!mountedRef.current) return;
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
-        
-        const response = await fetch(healthUrl, {
-          method: 'GET',
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-        const connected = response.ok;
-        const currentOffline = !connected;
-
-        if (prevOffline.current && !currentOffline) {
-          setShowConnected(true);
-          setTimeout(() => {
-            setShowConnected(false);
-          }, 3000);
-        }
-
-        setIsOffline(currentOffline);
-        prevOffline.current = currentOffline;
-      } catch (e) {
+      if (!online) {
         setIsOffline(true);
         prevOffline.current = true;
+      } else {
+        // Was offline → now back online: show green "Restored" banner briefly
+        if (prevOffline.current) {
+          setShowConnected(true);
+          setTimeout(() => {
+            if (mountedRef.current) setShowConnected(false);
+          }, 3000);
+        }
+        setIsOffline(false);
+        prevOffline.current = false;
       }
     };
 
-    checkNetwork();
-    const interval = setInterval(checkNetwork, 5000);
-    return () => clearInterval(interval);
+    // Small initial delay so app startup completes before the first check
+    const initialTimer = setTimeout(checkNetwork, 1500);
+    const interval = setInterval(checkNetwork, CHECK_INTERVAL_MS);
+
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -67,14 +80,14 @@ export default function NetworkBanner() {
 
   return (
     <>
-      <Animated.View 
+      <Animated.View
         style={[
-          styles.container, 
-          { 
+          styles.container,
+          {
             height: TOTAL_HEIGHT,
             transform: [{ translateY: slideAnim }],
-            backgroundColor: showConnected ? colors.success : colors.error 
-          }
+            backgroundColor: showConnected ? colors.success : colors.error,
+          },
         ]}
       >
         <View style={[styles.banner, { paddingTop: insets.top }]}>
@@ -104,9 +117,7 @@ export default function NetworkBanner() {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+    top: 0, left: 0, right: 0,
     zIndex: 100001,
   },
   banner: {
@@ -133,11 +144,8 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 8, height: 8, borderRadius: 4,
     backgroundColor: '#4ADE80',
     marginRight: 2,
-  }
+  },
 });
-

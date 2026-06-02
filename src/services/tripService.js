@@ -120,8 +120,8 @@ export function getNearbyDrivers(lat, lng, radiusKm = 5, token) {
   return get(`/geo/nearby-drivers?${q}`, token);
 }
 
-export function submitRating(tripId, { rating, comment, tip }, token) {
-  return post(`/trips/${tripId}/ratings`, { rating, comment, tip }, token);
+export function submitRating(tripId, { score, comment, tags }, token) {
+  return post(`/trips/${tripId}/ratings`, { score, comment, tags }, token);
 }
 
 export function getFareEstimate(fromLat, fromLng, toLat, toLng, token) {

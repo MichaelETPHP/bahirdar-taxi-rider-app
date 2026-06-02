@@ -25,18 +25,19 @@ enableScreens();
 const queryClient = new QueryClient();
 
 async function loadCustomFonts() {
+  // Fonts are loaded from locally-bundled files — no network required.
+  // CDN URLs were removed because they fail in Expo Go and on slow/no network.
   try {
-    // Load Plus Jakarta Sans from Google Fonts
     await Font.loadAsync({
-      'PlusJakartaSans-Regular': 'https://fonts.gstatic.com/s/plusjakartasans/v8/1Pt_g83EOa2zuMJ2EbScVcg3bBHBjmyHJKNHSYw0RDI.ttf',
-      'PlusJakartaSans-Medium': 'https://fonts.gstatic.com/s/plusjakartasans/v8/1Pt9g83EOa2zuMJ2EbScVce2t5_yD2kQnj1dEyQw.ttf',
-      'PlusJakartaSans-SemiBold': 'https://fonts.gstatic.com/s/plusjakartasans/v8/1Pt9g83EOa2zuMJ2EbScVcevh5_yD2kQnj1dEyQw.ttf',
-      'PlusJakartaSans-Bold': 'https://fonts.gstatic.com/s/plusjakartasans/v8/1Pt9g83EOa2zuMJ2EbScVceFh5_yD2kQnj1dEyQw.ttf',
-      'PlusJakartaSans-Light': 'https://fonts.gstatic.com/s/plusjakartasans/v8/1Pt9g83EOa2zuMJ2EbScVce2j5_yD2kQnj1dEyQw.ttf',
-      'PlusJakartaSans-Italic': 'https://fonts.gstatic.com/s/plusjakartasans/v8/1Pt_g83EOa2zuMJ2EbScVcgxbtDhLVH0lmFvzfE.ttf',
+      'PlusJakartaSans-Light':    require('./assets/fonts/PlusJakartaSans-Light.ttf'),
+      'PlusJakartaSans-Regular':  require('./assets/fonts/PlusJakartaSans-Regular.ttf'),
+      'PlusJakartaSans-Medium':   require('./assets/fonts/PlusJakartaSans-Medium.ttf'),
+      'PlusJakartaSans-SemiBold': require('./assets/fonts/PlusJakartaSans-SemiBold.ttf'),
+      'PlusJakartaSans-Bold':     require('./assets/fonts/PlusJakartaSans-Bold.ttf'),
+      'PlusJakartaSans-Italic':   require('./assets/fonts/PlusJakartaSans-Italic.ttf'),
     });
-  } catch (error) {
-    console.warn('Failed to load Plus Jakarta Sans fonts, using system font:', error);
+  } catch {
+    // Font files not yet downloaded — app continues with system font, no warning needed
   }
 }
 
