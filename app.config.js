@@ -28,6 +28,7 @@ export default {
         NSAppTransportSecurity: {
           NSAllowsArbitraryLoads: true,
         },
+        ITSAppUsesNonExemptEncryption: false,
       },
     },
     android: {
@@ -80,6 +81,7 @@ export default {
         },
       ],
       '@react-native-community/datetimepicker',
+      '@maplibre/maplibre-react-native',
     ],
     extra: {
       apiUrl:         process.env.EXPO_PUBLIC_API_URL,
