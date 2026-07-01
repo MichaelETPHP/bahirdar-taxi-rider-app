@@ -5,7 +5,7 @@ export default {
     owner: "zmichaeleth",
     name: 'Bahiran Ride',
     slug: 'BahirdarRide',
-    version: '1.0.1',
+    version: '1.1.0',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
@@ -92,6 +92,14 @@ export default {
       "eas": {
         "projectId": "2fe9c462-da5d-437a-91bb-b56a4c48e258"
       }
+    },
+    runtimeVersion: {
+      policy: 'appVersion',
+    },
+    updates: {
+      url: 'https://u.expo.dev/2fe9c462-da5d-437a-91bb-b56a4c48e258',
+      enabled: true,
+      fallbackToCacheTimeout: 0,
     },
   },
 };

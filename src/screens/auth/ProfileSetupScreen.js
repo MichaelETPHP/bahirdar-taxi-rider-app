@@ -8,6 +8,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
   Alert,
   Dimensions,
@@ -78,11 +79,17 @@ export default function ProfileSetupScreen({ navigation }) {
         <SafeAreaView style={styles.safe} edges={['top']}>
           <KeyboardAvoidingView
             style={styles.kav}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
-            enabled={Platform.OS === 'ios'}
           >
-            <View style={[styles.center, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+            <ScrollView
+              style={styles.scrollFill}
+              contentContainerStyle={[styles.center, { paddingBottom: Math.max(insets.bottom, 24) }]}
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
+              overScrollMode="never"
+              showsVerticalScrollIndicator={false}
+            >
               {/* Logo */}
               <View style={styles.logoCircle}>
                 <Image
@@ -119,7 +126,7 @@ export default function ProfileSetupScreen({ navigation }) {
                   style={styles.button}
                 />
               </View>
-            </View>
+            </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
       </TouchableWithoutFeedback>
@@ -142,8 +149,11 @@ const styles = StyleSheet.create({
   kav: {
     flex: 1,
   },
-  center: {
+  scrollFill: {
     flex: 1,
+  },
+  center: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
