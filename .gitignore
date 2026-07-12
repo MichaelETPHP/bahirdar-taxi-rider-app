@@ -36,8 +36,8 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# local env files — .env holds the Google Maps API key; never commit any of them
+.env*
 
 # typescript
 *.tsbuildinfo

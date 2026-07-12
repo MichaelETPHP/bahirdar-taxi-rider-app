@@ -1,9 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../lib/secureStorage';
 
 /**
  * Session Manager - Handles 30-day persistent login
  *
- * Stores:
+ * Stores (in hardware-encrypted SecureStore — INSA Finding 3):
  * - Tokens (access + refresh)
  * - Login timestamp (when user first authenticated)
  * - Last activity (when app was last used)
@@ -28,11 +28,11 @@ export async function saveSession(accessToken, refreshToken, expiresIn = 3600, p
       tokenExpiresAt: now + (expiresIn * 1000),
     };
 
-    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+    await secureStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
 
     // Also save phone number separately for easy retrieval
     if (phone) {
-      await AsyncStorage.setItem(PHONE_KEY, phone);
+      await secureStorage.setItem(PHONE_KEY, phone);
     }
 
     return sessionData;
@@ -44,7 +44,7 @@ export async function saveSession(accessToken, refreshToken, expiresIn = 3600, p
 
 export async function getSavedPhone() {
   try {
-    const phone = await AsyncStorage.getItem(PHONE_KEY);
+    const phone = await secureStorage.getItem(PHONE_KEY);
     return phone || null;
   } catch (error) {
     console.error('Failed to get saved phone:', error);
@@ -54,7 +54,7 @@ export async function getSavedPhone() {
 
 export async function getSession() {
   try {
-    const sessionJson = await AsyncStorage.getItem(SESSION_KEY);
+    const sessionJson = await secureStorage.getItem(SESSION_KEY);
     if (!sessionJson) return null;
 
     const session = JSON.parse(sessionJson);
@@ -78,7 +78,7 @@ export async function updateLastActivity() {
     if (!session) return;
 
     session.lastActivity = Date.now();
-    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    await secureStorage.setItem(SESSION_KEY, JSON.stringify(session));
   } catch (error) {
     console.error('Failed to update activity:', error);
   }
@@ -94,7 +94,7 @@ export async function updateTokens(accessToken, refreshToken, expiresIn = 3600) 
     session.tokenExpiresAt = Date.now() + (expiresIn * 1000);
     session.lastActivity = Date.now();
 
-    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    await secureStorage.setItem(SESSION_KEY, JSON.stringify(session));
     return session;
   } catch (error) {
     console.error('Failed to update tokens:', error);
@@ -104,8 +104,8 @@ export async function updateTokens(accessToken, refreshToken, expiresIn = 3600) 
 
 export async function clearSession() {
   try {
-    await AsyncStorage.removeItem(SESSION_KEY);
-    await AsyncStorage.removeItem(PHONE_KEY);
+    await secureStorage.removeItem(SESSION_KEY);
+    await secureStorage.removeItem(PHONE_KEY);
   } catch (error) {
     console.error('Failed to clear session:', error);
   }

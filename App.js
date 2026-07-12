@@ -19,6 +19,11 @@ import { fontFamily } from './src/constants/typography';
 import MaintenanceScreen from './src/screens/common/MaintenanceScreen';
 import { checkMaintenanceStatus } from './src/api/maintenance';
 import useMaintenanceStore from './src/store/maintenanceStore';
+import { migrateSecureStorage } from './src/lib/migrateSecureStorage';
+
+// Move any plaintext-stored session data into SecureStore before anything
+// reads auth state (idempotent; reads after this also migrate lazily).
+migrateSecureStorage();
 
 enableScreens();
 

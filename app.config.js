@@ -39,8 +39,11 @@ export default {
 
       package: 'com.bahirdar.rider',
       usesCleartextTraffic: true,
-      minSdkVersion: 21,
-      targetSdkVersion: 34,
+      // INSA Finding 1 (CWE-538): forbid ADB/cloud backup extraction of the
+      // app sandbox — this app stores auth tokens and PII.
+      allowBackup: false,
+      // minSdk/targetSdk are NOT set here — prebuild ignores these keys.
+      // They are enforced via the expo-build-properties plugin below.
       permissions: [
         'android.permission.ACCESS_FINE_LOCATION',
         'android.permission.ACCESS_COARSE_LOCATION',
@@ -66,6 +69,19 @@ export default {
     },
     plugins: [
       [
+        // INSA Finding 4 (CWE-1104): minSdk 28 gives hardware-backed Keystore
+        // (strengthens Finding 3); target/compile 36 is the Expo SDK 54
+        // default and meets Play policy (API 36 required from Aug 31, 2026).
+        'expo-build-properties',
+        {
+          android: {
+            minSdkVersion: 28,
+            compileSdkVersion: 36,
+            targetSdkVersion: 36,
+          },
+        },
+      ],
+      [
         'expo-notifications',
         {
           icon: './assets/icon.png',
@@ -82,6 +98,7 @@ export default {
       ],
       '@react-native-community/datetimepicker',
       '@maplibre/maplibre-react-native',
+      'expo-secure-store',
     ],
     extra: {
       apiUrl:         process.env.EXPO_PUBLIC_API_URL,

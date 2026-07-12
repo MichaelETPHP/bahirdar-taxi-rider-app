@@ -4,14 +4,12 @@
  */
 
 import * as Location from 'expo-location';
-import { GOOGLE_MAPS_KEY } from '../config/api';
+import { apiRequest } from '../lib/apiClient';
 
 const TIMEOUT_MS = 10000;
 const FALLBACK_ADDRESS = 'Detecting location...';
 
 console.log('🔧 Location Service V2 loaded');
-console.log('📍 Google Maps API Key present:', !!GOOGLE_MAPS_KEY);
-console.log('🔑 Key length:', GOOGLE_MAPS_KEY?.length);
 
 /**
  * STEP 1: Get current GPS location
@@ -57,7 +55,10 @@ export async function getCurrentLocation() {
 
 /**
  * STEP 2: Convert coordinates to address (Reverse Geocoding)
- * Uses Google Maps API with fallback
+ * Proxied through our backend (/geo/reverse-geocode), which holds the real
+ * Google Maps key server-side and never ships it to the client. The backend
+ * itself falls back to Gebeta/Nominatim if Google fails, so a non-fallback
+ * response here means all upstream options were exhausted.
  */
 export async function reverseGeocode(lat, lng) {
   // Validate inputs
@@ -66,71 +67,18 @@ export async function reverseGeocode(lat, lng) {
     return FALLBACK_ADDRESS;
   }
 
-  // Try Google Geocode API first
-  if (GOOGLE_MAPS_KEY) {
-    try {
-      console.log('[Geocod] Calling with key:', GOOGLE_MAPS_KEY.substring(0, 10) + '...');
-      console.log('[Geocod] Coords:', lat.toFixed(6), lng.toFixed(6));
-
-      const url = 'https://maps.googleapis.com/maps/api/geocode/json';
-      const params = new URLSearchParams({
-        latlng: `${lat},${lng}`,
-        key: GOOGLE_MAPS_KEY,
-        language: 'en',
-      });
-
-      const response = await fetch(`${url}?${params}`, { method: 'GET' });
-      console.log('[Geocod] HTTP status:', response.status);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('[Geocod] Response status:', data.status);
-      if (data.error_message) {
-        console.warn('[Geocod] Error message:', data.error_message);
-      }
-
-      if (data.status !== 'OK') {
-        console.warn('[Geocod] Non-OK status:', data.status);
-      } else if (data.results?.length > 0) {
-        const result = data.results[0];
-        const formatted = result.formatted_address;
-        
-        // Try to find the most specific name from address components
-        // (neighborhood > sublocality > point_of_interest)
-        let specificName = '';
-        const components = result.address_components || [];
-        
-        const preferredTypes = ['neighborhood', 'sublocality_level_1', 'sublocality', 'point_of_interest', 'premise'];
-        
-        for (const type of preferredTypes) {
-          const comp = components.find(c => c.types.includes(type));
-          if (comp) {
-            specificName = comp.long_name;
-            break;
-          }
-        }
-
-        // If we found a specific name, prefix it to the formatted address or use it as a hint
-        // For now, we return the formatted address, but the parser will handle extraction.
-        // We'll return a special format if we have a specific name.
-        if (specificName && !formatted.startsWith(specificName)) {
-          console.log(`✅ Specific location found: ${specificName}`);
-          return `${specificName}, ${formatted}`;
-        }
-
-        console.log('✅ Address found:', formatted);
-        return formatted;
-      }
-    } catch (error) {
-      console.warn('⚠️  Google API call failed:', error.message);
-      console.log('    Using fallback method...');
+  try {
+    console.log('[Geocod] Requesting backend reverse-geocode:', lat.toFixed(6), lng.toFixed(6));
+    const result = await apiRequest('POST', '/geo/reverse-geocode', { lat, lng });
+    const address = result?.data?.address;
+    if (address) {
+      console.log('✅ Address found:', address);
+      return address;
     }
-  } else {
-    console.warn('⚠️  Google Maps API Key not configured');
-    console.log('    Make sure EXPO_PUBLIC_GOOGLE_MAPS_API_KEY is in .env.development');
+    console.warn('[Geocod] Backend returned no address');
+  } catch (error) {
+    console.warn('⚠️  Backend reverse-geocode failed:', error?.message);
+    console.log('    Using local fallback method...');
   }
 
   // Fallback: Create address from coordinates + city detection
@@ -161,52 +109,20 @@ export async function searchPlaces(query, lat, lng, radiusMeters = 20000) {
     return [];
   }
 
-  if (!GOOGLE_MAPS_KEY) {
-    console.error('❌ Google Maps API Key missing');
-    return [];
-  }
-
   try {
-    const url = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
-    const params = new URLSearchParams({
-      input: query.trim(),
-      key: GOOGLE_MAPS_KEY,
-      language: 'en',
-      components: 'country:ET',
-    });
-
-    if (lat && lng) {
-      params.append('location', `${lat},${lng}`);
+    const params = new URLSearchParams({ query: query.trim() });
+    if (lat != null && lng != null) {
+      params.append('lat', String(lat));
+      params.append('lng', String(lng));
       params.append('radius', String(Math.round(radiusMeters)));
     }
 
-    const response = await fetch(`${url}?${params}`);
-    console.log('[Places] HTTP status:', response.status);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('[Places] Response status:', data.status);
-    if (data.error_message) {
-      console.warn('[Places] Error message:', data.error_message);
-    }
-
-    if (data.status === 'OK' && data.predictions?.length > 0) {
-      console.log('[Places] Found', data.predictions.length, 'predictions');
-      return data.predictions.map((p) => ({
-        placeId: p.place_id,
-        mainText: p.structured_formatting?.main_text || p.description,
-        secondaryText: p.structured_formatting?.secondary_text || '',
-        description: p.description,
-      }));
-    }
-
-    console.warn('[Places] No predictions. Status was:', data.status);
-    return [];
+    const result = await apiRequest('GET', `/geo/places/autocomplete?${params}`);
+    const predictions = result?.data ?? [];
+    console.log('[Places] Found', predictions.length, 'predictions');
+    return predictions;
   } catch (error) {
-    console.error('[Places] Search failed:', error.message);
+    console.error('[Places] Search failed:', error?.message);
     return [];
   }
 }
@@ -216,57 +132,18 @@ export async function searchPlaces(query, lat, lng, radiusMeters = 20000) {
  * After user selects from search results
  */
 export async function getPlaceDetails(placeId) {
-  if (!placeId || !GOOGLE_MAPS_KEY) {
-    console.error('❌ Missing placeId or API key');
+  if (!placeId) {
+    console.error('❌ Missing placeId');
     return null;
   }
 
   try {
     console.log('[Places] Details for placeId:', placeId?.substring(0, 20));
-    console.log('[Places] Using key:', GOOGLE_MAPS_KEY.substring(0, 10) + '...');
-
-    const url = 'https://maps.googleapis.com/maps/api/place/details/json';
-    const params = new URLSearchParams({
-      place_id: placeId,
-      fields: 'geometry,formatted_address,name',
-      key: GOOGLE_MAPS_KEY,
-      language: 'en',
-    });
-
-    const response = await fetch(`${url}?${params}`);
-    console.log('[Places] Details HTTP status:', response.status);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('[Places] Details response status:', data.status);
-    if (data.error_message) {
-      console.warn('[Places] Details error message:', data.error_message);
-    }
-
-    if (data.status === 'OK' && data.result) {
-      const { geometry, formatted_address, name } = data.result;
-
-      if (!geometry?.location) {
-        console.error('[Places] No geometry in response');
-        return null;
-      }
-
-      return {
-        lat: geometry.location.lat,
-        lng: geometry.location.lng,
-        address: formatted_address,
-        name,
-        placeId,
-      };
-    }
-
-    console.error('[Places] Details API returned:', data.status);
-    return null;
+    const params = new URLSearchParams({ place_id: placeId });
+    const result = await apiRequest('GET', `/geo/places/details?${params}`);
+    return result?.data ?? null;
   } catch (error) {
-    console.error('[Places] Details failed:', error.message);
+    console.error('[Places] Details failed:', error?.message);
     return null;
   }
 }

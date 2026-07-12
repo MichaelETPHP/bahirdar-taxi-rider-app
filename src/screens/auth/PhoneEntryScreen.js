@@ -17,7 +17,7 @@ import {
   Linking,
   InputAccessoryView,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../../lib/secureStorage';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -126,7 +126,7 @@ export default function PhoneEntryScreen({ navigation }) {
   useEffect(() => {
     (async () => {
       try {
-        const fromStorage = await AsyncStorage.getItem(RECENT_PHONE_KEY);
+        const fromStorage = await secureStorage.getItem(RECENT_PHONE_KEY);
         const fromStore = storedPhone || '';
         const candidate = toLocalEthiopianDigits(fromStore) || toLocalEthiopianDigits(fromStorage);
         if (!candidate) return;
@@ -251,7 +251,7 @@ export default function PhoneEntryScreen({ navigation }) {
     setLoading(true);
     setInlineError('');
     const intlPhone = toInternationalPhone(rawDigits);
-    AsyncStorage.setItem(RECENT_PHONE_KEY, intlPhone).catch(() => { });
+    secureStorage.setItem(RECENT_PHONE_KEY, intlPhone).catch(() => { });
 
     try {
       // Step 1: Save phone and check existence
