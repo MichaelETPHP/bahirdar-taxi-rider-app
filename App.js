@@ -20,6 +20,13 @@ import MaintenanceScreen from './src/screens/common/MaintenanceScreen';
 import { checkMaintenanceStatus } from './src/api/maintenance';
 import useMaintenanceStore from './src/store/maintenanceStore';
 import { migrateSecureStorage } from './src/lib/migrateSecureStorage';
+import useAuthStore from './src/store/authStore';
+import {
+  startIntegrityMonitoring,
+  getCachedIntegrity,
+  onIntegrityChange,
+  reportIntegrityEvent,
+} from './src/security/deviceIntegrity';
 
 // Move any plaintext-stored session data into SecureStore before anything
 // reads auth state (idempotent; reads after this also migrate lazily).
@@ -119,6 +126,7 @@ async function registerExpoPushTokenIfConfigured() {
 
 export default function App() {
   const { isMaintenanceMode, maintenanceData, setMaintenance } = useMaintenanceStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const runMaintenanceCheck = async () => {
     try {
@@ -136,6 +144,20 @@ export default function App() {
   useEffect(() => {
     runMaintenanceCheck();
   }, []);
+
+  // INSA: device integrity — local root/hook detection at startup and on app
+  // resume; once authenticated, report non-clean detections to the API
+  // (visibility only — enforcement is the server-verified Play Integrity
+  // verdict, wired on the driver app's wallet flows; rider is cash-only).
+  useEffect(() => {
+    startIntegrityMonitoring();
+  }, []);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const cached = getCachedIntegrity();
+    if (cached) reportIntegrityEvent(cached);
+    return onIntegrityChange(reportIntegrityEvent);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     loadCustomFonts();
