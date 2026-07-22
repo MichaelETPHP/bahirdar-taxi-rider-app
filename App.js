@@ -2,7 +2,7 @@ import 'react-native-gesture-handler';
 import './src/i18n';
 
 import React, { useEffect, useState } from 'react';
-import { Platform, Text, TextInput } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
@@ -14,6 +14,7 @@ import { enableScreens } from 'react-native-screens';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Provider as PaperProvider } from 'react-native-paper';
 import RootNavigator from './src/navigation/RootNavigator';
+import SplashLoader from './src/components/common/SplashLoader';
 import { navigationRef } from './src/navigation/RootNavigator';
 import { fontFamily } from './src/constants/typography';
 import MaintenanceScreen from './src/screens/common/MaintenanceScreen';
@@ -23,14 +24,24 @@ import { migrateSecureStorage } from './src/lib/migrateSecureStorage';
 import useAuthStore from './src/store/authStore';
 import {
   startIntegrityMonitoring,
+  checkDeviceIntegrity,
   getCachedIntegrity,
   onIntegrityChange,
   reportIntegrityEvent,
+  __devSimulateRooted,
 } from './src/security/deviceIntegrity';
+import { ensureIntegrityVerdict } from './src/security/playIntegrityClient';
+import { policyForRisk } from './src/security/integrityPolicy';
+import RootBlockScreen from './src/components/security/RootBlockScreen';
+import { initSslPinning } from './src/security/sslPinning';
 
 // Move any plaintext-stored session data into SecureStore before anything
 // reads auth state (idempotent; reads after this also migrate lazily).
 migrateSecureStorage();
+
+// INSA: pin the API's certificate keys before any network request leaves the
+// app — a MITM proxy can never impersonate the backend after this resolves.
+initSslPinning();
 
 enableScreens();
 
@@ -145,19 +156,49 @@ export default function App() {
     runMaintenanceCheck();
   }, []);
 
-  // INSA: device integrity — local root/hook detection at startup and on app
-  // resume; once authenticated, report non-clean detections to the API
-  // (visibility only — enforcement is the server-verified Play Integrity
-  // verdict, wired on the driver app's wallet flows; rider is cash-only).
+  // INSA: device integrity — a high-risk device (rooted / hooking tools /
+  // emulator) never reaches the navigator: the whole app is replaced by
+  // RootBlockScreen and login is unreachable. Detection runs at startup and
+  // on every app resume.
+  //
+  // integrityReady stays false until the FIRST verdict is known — we hold the
+  // splash/loading screen during that window so login/OTP can never render
+  // before the async jail-monkey/expo-device checks resolve.
+  const [integrityReady, setIntegrityReady] = useState(false);
+  const [integrityBlocked, setIntegrityBlocked] = useState(() => {
+    const cached = getCachedIntegrity();
+    return cached ? policyForRisk(cached.riskLevel).appAccess === 'blocked' : false;
+  });
   useEffect(() => {
     startIntegrityMonitoring();
+    const sync = (r) => {
+      setIntegrityBlocked(policyForRisk(r.riskLevel).appAccess === 'blocked');
+      setIntegrityReady(true);
+    };
+    const cached = getCachedIntegrity();
+    if (cached) {
+      sync(cached);
+    } else {
+      checkDeviceIntegrity().then(sync);
+    }
+    return onIntegrityChange(sync);
   }, []);
   useEffect(() => {
     if (!isAuthenticated) return;
     const cached = getCachedIntegrity();
     if (cached) reportIntegrityEvent(cached);
+    ensureIntegrityVerdict();
     return onIntegrityChange(reportIntegrityEvent);
   }, [isAuthenticated]);
+  // Any lingering authenticated session on a blocked device is terminated
+  // within one minute of detection.
+  useEffect(() => {
+    if (!integrityBlocked || !isAuthenticated) return;
+    const timer = setTimeout(() => {
+      useAuthStore.getState().logout();
+    }, 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [integrityBlocked, isAuthenticated]);
 
   useEffect(() => {
     loadCustomFonts();
@@ -206,6 +247,27 @@ export default function App() {
     };
   }, []);
 
+  // INSA: hold a lightweight loading screen until the FIRST device-integrity
+  // verdict is known — must resolve before the navigator so a rooted device
+  // can never render login/OTP even for one frame.
+  if (!integrityReady) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SplashLoader text="Securing your session..." />
+      </GestureHandlerRootView>
+    );
+  }
+
+  // INSA: compromised device — outranks every other screen, login unreachable
+  if (integrityBlocked) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <RootBlockScreen />
+        <DevIntegrityFloatingButton />
+      </GestureHandlerRootView>
+    );
+  }
+
   if (isMaintenanceMode && maintenanceData) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -227,9 +289,49 @@ export default function App() {
           <SafeAreaProvider>
             <StatusBar style="light" backgroundColor="#00674F" />
             <RootNavigator />
+            <DevIntegrityFloatingButton />
           </SafeAreaProvider>
         </PaperProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }
+
+/**
+ * DEV-ONLY floating test button — reachable on EVERY screen (phone entry,
+ * OTP, home, anywhere), including before authentication, so the
+ * rooted-device block can be verified starting from the very first screen
+ * without needing physical rooted hardware. Dead code in release builds.
+ */
+function DevIntegrityFloatingButton() {
+  if (!__DEV__) return null;
+  return (
+    <View pointerEvents="box-none" style={devStyles.wrap}>
+      <Pressable style={[devStyles.btn, devStyles.btnDanger]} onPress={() => __devSimulateRooted(true)}>
+        <Text style={devStyles.btnText}>ROOT</Text>
+      </Pressable>
+      <Pressable style={devStyles.btn} onPress={() => __devSimulateRooted(false)}>
+        <Text style={devStyles.btnText}>CLEAN</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const devStyles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    bottom: 48,
+    right: 12,
+    flexDirection: 'row',
+    gap: 6,
+    zIndex: 9999,
+  },
+  btn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#374151',
+  },
+  btnDanger: { backgroundColor: '#DC2626' },
+  btnText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+});

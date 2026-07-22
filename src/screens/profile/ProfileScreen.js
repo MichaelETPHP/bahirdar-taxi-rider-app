@@ -37,6 +37,7 @@ import useAuthStore from '../../store/authStore';
 import { updateProfile, uploadAvatar } from '../../services/authService';
 import { API_BASE_URL } from '../../config/api';
 import { buildAvatarUrl } from '../../utils/avatarUrl';
+import VersionFooter from '../../components/common/VersionFooter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -537,6 +538,8 @@ export default function ProfileScreen({ navigation }) {
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
+          {/* ── Version footer ── */}
+          <VersionFooter />
         </View>
       </ScrollView>
 
@@ -620,7 +623,7 @@ export default function ProfileScreen({ navigation }) {
                 <Text style={[styles.modalItemTitle, { color: colors.error }]}>Delete Account</Text>
               </TouchableOpacity>
 
-              <Text style={styles.versionText}>Version 1.0.0</Text>
+              <VersionFooter />
             </ScrollView>
           </View>
         </TouchableOpacity>
