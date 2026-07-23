@@ -1,6 +1,6 @@
 import { Clock, Phone } from 'lucide-react-native';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, BackHandler, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RideMap from '../../components/map/RideMap';
 import DriverMarker from '../../components/map/DriverMarker';
@@ -31,6 +31,24 @@ function resolveAvatarUrl(rawUrl) {
 
 const LOCATION_POLL_MS = 3000;
 
+/** Pulsing placeholder shown until the first live fare update arrives. */
+function FareValueSkeleton() {
+  const opacity = useRef(new Animated.Value(0.38)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.62, duration: 700, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.38, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+
+  return <Animated.View style={[styles.fareValueSkeleton, { opacity }]} />;
+}
+
 export default function TripActiveScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
@@ -39,7 +57,7 @@ export default function TripActiveScreen({ navigation }) {
   const timerRef = useRef(null);
   const handledRef = useRef(false);
 
-  const { tripId, tripData, driver, driverLocation, setDriverLocation, setTripStatus, setFinalFare, setFareAdjustment, setLiveFare, clearLiveFare, resetTrip, mergeTripData } = useRideStore();
+  const { tripId, tripData, driver, driverLocation, liveFare, setDriverLocation, setTripStatus, setFinalFare, setFareAdjustment, setLiveFare, clearLiveFare, resetTrip, mergeTripData } = useRideStore();
   const setDriver = useRideStore((s) => s.setDriver);
   const categories = useRideStore((s) => s.categories);
   const { token } = useAuthStore();
@@ -349,7 +367,13 @@ export default function TripActiveScreen({ navigation }) {
             Heading to {tripData?.dropoff_address || destination?.name || 'Destination'}
           </Text>
         </View>
-        
+
+        <View style={styles.fareRow}>
+          <Text style={styles.fareLabel}>Live Fare</Text>
+          {liveFare?.liveFareEtb != null
+            ? <Text style={styles.fareValue}>ETB {Number(liveFare.liveFareEtb).toFixed(2)}</Text>
+            : <FareValueSkeleton />}
+        </View>
       </View>
     </View>
   );
@@ -427,4 +451,5 @@ const styles = StyleSheet.create({
   },
   fareLabel: { fontSize: fontSize.sm, color: '#94A3B8', fontWeight: fontWeight.medium },
   fareValue: { fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: '#111827' },
+  fareValueSkeleton: { width: 70, height: 18, borderRadius: 4, backgroundColor: '#E2E8F0' },
 });
