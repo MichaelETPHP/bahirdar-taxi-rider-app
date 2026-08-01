@@ -6,6 +6,7 @@
     "phonePlaceholder": "09 XX XXX XXX",
     "phonePrefixError": "Phone must start with 09 or 07",
     "sendOTP": "Sign in",
+    "orContinueWith": "Or continue with",
     "terms": "Terms & Privacy Policy",
     "verifyTitle": "Verify your number",
     "verifySubtitle": "We sent a 4-digit code to",

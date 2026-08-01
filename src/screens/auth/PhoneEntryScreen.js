@@ -27,8 +27,10 @@ import AppInput from '../../components/common/AppInput';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
-import { Globe, ChevronDown, Car, CarTaxiFront, CheckCircle, History, Ban, Share2, Users, Music } from 'lucide-react-native';
+import { Globe, ChevronDown, Car, CarTaxiFront, CheckCircle, History, Ban, Share2, Users, Music, Key } from 'lucide-react-native';
 import { FacebookIcon, InstagramIcon, TiktokIcon, TelegramIcon } from '../../components/common/BrandIcons';
+import GoogleLogo from '../../components/icons/GoogleLogo';
+import FacebookLogo from '../../components/icons/FacebookLogo';
 
 import {
   formatPhone,
@@ -122,6 +124,21 @@ export default function PhoneEntryScreen({ navigation }) {
   const bounceAnim = useRef(new Animated.Value(1)).current;
   const focusAnim = useRef(new Animated.Value(0)).current; // 0 = blurred, 1 = focused
   const prevValid = useRef(false);
+  // Android only: the footer sits outside the ScrollView with a fixed height,
+  // so it competes with the form for the shrunk (adjustResize) window space
+  // once the keyboard opens — hiding it frees that space for the Sign In
+  // button instead. iOS already reaches Sign In fine, so it's left alone.
+  const [androidKeyboardOpen, setAndroidKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setAndroidKeyboardOpen(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setAndroidKeyboardOpen(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -244,6 +261,16 @@ export default function PhoneEntryScreen({ navigation }) {
     }
   };
 
+  const handleGoogleLogin = () => {
+    // TODO: wire Google OAuth later (no backend yet)
+    console.log('Google login pressed');
+  };
+
+  const handleFacebookLogin = () => {
+    // TODO: wire Facebook OAuth later (no backend yet)
+    console.log('Facebook login pressed');
+  };
+
   const handleCheckPress = async () => {
     if (!isValid || loading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -347,7 +374,7 @@ export default function PhoneEntryScreen({ navigation }) {
                   style={styles.scrollFill}
                   contentContainerStyle={styles.scrollContent}
                   keyboardShouldPersistTaps="handled"
-                  scrollEnabled={false}
+                  scrollEnabled={true}
                   showsVerticalScrollIndicator={false}
                 >
                   <View style={styles.centerWrapper}>
@@ -459,19 +486,47 @@ export default function PhoneEntryScreen({ navigation }) {
 
                           <View style={styles.dividerHorizontal} />
 
-                          <AppButton 
+                          <AppButton
                             title={t('auth.signIn', 'Sign in')}
                             onPress={handleCheckPress}
                             disabled={!isValid || loading}
                             loading={loading}
                             shimmer={true}
-                            style={{ 
-                              width: '110%', // Make it wider than the container
-                              marginTop: 12, 
-                              height: 58,
-                              borderRadius: 16,
-                            }}
+                            icon={
+                              <View style={styles.signInIconBadge}>
+                                <Key size={15} color={colors.white} strokeWidth={2.75} />
+                              </View>
+                            }
+                            textStyle={styles.signInLabel}
+                            style={[
+                              styles.signInButton,
+                              (isValid && !loading) && styles.signInButtonActive,
+                              { marginHorizontal: -16 }, // bleeds flush to the card's edges — safe on any screen size, unlike a >100% width
+                            ]}
                           />
+
+                          <View style={styles.socialDividerRow}>
+                            <View style={styles.socialDividerLine} />
+                            <Text style={styles.socialDividerText}>{t('auth.orContinueWith')}</Text>
+                            <View style={styles.socialDividerLine} />
+                          </View>
+
+                          <View style={styles.socialButtonRow}>
+                            <TouchableOpacity
+                              style={styles.socialCircleButton}
+                              onPress={handleGoogleLogin}
+                              activeOpacity={0.8}
+                            >
+                              <GoogleLogo size={22} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.socialCircleButton}
+                              onPress={handleFacebookLogin}
+                              activeOpacity={0.8}
+                            >
+                              <FacebookLogo size={22} />
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       </View>
                     </View>
@@ -480,26 +535,31 @@ export default function PhoneEntryScreen({ navigation }) {
               </View>
             </KeyboardAvoidingView>
 
-            {/* Footer moved OUTSIDE of KeyboardAvoidingView so it stays put */}
-            <View style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}>
-              <View style={styles.socialIcons}>
-                <TouchableOpacity onPress={() => Linking.openURL('https://facebook.com')} style={styles.socialBtn}>
-                  <FacebookIcon size={18} color={colors.white} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => Linking.openURL('https://t.me')} style={styles.socialBtn}>
-                  <TelegramIcon size={18} color={colors.white} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => Linking.openURL('https://instagram.com')} style={styles.socialBtn}>
-                  <InstagramIcon size={18} color={colors.white} />
+            {/* Footer moved OUTSIDE of KeyboardAvoidingView so it stays put.
+                Hidden on Android while the keyboard is open — it otherwise
+                eats into the shrunk (adjustResize) space the Sign In button
+                needs. */}
+            {!androidKeyboardOpen && (
+              <View style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}>
+                <View style={styles.socialIcons}>
+                  <TouchableOpacity onPress={() => Linking.openURL('https://facebook.com')} style={styles.socialBtn}>
+                    <FacebookIcon size={18} color={colors.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => Linking.openURL('https://t.me')} style={styles.socialBtn}>
+                    <TelegramIcon size={18} color={colors.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => Linking.openURL('https://instagram.com')} style={styles.socialBtn}>
+                    <InstagramIcon size={18} color={colors.white} />
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setTermsModalVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.terms}>{t('auth.terms')}</Text>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={() => setTermsModalVisible(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.terms}>{t('auth.terms')}</Text>
-              </TouchableOpacity>
-            </View>
+            )}
           </View>
           <TermsConditionsModal
             visible={termsModalVisible}
@@ -685,6 +745,75 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 12,
   },
+  signInButton: {
+    alignSelf: 'stretch',
+    marginTop: 12,
+    height: 60,
+  },
+  // Colored, soft-blurred shadow tinted to the button's own hue reads as
+  // deliberate depth rather than the shared component's generic black one —
+  // only while the button is actually actionable, so a disabled/grayed
+  // button never shows a blue glow that no longer matches its own fill.
+  signInButtonActive: {
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  signInLabel: {
+    fontSize: fontSize['2xl'],
+    fontWeight: fontWeight.bold,
+    letterSpacing: 0.3,
+  },
+  signInIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  socialDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 20,
+    gap: 10,
+  },
+  socialDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  socialDividerText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.medium,
+  },
+  socialButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 16,
+    gap: 20,
+  },
+  socialCircleButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   checkButtonInline: {
     paddingLeft: 8,
     justifyContent: 'center',
@@ -756,7 +885,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 999,
-    backgroundColor: 'rgba(0,103,79,0.1)',
+    backgroundColor: 'rgba(47,112,199,0.1)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
