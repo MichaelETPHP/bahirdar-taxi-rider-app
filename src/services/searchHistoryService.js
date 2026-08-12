@@ -8,6 +8,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const HISTORY_KEY = 'search_history';
 const MAX_HISTORY = 20; // Keep last 20 searches
 
+// Normalized name, used as a fallback dedup key alongside placeId. Google can
+// return a different placeId for what's clearly the same real-world spot
+// depending on how it was searched (POI name vs. exact address vs. a nearby
+// road), so placeId alone under-deduplicates — two searches for "Bahir Dar
+// Stadium" can resolve to different IDs but should still collapse to one
+// history entry.
+function nameKey(place) {
+  return String(place?.name || '').trim().toLowerCase();
+}
+
 export async function saveSearchPlace(place) {
   try {
     if (!place || !place.placeId) {
@@ -16,9 +26,15 @@ export async function saveSearchPlace(place) {
     }
 
     const history = await getSearchHistory();
+    const newNameKey = nameKey(place);
 
-    // Remove duplicates (if same place was searched before, move it to top)
-    const filtered = history.filter(p => p.placeId !== place.placeId);
+    // Remove duplicates (if the same place was searched before — by placeId
+    // or by matching name — move it to top instead of listing it again)
+    const filtered = history.filter((p) => {
+      const samePlace = p.placeId === place.placeId;
+      const sameName = newNameKey.length > 0 && nameKey(p) === newNameKey;
+      return !samePlace && !sameName;
+    });
 
     // Add new search at beginning
     const updated = [place, ...filtered].slice(0, MAX_HISTORY);

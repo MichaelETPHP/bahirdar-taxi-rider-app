@@ -23,12 +23,16 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
-import AppInput from '../../components/common/AppInput';
+import PhoneInput, { isValidNumber as isValidPhoneNumberForCountry } from 'react-native-phone-number-input';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
-import { Globe, ChevronDown, Car, CarTaxiFront, CheckCircle, History, Ban, Share2, Users, Music } from 'lucide-react-native';
+import { Globe, ChevronDown, Car, CarTaxiFront, CheckCircle, History, Ban, Share2, Users, Music, Key } from 'lucide-react-native';
 import { FacebookIcon, InstagramIcon, TiktokIcon, TelegramIcon } from '../../components/common/BrandIcons';
+import GoogleLogo from '../../components/icons/GoogleLogo';
+import AppleLogo from '../../components/icons/AppleLogo';
+import { isGoogleSignInConfigured, signInWithGoogle, googleSignInErrorMessage } from '../../lib/googleAuth';
+import { isAppleSignInAvailable, signInWithApple, appleSignInErrorMessage } from '../../lib/appleAuth';
 
 import {
   formatPhone,
@@ -38,13 +42,21 @@ import {
 } from '../../utils/formatters';
 import useAuthStore from '../../store/authStore';
 import TermsConditionsModal from '../../components/auth/TermsConditionsModal';
-import { registerRider, sendOtp, verifyOtp, checkPhoneExistence } from '../../services/authService';
+import SendCodeSheet from '../../components/auth/SendCodeSheet';
+import { registerRider, sendOtp, verifyOtp, checkPhoneExistence, googleLogin, appleLogin } from '../../services/authService';
+import Constants from 'expo-constants';
 import { changeLanguage } from '../../i18n';
 import AppButton from '../../components/common/AppButton';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('screen');
-const ETHIOPIA_FLAG_URI = 'https://flagcdn.com/w80/et.png';
 const RECENT_PHONE_KEY = 'bahirdar_recent_phone';
+const AUTH_DEVICE_ID =
+  Constants?.installationId ||
+  Constants?.deviceId ||
+  `auth-device-${Platform.OS}`;
+const PHONE_INPUT_HEIGHT = 60;
+const PHONE_INPUT_RADIUS = 18;
+const MAX_E164_DIGITS = 15;
 
 function toLocalEthiopianDigits(raw) {
   const digits = String(raw || '').replace(/\D/g, '');
@@ -105,8 +117,13 @@ export default function PhoneEntryScreen({ navigation }) {
     changeLanguage(i18n.language === 'en' ? 'am' : 'en');
   };
   const [phone, setPhone] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState('ET');
+  const [selectedCallingCode, setSelectedCallingCode] = useState('251');
+  const [intlFormattedPhone, setIntlFormattedPhone] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const [termsModalVisible, setTermsModalVisible] = useState(false);
+  const [sendCodeSheetVisible, setSendCodeSheetVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [inlineError, setInlineError] = useState('');
   const [supportPhone, setSupportPhone] = useState('');
@@ -118,9 +135,17 @@ export default function PhoneEntryScreen({ navigation }) {
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
   const setTokens = useAuthStore((s) => s.setTokens);
   const setUser = useAuthStore((s) => s.setUser);
+  const loadProfile = useAuthStore((s) => s.loadProfile);
   const storedPhone = useAuthStore((s) => s.phone);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  // True the instant any one of the three sign-in methods is mid-flight —
+  // used to disable the OTHER two while one is running, so a customer can
+  // never fire two different login attempts at once (e.g. tap Google, then
+  // tap Apple before the first one resolves).
+  const isAuthBusy = loading || googleLoading || appleLoading;
   const bounceAnim = useRef(new Animated.Value(1)).current;
-  const focusAnim = useRef(new Animated.Value(0)).current; // 0 = blurred, 1 = focused
   const prevValid = useRef(false);
 
   useEffect(() => {
@@ -138,43 +163,52 @@ export default function PhoneEntryScreen({ navigation }) {
     })();
   }, []);
 
+  // Android has no Apple Sign-In at all — isAppleSignInAvailable() resolves
+  // false there, so the button hides itself instead of erroring on tap.
+  useEffect(() => {
+    isAppleSignInAvailable().then(setAppleAvailable);
+  }, []);
+
   const handleFocus = () => {
     setInputFocused(true);
-    Animated.spring(focusAnim, {
-      toValue: 1,
-      tension: 40,
-      friction: 7,
-      useNativeDriver: false, // background color and width need false
-    }).start();
   };
 
   const handleBlur = () => {
     setInputFocused(false);
-    Animated.spring(focusAnim, {
-      toValue: 0,
-      tension: 40,
-      friction: 7,
-      useNativeDriver: false,
-    }).start();
+    setPhoneTouched(true);
   };
 
-  // Liquid color interpolation
-  const inputBgColor = focusAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.white, 'rgba(255, 255, 255, 0.95)'],
-  });
-
-  const inputScale = focusAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.03],
-  });
-
-  const inputBorderColor = focusAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.border, colors.primary],
-  });
+  const isEthiopia = selectedCountry === 'ET';
 
   const handlePhoneChange = (text) => {
+    // International entries use digits only and are capped to the E.164 limit.
+    if (!isEthiopia) {
+      const original = String(text || '').trim();
+      let digits = original.replace(/\D/g, '');
+
+      if (original.startsWith('+') && selectedCallingCode && digits.startsWith(selectedCallingCode)) {
+        digits = digits.slice(selectedCallingCode.length);
+      } else if (selectedCallingCode && digits.startsWith(`00${selectedCallingCode}`)) {
+        digits = digits.slice(selectedCallingCode.length + 2);
+      }
+
+      const trunkPrefixAllowance = digits.startsWith('0') ? 1 : 0;
+      const maxNationalDigits = Math.max(
+        4,
+        MAX_E164_DIGITS - selectedCallingCode.length + trunkPrefixAllowance
+      );
+      const limitedDigits = digits.slice(0, maxNationalDigits);
+
+      setPhone(limitedDigits);
+      setIntlFormattedPhone(
+        limitedDigits
+          ? `+${selectedCallingCode}${limitedDigits.replace(/^0/, '')}`
+          : ''
+      );
+      if (inlineError) setInlineError('');
+      if (supportPhone) setSupportPhone('');
+      return;
+    }
     let digits = text.replace(/\D/g, '');
     // Normalize international and SIM/autofill formats to local 09XXXXXXXX / 07XXXXXXXX.
     const normalized = toLocalEthiopianDigits(digits);
@@ -188,13 +222,31 @@ export default function PhoneEntryScreen({ navigation }) {
       digits = digits.slice(0, 10);
     }
     setPhone(formatPhone(digits));
+    setIntlFormattedPhone(digits ? toInternationalPhone(digits) : '');
     if (inlineError) setInlineError('');
     if (supportPhone) setSupportPhone('');
   };
 
+  // Country picker changed — start the field fresh rather than reinterpreting
+  // a half-typed number under a different country's rules.
+  const handleCountryChange = (country) => {
+    setSelectedCountry(country.cca2);
+    setSelectedCallingCode(String(country.callingCode?.[0] || ''));
+    setPhone('');
+    setIntlFormattedPhone('');
+    setInlineError('');
+    setPhoneTouched(false);
+  };
+
   const rawDigits = phone.replace(/\D/g, '');
-  const isValid = validateEthiopianPhone(rawDigits);
-  const hasPrefixError = hasInvalidEthiopianPhonePrefix(rawDigits);
+  // Ethiopia keeps its mobile-prefix rules. Every other selection is checked
+  // against that country's actual numbering metadata.
+  const isValid = isEthiopia
+    ? validateEthiopianPhone(rawDigits)
+    : isValidPhoneNumberForCountry(rawDigits, selectedCountry);
+  const hasPrefixError = isEthiopia && hasInvalidEthiopianPhonePrefix(rawDigits);
+  const hasPhoneFormatError =
+    phoneTouched && !inputFocused && rawDigits.length > 0 && !isValid && !hasPrefixError;
 
   useEffect(() => {
     if (isValid && !prevValid.current) {
@@ -244,8 +296,126 @@ export default function PhoneEntryScreen({ navigation }) {
     }
   };
 
-  const handleCheckPress = async () => {
+  // Opens the "Send to..." sheet — SMS / WhatsApp / Edit. Replaces the old
+  // behavior of sending the OTP straight from the Sign in tap. Non-Ethiopia
+  // numbers still open the sheet — they just only see the WhatsApp option,
+  // since the backend can't SMS-verify them yet.
+  const openSendCodeSheet = () => {
     if (!isValid || loading) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Keyboard.dismiss();
+    setSendCodeSheetVisible(true);
+  };
+
+  const handleWhatsAppCode = () => {
+    // TODO: WhatsApp OTP (needs WhatsApp Business API) — not wired yet
+    console.log('WhatsApp code pressed');
+    setSendCodeSheetVisible(false);
+    Alert.alert(t('common.comingSoon'));
+  };
+
+  const handleEditPhone = () => {
+    setSendCodeSheetVisible(false);
+    setTimeout(() => phoneInputRef.current?.focus(), 300);
+  };
+
+  // Full login on its own — no phone/OTP step follows. The idToken is
+  // verified server-side (never trust the client's claim of who signed in);
+  // the backend finds-or-creates the rider by google_id and returns the same
+  // token/user shape phone OTP verification does.
+  const handleGoogleLogin = async () => {
+    if (googleLoading || loading) return;
+    if (!isGoogleSignInConfigured()) {
+      Alert.alert(t('common.comingSoon'));
+      return;
+    }
+    setGoogleLoading(true);
+    try {
+      const profile = await signInWithGoogle();
+      if (!profile) return; // user backed out of the picker
+
+      const res = await googleLogin(profile.idToken, {
+        device_id: AUTH_DEVICE_ID,
+        platform: Platform.OS,
+      });
+      const { accessToken, refreshToken, user, expiresIn } = res.data;
+
+      const mappedUser = {
+        ...user,
+        avatarUrl: user.avatar_url || user.avatarUrl,
+        fullName: user.full_name || user.fullName,
+        isVerified: true,
+      };
+
+      if (user.phone) setStorePhone(user.phone);
+      await setTokens(accessToken, refreshToken, expiresIn || 3600, mappedUser);
+      await loadProfile();
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      const displayName = user?.fullName || user?.full_name;
+      if (!displayName) {
+        navigation.replace('ProfileSetup');
+      } else {
+        setAuthenticated(true, false);
+      }
+    } catch (err) {
+      Alert.alert('Google Sign-In', googleSignInErrorMessage(err));
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  // Same shape as handleGoogleLogin — the identityToken is verified
+  // server-side, the backend finds-or-creates the rider by apple_id and
+  // returns the same token/user shape phone OTP verification does.
+  const handleAppleLogin = async () => {
+    if (appleLoading || loading) return;
+    setAppleLoading(true);
+    try {
+      const credential = await signInWithApple();
+      if (!credential) return; // user cancelled the system sheet
+
+      const res = await appleLogin(credential.identityToken, credential.fullName, {
+        device_id: AUTH_DEVICE_ID,
+        platform: Platform.OS,
+      });
+      const { accessToken, refreshToken, user, expiresIn } = res.data;
+
+      const mappedUser = {
+        ...user,
+        avatarUrl: user.avatar_url || user.avatarUrl,
+        fullName: user.full_name || user.fullName,
+        isVerified: true,
+      };
+
+      if (user.phone) setStorePhone(user.phone);
+      await setTokens(accessToken, refreshToken, expiresIn || 3600, mappedUser);
+      await loadProfile();
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      const displayName = user?.fullName || user?.full_name;
+      if (!displayName) {
+        navigation.replace('ProfileSetup');
+      } else {
+        setAuthenticated(true, false);
+      }
+    } catch (err) {
+      Alert.alert('Apple Sign-In', appleSignInErrorMessage(err));
+    } finally {
+      setAppleLoading(false);
+    }
+  };
+
+  // Unchanged from the old "Sign in" flow — only its entry point moved
+  // behind the sheet's "Send code by SMS" option. SMS is Ethiopia-only
+  // (backend can't normalise/send to other countries yet); the sheet hides
+  // this option for other countries, but guard here too since it calls real
+  // backend endpoints.
+  const handleSendSmsCode = async () => {
+    if (!isValid || !isEthiopia || loading) return;
+    setSendCodeSheetVisible(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Keyboard.dismiss();
     setLoading(true);
@@ -366,51 +536,64 @@ export default function PhoneEntryScreen({ navigation }) {
                         <Text style={styles.sub}>{t('auth.welcomeSub')}</Text>
 
                         <View style={styles.loginCard}>
-                          <Animated.View 
-                            style={[
-                              styles.phoneInput, 
-                              { 
-                                backgroundColor: inputBgColor,
-                                borderColor: inputBorderColor,
-                                transform: [{ scale: inputScale }]
-                              },
-                              hasPrefixError && styles.phoneInputError
-                            ]}
-                          >
-                            <TouchableOpacity
-                              style={styles.countryCodeSection}
-                              onPress={() => phoneInputRef.current?.focus()}
-                              activeOpacity={0.7}
-                            >
-                              <Image
-                                source={{ uri: ETHIOPIA_FLAG_URI }}
-                                style={styles.ethiopiaFlagImage}
-                                resizeMode="contain"
+                          <View style={styles.phoneInput}>
+                            <View style={styles.phoneInputPositioner}>
+                              <PhoneInput
+                                defaultCode="ET"
+                                value={phone}
+                                layout="second"
+                                onChangeText={handlePhoneChange}
+                                onChangeCountry={handleCountryChange}
+                                renderDropdownImage={<ChevronDown size={12} color={colors.textSecondary} />}
+                                containerStyle={styles.phoneInputLibContainer}
+                                flagButtonStyle={styles.phoneInputLibFlagButton}
+                                textContainerStyle={[
+                                  styles.phoneInputLibTextContainer,
+                                  inputFocused && styles.phoneInputLibTextContainerFocused,
+                                  (hasPrefixError || hasPhoneFormatError) && styles.phoneInputError,
+                                ]}
+                                codeTextStyle={styles.code}
+                                textInputStyle={[styles.phoneInputText, (isValid || inputFocused) && styles.phoneInputTextActive]}
+                                textInputProps={{
+                                  ref: phoneInputRef,
+                                  placeholder: isEthiopia
+                                    ? t('auth.phonePlaceholder')
+                                    : t('auth.phoneInternationalPlaceholder'),
+                                  placeholderTextColor: colors.inputPlaceholder,
+                                  returnKeyType: 'done',
+                                  onSubmitEditing: () => {
+                                    phoneInputRef.current?.blur();
+                                    Keyboard.dismiss();
+                                  },
+                                  inputAccessoryViewID: 'doneButton',
+                                  autoComplete: 'tel',
+                                  textContentType: 'telephoneNumber',
+                                  autoCapitalize: 'none',
+                                  includeFontPadding: false,
+                                  maxFontSizeMultiplier: 1.15,
+                                  maxLength: isEthiopia ? 12 : MAX_E164_DIGITS,
+                                  value: phone,
+                                  onFocus: handleFocus,
+                                  onBlur: handleBlur,
+                                }}
                               />
-                              <Text style={styles.code}>+251</Text>
-                            </TouchableOpacity>
-                            <View style={styles.divider} />
-                            <AppInput
-                              placeholder={t('auth.phonePlaceholder')}
-                              placeholderTextColor={colors.inputPlaceholder}
-                              value={phone}
-                              onChangeText={handlePhoneChange}
-                              keyboardType="number-pad"
-                              returnKeyType="done"
-                              onSubmitEditing={Keyboard.dismiss}
-                              inputAccessoryViewID="doneButton"
-                              autoComplete="tel"
-                              textContentType="telephoneNumber"
-                              autoCapitalize="none"
-                              embedded
-                              style={styles.phoneInputInner}
-                              inputStyle={[styles.phoneInputText, (isValid || inputFocused) && styles.phoneInputTextActive]}
-                              inputRef={phoneInputRef}
-                              onFocus={handleFocus}
-                              onBlur={handleBlur}
-                            />
+                              {/* The picker library's own flag glyph renders blank on a lot of
+                                  Android builds (emoji-font coverage) and its image-flag fallback
+                                  depends on a remote fetch that isn't reliable either. Overlaying
+                                  our own flagcdn image — the same source this screen used before
+                                  the picker existed — sits on top of the library's flag slot;
+                                  pointerEvents="none" lets the tap pass through to the real
+                                  (invisible) button underneath, so the picker still opens exactly
+                                  as before. */}
+                              <Image
+                                source={{ uri: `https://flagcdn.com/w80/${selectedCountry.toLowerCase()}.png` }}
+                                style={styles.flagOverlay}
+                                resizeMode="contain"
+                                pointerEvents="none"
+                              />
+                            </View>
                             <TouchableOpacity
-                              onPress={handleCheckPress}
+                              onPress={openSendCodeSheet}
                               disabled={!isValid || loading}
                               activeOpacity={0.7}
                               style={styles.checkButtonInline}
@@ -425,12 +608,21 @@ export default function PhoneEntryScreen({ navigation }) {
                                 )}
                               </Animated.View>
                             </TouchableOpacity>
-                          </Animated.View>
+                          </View>
 
                           {hasPrefixError && (
-                            <Text style={styles.phoneError}>{`😠 ${t('auth.phonePrefixError')}`}</Text>
+                            <View style={styles.phoneErrorRow}>
+                              <AlertTriangle size={13} color={colors.error} strokeWidth={2} />
+                              <Text style={styles.phoneError}>{t('auth.phonePrefixError')}</Text>
+                            </View>
                           )}
-                          {!phone && !!recentPhone && (
+                          {hasPhoneFormatError && (
+                            <View style={styles.phoneErrorRow}>
+                              <AlertTriangle size={13} color={colors.error} strokeWidth={2} />
+                              <Text style={styles.phoneError}>{t('auth.phoneInvalid')}</Text>
+                            </View>
+                          )}
+                          {isEthiopia && !phone && !!recentPhone && (
                             <TouchableOpacity
                               style={styles.recentPhoneChip}
                               onPress={() => setPhone(formatPhone(recentPhone))}
@@ -459,19 +651,59 @@ export default function PhoneEntryScreen({ navigation }) {
 
                           <View style={styles.dividerHorizontal} />
 
-                          <AppButton 
+                          <AppButton
                             title={t('auth.signIn', 'Sign in')}
-                            onPress={handleCheckPress}
-                            disabled={!isValid || loading}
+                            onPress={openSendCodeSheet}
+                            disabled={!isValid || isAuthBusy}
                             loading={loading}
                             shimmer={true}
-                            style={{ 
+                            icon={
+                              <View style={styles.signInIconBadge}>
+                                <Key size={15} color={colors.white} strokeWidth={2.75} />
+                              </View>
+                            }
+                            style={{
                               width: '110%', // Make it wider than the container
-                              marginTop: 12, 
+                              marginTop: 12,
                               height: 58,
-                              borderRadius: 16,
+                              borderRadius: 999,
                             }}
                           />
+
+                          <View style={styles.socialDividerRow}>
+                            <View style={styles.socialDividerLine} />
+                            <Text style={styles.socialDividerText}>{t('auth.orContinueWith')}</Text>
+                            <View style={styles.socialDividerLine} />
+                          </View>
+
+                          <View style={styles.socialButtonRow}>
+                            <TouchableOpacity
+                              style={[styles.socialCircleButton, isAuthBusy && !googleLoading && styles.socialCircleButtonDisabled]}
+                              onPress={handleGoogleLogin}
+                              disabled={isAuthBusy}
+                              activeOpacity={0.8}
+                            >
+                              {googleLoading ? (
+                                <ActivityIndicator size="small" color={colors.textSecondary} />
+                              ) : (
+                                <GoogleLogo size={22} />
+                              )}
+                            </TouchableOpacity>
+                            {appleAvailable ? (
+                              <TouchableOpacity
+                                style={[styles.socialCircleButton, isAuthBusy && !appleLoading && styles.socialCircleButtonDisabled]}
+                                onPress={handleAppleLogin}
+                                disabled={isAuthBusy}
+                                activeOpacity={0.8}
+                              >
+                                {appleLoading ? (
+                                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                                ) : (
+                                  <AppleLogo size={22} />
+                                )}
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
                         </View>
                       </View>
                     </View>
@@ -504,6 +736,15 @@ export default function PhoneEntryScreen({ navigation }) {
           <TermsConditionsModal
             visible={termsModalVisible}
             onClose={() => setTermsModalVisible(false)}
+          />
+          <SendCodeSheet
+            visible={sendCodeSheetVisible}
+            phone={isEthiopia ? rawDigits : intlFormattedPhone}
+            isEthiopia={isEthiopia}
+            onClose={() => setSendCodeSheetVisible(false)}
+            onSendSms={handleSendSmsCode}
+            onSendWhatsapp={handleWhatsAppCode}
+            onEditPhone={handleEditPhone}
           />
         </SafeAreaView>
       </TouchableWithoutFeedback>
@@ -611,68 +852,102 @@ const styles = StyleSheet.create({
     ...shadow.lg,
   },
   phoneInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
     width: '100%',
-    height: 68,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: 30, // Precise 30px as requested
-    backgroundColor: colors.white,
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    height: PHONE_INPUT_HEIGHT,
   },
   phoneInputError: {
     borderColor: colors.error,
-    backgroundColor: colors.white,
   },
   phoneError: {
     fontSize: fontSize.xs,
     color: colors.error,
-    marginTop: 8,
     textAlign: 'center',
-    alignSelf: 'center',
     fontWeight: fontWeight.medium,
   },
-  countryCodeSection: {
+  phoneErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 4, // Minimal left padding
-    gap: 4, // Reduced from 8
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingHorizontal: 8,
   },
-  divider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    marginHorizontal: 6, // Slightly more space for the divider to breathe
+  // Keep the country selector and number field as two distinct rounded zones.
+  phoneInputLibContainer: {
+    width: '100%',
+    backgroundColor: 'transparent',
+    height: PHONE_INPUT_HEIGHT,
   },
-  ethiopiaFlagImage: {
-    width: 20, // Reduced from 22
-    height: 14,
-    borderRadius: 2,
+  phoneInputPositioner: {
+    flex: 1,
+    height: PHONE_INPUT_HEIGHT,
+  },
+  phoneInputLibFlagButton: {
+    width: 112,
+    minWidth: 112,
+    maxWidth: 112,
+    height: PHONE_INPUT_HEIGHT,
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 36,
+    paddingRight: 10,
+    marginRight: 10,
+    borderRadius: PHONE_INPUT_RADIUS,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.backgroundAlt,
+    justifyContent: 'center',
+  },
+  flagOverlay: {
+    position: 'absolute',
+    left: 14,
+    top: '50%',
+    marginTop: -9,
+    width: 26,
+    height: 18,
+    borderRadius: 3,
+    zIndex: 2,
+  },
+  phoneInputLibTextContainer: {
+    flex: 1,
+    height: PHONE_INPUT_HEIGHT,
+    minHeight: PHONE_INPUT_HEIGHT,
+    maxHeight: PHONE_INPUT_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    overflow: 'hidden',
+    backgroundColor: colors.backgroundAlt,
+    paddingVertical: 0,
+    paddingLeft: 18,
+    paddingRight: 52,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: PHONE_INPUT_RADIUS,
+  },
+  phoneInputLibTextContainerFocused: {
+    borderColor: colors.primary,
   },
   code: {
-    fontSize: 17, // Slightly smaller to save space
+    fontSize: 15,
+    lineHeight: 20,
+    includeFontPadding: false,
     fontWeight: fontWeight.bold,
     color: colors.textPrimary,
     marginLeft: 0,
-  },
-  phoneInputInner: {
-    marginBottom: 0,
-    flex: 2, // Give more flex weight to the input area
-    height: 68,
-    marginLeft: 0,
+    marginRight: 2,
   },
   phoneInputText: {
-    fontSize: 18,
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: fontWeight.medium,
     color: colors.textSecondary,
-    letterSpacing: 1,
-    paddingLeft: 0, // Ensure text starts right after country code
+    letterSpacing: 0.4,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    margin: 0,
+    height: PHONE_INPUT_HEIGHT - 2,
+    textAlignVertical: 'center', // Android: TextInput default vertical align is top, not center
   },
   phoneInputTextActive: {
     color: colors.textPrimary,
@@ -685,8 +960,65 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 12,
   },
+  signInIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  socialDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 20,
+    gap: 10,
+  },
+  socialDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  socialDividerText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.medium,
+  },
+  socialButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 16,
+    gap: 20,
+  },
+  socialCircleButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  // Applied to whichever social button ISN'T the one currently signing in —
+  // dims it so it visibly reads as "unavailable right now", not just silently
+  // unresponsive to a tap.
+  socialCircleButtonDisabled: {
+    opacity: 0.4,
+  },
   checkButtonInline: {
-    paddingLeft: 8,
+    position: 'absolute',
+    right: 10,
+    top: (PHONE_INPUT_HEIGHT - 36) / 2,
+    zIndex: 3,
     justifyContent: 'center',
     alignItems: 'center',
   },

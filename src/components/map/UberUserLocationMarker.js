@@ -1,166 +1,46 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Animated, Easing, Platform, Image } from 'react-native';
-import { Marker } from 'react-native-maps';
-import { colors } from '../../constants/colors';
+import React from 'react';
+import { Marker, Circle } from 'react-native-maps';
 
-const OUTER_SIZE = 48;
-const SHELL_SIZE = 34;
-
-function PulseRing({ delay = 0 }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const opacity = useRef(new Animated.Value(0.55)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.parallel([
-          Animated.timing(scale, {
-            toValue: 2.2,
-            duration: 1800,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: false,
-          }),
-          Animated.timing(opacity, {
-            toValue: 0,
-            duration: 1800,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: false,
-          }),
-        ]),
-        Animated.parallel([
-          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: false }),
-          Animated.timing(opacity, { toValue: 0.55, duration: 0, useNativeDriver: false }),
-        ]),
-      ])
-    );
-
-    animation.start();
-    return () => animation.stop();
-  }, [delay, scale, opacity]);
-
-  return (
-    <Animated.View
-      style={[
-        styles.pulseRing,
-        {
-          transform: [{ scale }],
-          opacity,
-        },
-      ]}
-    />
-  );
-}
-
-function UberUserLocationMarker({ coordinate, avatarUrl, animated = true }) {
-  const [imageReady, setImageReady] = useState(false);
-
-  useEffect(() => {
-    setImageReady(false);
-  }, [avatarUrl]);
-
+// Deliberately a native pin, not a custom child View — confirmed on iOS that
+// custom Marker children (pulse-ring/avatar-photo version) silently fail to
+// render on this project's react-native-maps 1.29.0 + New Architecture setup,
+// even with the Fabric legacy-component interop registered in
+// react-native.config.js. Native pins render through a different path and
+// are unaffected. Revisit the custom-view design only after that's resolved
+// upstream or a newer react-native-maps version fixes it.
+//
+// The "you are here" halo below is a `Circle`, not a Marker child — it's a
+// separate native map overlay, not nested inside the Marker, so it isn't
+// affected by that bug and renders reliably on both platforms. It's a
+// static double-ring rather than an animated pulse: `Circle`'s radius is a
+// native geographic prop, not a style transform, so animating it smoothly
+// would mean re-rendering the native overlay on every frame — real cost for
+// a decorative effect. A static halo reads as "you are here" just as
+// clearly without that risk.
+function UberUserLocationMarker({ coordinate, title }) {
   if (!coordinate) return null;
 
   return (
-    <Marker
-      coordinate={coordinate}
-      anchor={{ x: 0.5, y: 0.5 }}
-      zIndex={99999}
-      flat={false}
-      tracksViewChanges={Platform.OS === 'android' ? true : !imageReady}
-    >
-      <View style={styles.column} collapsable={false} pointerEvents="none">
-        <View style={styles.outer}>
-          <PulseRing delay={0} />
-          <PulseRing delay={900} />
-
-          <View style={styles.ring} />
-
-          <View style={styles.shellShadow}>
-            <View style={styles.shell}>
-              {avatarUrl ? (
-                <Image
-                  key={avatarUrl}
-                  source={{ uri: avatarUrl }}
-                  style={styles.avatar}
-                  resizeMode="cover"
-                  onLoad={() => setImageReady(true)}
-                  onError={() => setImageReady(false)}
-                />
-              ) : (
-                <View style={styles.fallbackDot} />
-              )}
-            </View>
-          </View>
-        </View>
-      </View>
-    </Marker>
+    <>
+      <Circle
+        center={coordinate}
+        radius={45}
+        fillColor="rgba(47, 112, 199, 0.10)"
+        strokeColor="rgba(47, 112, 199, 0.28)"
+        strokeWidth={1}
+        zIndex={1}
+      />
+      <Circle
+        center={coordinate}
+        radius={22}
+        fillColor="rgba(47, 112, 199, 0.18)"
+        strokeColor="rgba(47, 112, 199, 0.4)"
+        strokeWidth={1}
+        zIndex={2}
+      />
+      <Marker coordinate={coordinate} title={title} pinColor="#2F70C7" zIndex={3} />
+    </>
   );
 }
 
 export default React.memo(UberUserLocationMarker);
-
-const styles = StyleSheet.create({
-  column: {
-    alignItems: 'center',
-  },
-  outer: {
-    width: OUTER_SIZE,
-    height: OUTER_SIZE,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pulseRing: {
-    position: 'absolute',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.mapCurrentLocation,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  ring: {
-    position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2.5,
-    borderColor: colors.mapCurrentLocation,
-    backgroundColor: `${colors.mapCurrentLocation}22`,
-  },
-  shellShadow: {
-    width: SHELL_SIZE,
-    height: SHELL_SIZE,
-    borderRadius: SHELL_SIZE / 2,
-    borderWidth: 3,
-    borderColor: colors.white,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.24,
-    shadowRadius: 3.84,
-  },
-  shell: {
-    width: SHELL_SIZE - 4,
-    height: SHELL_SIZE - 4,
-    borderRadius: (SHELL_SIZE - 4) / 2,
-    overflow: 'hidden',
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 1000,
-  },
-  fallbackDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.mapCurrentLocation,
-  },
-});

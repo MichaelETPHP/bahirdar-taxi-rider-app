@@ -5,8 +5,8 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#00674F",
-        secondary: "#FFD700", // Example Bahirdar secondary color
+        primary: "#2F70C7",
+        secondary: "#5899FE",
       },
       fontFamily: {
         italic: ["italic"], // Matches your typography mapping

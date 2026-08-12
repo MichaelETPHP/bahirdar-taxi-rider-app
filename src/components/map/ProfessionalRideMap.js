@@ -93,7 +93,7 @@ function ProfessionalRideMap({
 
         // Loading indicator inside MapView (shows native spinner before tiles appear)
         loadingEnabled={true}
-        loadingIndicatorColor="#00674F"
+        loadingIndicatorColor="#2F70C7"
         loadingBackgroundColor="#F5F5F5"
 
         toolbarEnabled={false}
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#00674F',
+    backgroundColor: '#2F70C7',
     borderWidth: 3,
     borderColor: '#fff',
     shadowColor: '#000',

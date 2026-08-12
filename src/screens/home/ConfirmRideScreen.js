@@ -356,7 +356,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
               navigation.goBack();
             }}
           >
-            <ArrowLeft size={22} color={colors.textPrimary} />
+            <ArrowLeft size={22} color={colors.white} />
           </Pressable>
 
           <View style={{ flex: 1 }}>
@@ -433,10 +433,8 @@ const styles = StyleSheet.create({
   actionBackBtn: {
     width: 52,
     height: 52,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
+    borderRadius: 26,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -445,6 +443,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingVertical: 10,
     marginTop: 0,
+    backgroundColor: colors.primary,
   },
   liveTag: {
     backgroundColor: '#DCFCE7',

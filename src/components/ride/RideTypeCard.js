@@ -14,14 +14,13 @@ import { borderRadius, shadow } from '../../constants/layout';
 
 
 const PALETTE = [
-  { color: '#00674F', bgColor: '#E6F4F1' },
+  { color: '#2F70C7', bgColor: '#E5EEFB' },
   { color: '#0369A1', bgColor: '#E0F2FE' },
   { color: '#7C3AED', bgColor: '#EDE9FE' },
   { color: '#B45309', bgColor: '#FEF3C7' },
 ];
 
 const SHIMMER_TRANSLATE = { inputRange: [-1.5, 1.5], outputRange: [-450, 450] };
-const WIGGLE_ROTATE     = { inputRange: [-1, 1],     outputRange: ['-15deg', '15deg'] };
 
 const SHIMMER_GRADIENT_COLORS = [
   'transparent',
@@ -68,12 +67,10 @@ function RideTypeCard({
 
 
   const shimmerPos = useRef(new Animated.Value(-1.5)).current;
-  const wiggleAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!selected) {
       shimmerPos.setValue(-1.5);
-      wiggleAnim.setValue(0);
       return undefined;
     }
     const shimmerLoop = Animated.loop(
@@ -82,23 +79,13 @@ function RideTypeCard({
         Animated.delay(2200),
       ]),
     );
-    const wiggleLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(wiggleAnim, { toValue: 1,  duration: 200, useNativeDriver: true }),
-        Animated.timing(wiggleAnim, { toValue: -1, duration: 400, useNativeDriver: true }),
-        Animated.timing(wiggleAnim, { toValue: 0,  duration: 200, useNativeDriver: true }),
-        Animated.delay(1800),
-      ]),
-    );
-    Animated.parallel([shimmerLoop, wiggleLoop]).start();
+    shimmerLoop.start();
     return () => {
       shimmerLoop.stop();
-      wiggleLoop.stop();
     };
-  }, [selected, shimmerPos, wiggleAnim]);
+  }, [selected, shimmerPos]);
 
   const shimmerTranslateX = shimmerPos.interpolate(SHIMMER_TRANSLATE);
-  const wiggleRotate      = wiggleAnim.interpolate(WIGGLE_ROTATE);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const handlePress = useCallback(async () => {
@@ -116,9 +103,8 @@ function RideTypeCard({
     styles.iconCircle,
     {
       backgroundColor: selected ? palette.bgColor : '#F3F4F6',
-      transform: [{ rotate: wiggleRotate }],
     },
-  ]), [selected, palette.bgColor, wiggleRotate]);
+  ]), [selected, palette.bgColor]);
 
   const shimmerStyle = useMemo(() => ([
     StyleSheet.absoluteFill,
@@ -377,7 +363,7 @@ const styles = StyleSheet.create({
   cardSelected: {
     borderColor: colors.primary,
     borderWidth: 2,
-    backgroundColor: 'rgba(0,103,79,0.06)',
+    backgroundColor: 'rgba(47,112,199,0.06)',
     shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
@@ -470,7 +456,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   priceValueSelected: {
-    color: '#00674F',
+    color: '#2F70C7',
   },
   currencyLabel: {
     fontSize: 10,
@@ -497,7 +483,7 @@ const styles = StyleSheet.create({
   },
   protectionText: {
     fontSize: 9,
-    color: '#00674F',
+    color: '#2F70C7',
     fontWeight: '700',
   },
   protectionSub: {
@@ -533,7 +519,7 @@ const styles = StyleSheet.create({
   },
   breakdownTotal: {
     fontSize: 11,
-    color: '#00674F',
+    color: '#2F70C7',
     fontWeight: '700',
     marginTop: 3,
   },
@@ -580,9 +566,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   verticalDivider: {
+    // No visible line by default — keeps the icon/text gap (via margin)
+    // without a color that meant nothing. Still turns blue on selection,
+    // via verticalDividerSelected below, which is the one state worth
+    // marking with color.
     width: 2,
     alignSelf: 'stretch',
-    backgroundColor: '#EF4444',
+    backgroundColor: 'transparent',
     marginHorizontal: 12,
     marginVertical: -8,
   },

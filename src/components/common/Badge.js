@@ -5,7 +5,7 @@ import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
 
 const variantMap = {
-  verified: { bg: '#E6F4F1', text: colors.primary },
+  verified: { bg: '#E5EEFB', text: colors.primary },
   online: { bg: '#DCFCE7', text: '#16A34A' },
   offline: { bg: '#F3F4F6', text: colors.textSecondary },
   error: { bg: '#FEE2E2', text: colors.error },

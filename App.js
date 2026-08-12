@@ -2,7 +2,7 @@ import 'react-native-gesture-handler';
 import './src/i18n';
 
 import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Text, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
@@ -28,12 +28,16 @@ import {
   getCachedIntegrity,
   onIntegrityChange,
   reportIntegrityEvent,
-  __devSimulateRooted,
 } from './src/security/deviceIntegrity';
 import { ensureIntegrityVerdict } from './src/security/playIntegrityClient';
 import { policyForRisk } from './src/security/integrityPolicy';
 import RootBlockScreen from './src/components/security/RootBlockScreen';
 import { initSslPinning } from './src/security/sslPinning';
+import { configureGoogleSignIn } from './src/lib/googleAuth';
+import { registerDevice } from './src/services/authService';
+import useCallStore from './src/store/callStore';
+import { acceptIncomingCall, declineIncomingCall } from './src/services/callEngine';
+import { setupCallKeep } from './src/services/callKeepService';
 
 // Move any plaintext-stored session data into SecureStore before anything
 // reads auth state (idempotent; reads after this also migrate lazily).
@@ -42,6 +46,9 @@ migrateSecureStorage();
 // INSA: pin the API's certificate keys before any network request leaves the
 // app — a MITM proxy can never impersonate the backend after this resolves.
 initSslPinning();
+
+// No-op until EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is set — see .env.development.
+configureGoogleSignIn();
 
 enableScreens();
 
@@ -73,14 +80,27 @@ function applyGlobalFont() {
   TextInput.defaultProps.style = baseTextStyle;
 }
 
+// Incoming in-app voice calls (the type set below) suppress their own
+// banner/sound if the live call UI is already ringing on screen — the
+// socket event usually beats the push here, no need for both to alert.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    const type = notification.request.content.data?.type;
+    const isCallInvite = type === 'incoming_call';
+    const alreadyRinging = isCallInvite && useCallStore.getState().status === 'incoming';
+    return {
+      shouldPlaySound: !alreadyRinging,
+      shouldSetBadge: true,
+      shouldShowBanner: !alreadyRinging,
+      shouldShowList: !alreadyRinging,
+    };
+  },
 });
+
+const CALL_INVITE_CHANNEL_ID = 'call-invites-v1';
+const CALL_INVITE_CATEGORY_ID = 'call_invite_actions';
+const CALL_ACCEPT_ACTION_ID = 'accept_call_invite';
+const CALL_DECLINE_ACTION_ID = 'decline_call_invite';
 
 function isNotificationPermissionGranted(status) {
   if (status.granted) return true;
@@ -102,14 +122,61 @@ async function ensureAndroidNotificationChannel() {
     name: 'Trip Updates',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
-    lightColor: '#00674F',
+    lightColor: '#2F70C7',
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    sound: 'default',
+  });
+  // Android silently fails to render a push's title/body if it references a
+  // channelId that was never registered on-device — this MUST match the
+  // channelId used server-side in expo.push.service.ts's admin broadcast
+  // (currently 'admin-broadcast-v1'), or the notification arrives blank.
+  await Notifications.setNotificationChannelAsync('admin-broadcast-v1', {
+    name: 'Announcements',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#2F70C7',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     sound: 'default',
   });
 }
 
+async function ensureCallInviteChannel() {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(CALL_INVITE_CHANNEL_ID, {
+    name: 'Incoming Calls',
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 300, 200, 300],
+    lightColor: '#22C55E',
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    bypassDnd: true,
+    sound: 'default',
+  });
+}
+
+async function registerCallInviteCategory() {
+  if (Platform.OS === 'web') return;
+  await Notifications.setNotificationCategoryAsync(
+    CALL_INVITE_CATEGORY_ID,
+    [
+      {
+        identifier: CALL_DECLINE_ACTION_ID,
+        buttonTitle: 'Decline',
+        options: { isDestructive: true, opensAppToForeground: true },
+      },
+      {
+        identifier: CALL_ACCEPT_ACTION_ID,
+        buttonTitle: 'Accept',
+        options: { opensAppToForeground: true },
+      },
+    ],
+    { previewPlaceholder: 'Incoming call', showTitle: true, showSubtitle: true },
+  );
+}
+
 async function ensureNotificationPermissions() {
   await ensureAndroidNotificationChannel();
+  await ensureCallInviteChannel();
+  await registerCallInviteCategory().catch(() => {});
 
   let current = await Notifications.getPermissionsAsync();
   if (!isNotificationPermissionGranted(current)) {
@@ -120,15 +187,29 @@ async function ensureNotificationPermissions() {
   return isNotificationPermissionGranted(current);
 }
 
-/** Server push (FCM/APNs via Expo). Needs `extra.eas.projectId` in app config and a dev/standalone build on Android SDK 53+. */
+const PUSH_DEVICE_ID =
+  Constants.installationId ?? Constants.deviceId ?? `push-device-${Platform.OS}`;
+
+/** Server push (FCM/APNs via Expo). Needs `extra.eas.projectId` in app config
+ * and a dev/standalone build on Android SDK 53+. Saves the token to the
+ * backend so it can actually reach this device — previously this only
+ * logged the token locally and never persisted it, so the backend had no
+ * way to push anything to a rider at all. */
 async function registerExpoPushTokenIfConfigured() {
   const projectId =
     Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
   if (!projectId) return;
   try {
-    const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    if (!token) return;
     if (__DEV__) {
-      console.log('[notifications] Expo push token (use on your backend):', data);
+      console.log('[notifications] Expo push token:', token);
+    }
+    try {
+      await registerDevice(token, PUSH_DEVICE_ID, Platform.OS);
+    } catch (err) {
+      if (__DEV__) console.warn('[notifications] Failed to save push token:', err?.message ?? err);
+      // Non-fatal — token will be retried on next app start.
     }
   } catch {
     // Expo Go limitations, missing google-services.json, etc.
@@ -154,6 +235,12 @@ export default function App() {
 
   useEffect(() => {
     runMaintenanceCheck();
+  }, []);
+
+  // Native call UI (CallKit / ConnectionService) — set up once, independent
+  // of ride state, so it's ready the moment a call:invite arrives.
+  useEffect(() => {
+    void setupCallKeep();
   }, []);
 
   // INSA: device integrity — a high-risk device (rooted / hooking tools /
@@ -226,6 +313,22 @@ export default function App() {
 
         subscription = Notifications.addNotificationResponseReceivedListener((response) => {
           const data = response?.notification?.request?.content?.data;
+
+          // Incoming call — Accept/Decline only actually connect anything
+          // if this app's JS process (and its in-memory RTCPeerConnection)
+          // is still alive; a fully killed-and-relaunched process has
+          // nothing to resume, so this is best-effort, not a guarantee. A
+          // plain tap just opens the app — the call overlay renders itself
+          // from whatever the live socket state already is.
+          if (data?.type === 'incoming_call') {
+            if (response.actionIdentifier === CALL_ACCEPT_ACTION_ID) {
+              acceptIncomingCall();
+            } else if (response.actionIdentifier === CALL_DECLINE_ACTION_ID) {
+              declineIncomingCall();
+            }
+            return;
+          }
+
           if (data?.route === 'Notification' && navigationRef.isReady()) {
             navigationRef.navigate('AppNav', { screen: 'Notification' });
           }
@@ -247,6 +350,17 @@ export default function App() {
     };
   }, []);
 
+  // The permission-request effect above runs once at mount, before the user
+  // may have logged in yet — saving the push token then would 401 (the
+  // endpoint requires auth) and never retry. Re-attempt whenever auth state
+  // flips to true, mirroring the driver app's syncPushToken pattern.
+  // registerExpoPushTokenIfConfigured() is idempotent, so this is safe to
+  // run again even if the mount-time attempt already succeeded.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    registerExpoPushTokenIfConfigured().catch(() => {});
+  }, [isAuthenticated]);
+
   // INSA: hold a lightweight loading screen until the FIRST device-integrity
   // verdict is known — must resolve before the navigator so a rooted device
   // can never render login/OTP even for one frame.
@@ -263,7 +377,6 @@ export default function App() {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <RootBlockScreen />
-        <DevIntegrityFloatingButton />
       </GestureHandlerRootView>
     );
   }
@@ -287,51 +400,11 @@ export default function App() {
       <QueryClientProvider client={queryClient}>
         <PaperProvider>
           <SafeAreaProvider>
-            <StatusBar style="light" backgroundColor="#00674F" />
+            <StatusBar style="light" backgroundColor="#2F70C7" />
             <RootNavigator />
-            <DevIntegrityFloatingButton />
           </SafeAreaProvider>
         </PaperProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }
-
-/**
- * DEV-ONLY floating test button — reachable on EVERY screen (phone entry,
- * OTP, home, anywhere), including before authentication, so the
- * rooted-device block can be verified starting from the very first screen
- * without needing physical rooted hardware. Dead code in release builds.
- */
-function DevIntegrityFloatingButton() {
-  if (!__DEV__) return null;
-  return (
-    <View pointerEvents="box-none" style={devStyles.wrap}>
-      <Pressable style={[devStyles.btn, devStyles.btnDanger]} onPress={() => __devSimulateRooted(true)}>
-        <Text style={devStyles.btnText}>ROOT</Text>
-      </Pressable>
-      <Pressable style={devStyles.btn} onPress={() => __devSimulateRooted(false)}>
-        <Text style={devStyles.btnText}>CLEAN</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-const devStyles = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    bottom: 48,
-    right: 12,
-    flexDirection: 'row',
-    gap: 6,
-    zIndex: 9999,
-  },
-  btn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#374151',
-  },
-  btnDanger: { backgroundColor: '#DC2626' },
-  btnText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
-});

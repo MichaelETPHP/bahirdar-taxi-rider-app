@@ -160,7 +160,7 @@ export default function OTPScreen({ navigation, route }) {
 
               <View style={styles.content}>
                 <View style={styles.iconCircle}>
-                  <MessageCircle size={32} color={colors.primary} />
+                  <MessageCircle size={32} color={colors.textPrimary} />
                 </View>
 
                 <Text style={styles.heading}>{t('auth.verifyTitle')}</Text>
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,

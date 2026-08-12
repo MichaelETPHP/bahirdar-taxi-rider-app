@@ -1,7 +1,7 @@
 export const colors = {
-  primary: '#00674F',
-  primaryLight: '#E6F4F1',
-  primaryDark: '#004D3A',
+  primary: '#2F70C7',
+  primaryLight: '#5899FE',
+  primaryDark: '#235495',
   accent: '#FFFFFF',
   white: '#FFFFFF',
 
@@ -14,7 +14,7 @@ export const colors = {
   background: '#FFFFFF',
   backgroundAlt: '#F9FAFB',
 
-  mapCurrentLocation: '#10B981',
+  mapCurrentLocation: '#2F70C7', // brand blue, matches `primary`
   mapDestination: '#EF4444',
   error: '#EF4444',
   success: '#10B981',
@@ -23,11 +23,11 @@ export const colors = {
   shadow: '#000000',
   overlay: 'rgba(0,0,0,0.4)',
 
-  starFilled: '#00674F',
+  starFilled: '#2F70C7',
   starEmpty: '#D1D5DB',
   verified: '#1DA1F2',
 
-  tipSelected: '#00674F',
+  tipSelected: '#2F70C7',
   tipUnselected: '#F3F4F6',
 };
 

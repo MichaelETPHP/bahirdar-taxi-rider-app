@@ -121,7 +121,7 @@ export default function Button({
       )}
 
       {loading ? (
-        <ActivityIndicator color={variant === "primary" ? "white" : "#00674F"} />
+        <ActivityIndicator color={variant === "primary" ? "white" : "#2F70C7"} />
       ) : (
         <StyledView className="flex-row items-center">
           {iconBefore && <StyledView className="mr-2">{iconBefore}</StyledView>}

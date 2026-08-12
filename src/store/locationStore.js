@@ -48,7 +48,16 @@ const useLocationStore = create(
 
       addToRecentDestination: (location) =>
         set((state) => {
-          const filtered = state.recentDestinations.filter((l) => l.id !== location.id);
+          // Dedup by id AND by normalized name — Google can return a
+          // different place id for what's clearly the same real-world spot
+          // depending on how it was searched, so id alone under-deduplicates
+          // (see searchHistoryService.js, which has the same fix).
+          const newNameKey = String(location?.name || '').trim().toLowerCase();
+          const filtered = state.recentDestinations.filter((l) => {
+            const sameId = l.id === location.id;
+            const sameName = newNameKey.length > 0 && String(l?.name || '').trim().toLowerCase() === newNameKey;
+            return !sameId && !sameName;
+          });
           const updated = [location, ...filtered].slice(0, MAX_RECENT);
           return { recentDestinations: updated };
         }),

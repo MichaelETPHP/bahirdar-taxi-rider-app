@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   tabBadgeActive: {
-    backgroundColor: colors.primaryLight || '#E6F9F0',
+    backgroundColor: colors.primaryLight || '#5899FE',
   },
   tabBadgeText: {
     fontSize: 11,

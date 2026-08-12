@@ -9,10 +9,12 @@ import useAuthStore from '../store/authStore';
 import useRideStore from '../store/rideStore';
 import useSessionManager from '../hooks/useSessionManager';
 import { connectSocket, disconnectSocket, joinRiderRoom } from '../services/socketService';
+import { attachCallSocketListeners } from '../services/callEngine';
 import { getActiveTrip } from '../services/tripService';
 
 import SplashScreen from '../screens/auth/SplashScreen';
 import NetworkBanner from '../components/common/NetworkBanner';
+import CallOverlay from '../components/call/CallOverlay';
 import { parseTripPollResponse } from '../utils/tripLifecycle';
 import { colors } from '../constants/colors';
 
@@ -56,6 +58,7 @@ export default function RootNavigator() {
     if (isAuthenticated && token && user?.id) {
       connectSocket(token);
       joinRiderRoom(user.id);
+      attachCallSocketListeners();
     } else {
       disconnectSocket();
     }
@@ -160,6 +163,7 @@ export default function RootNavigator() {
           <Stack.Screen name="AuthNav" component={AuthNavigator} />
         )}
       </Stack.Navigator>
+      {isAuthenticated && <CallOverlay />}
     </NavigationContainer>
   );
 }

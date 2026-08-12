@@ -2,7 +2,7 @@ import { Car, Star, Phone, AlertTriangle } from 'lucide-react-native';
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  Alert, Linking, Vibration, BackHandler, Animated
+  Alert, Linking, Vibration, BackHandler, Animated, Easing
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -117,6 +117,38 @@ export default function DriverMatchedScreen({ navigation }) {
   const [avatarBust, setAvatarBust] = useState(Date.now()); // Cache buster for avatar refresh
   const progressAnim = useRef(new Animated.Value(0)).current;
 
+  // Entrance: badge leads, card follows a beat later — this is a rare,
+  // high-emotion moment (driver matched), not a repeated action, so a
+  // little delight here is earned rather than annoying.
+  const badgeAnim = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const cancelPressScale = useRef(new Animated.Value(1)).current;
+  const sosPressScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.stagger(80, [
+      Animated.timing(badgeAnim, {
+        toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      }),
+      Animated.timing(cardAnim, {
+        toValue: 1, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const handleCancelPressIn = () => {
+    Animated.spring(cancelPressScale, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
+  };
+  const handleCancelPressOut = () => {
+    Animated.spring(cancelPressScale, { toValue: 1, useNativeDriver: true, friction: 5, tension: 160 }).start();
+  };
+  const handleSOSPressIn = () => {
+    Animated.spring(sosPressScale, { toValue: 0.92, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
+  };
+  const handleSOSPressOut = () => {
+    Animated.spring(sosPressScale, { toValue: 1, useNativeDriver: true, friction: 5, tension: 160 }).start();
+  };
+
   // Refresh avatar cache when driver changes
   useEffect(() => {
     if (driver?.id) {
@@ -198,7 +230,7 @@ export default function DriverMatchedScreen({ navigation }) {
     ? Math.max(0, Math.min(1, 1 - (distanceToPickupKm / baselineDistanceKm)))
     : 0;
   const etaMin = Number.isFinite(etaRaw) ? etaRaw : estimateEtaMinutes(distanceToPickupKm, liveSpeedKmh);
-  const etaText = etaMin != null ? `${Math.max(1, Math.round(etaMin))} min away` : 'Driver en route';
+  const etaText = etaMin != null ? `${Math.max(1, Math.round(etaMin))} min away` : null;
   const approachText = Number.isFinite(distanceToPickupKm)
     ? `${formatDistance(distanceToPickupKm)} to pickup`
     : 'Driver location updating...';
@@ -438,7 +470,6 @@ export default function DriverMatchedScreen({ navigation }) {
     tripData?.driver?.vehicle?.plate_number ||
     '';
   const carLine = [carMake, carModel, carColor, carPlate].filter(Boolean).join(' · ') || 'Vehicle';
-  const fare = Math.round(parseFloat(tripData?.estimated_fare_etb || 0)).toString();
   const pickupName = tripData?.pickup_address || 'Your location';
   const dropoffName = tripData?.dropoff_address || destination?.name || 'Destination';
 
@@ -485,20 +516,41 @@ export default function DriverMatchedScreen({ navigation }) {
       </View>
 
       {/* ── Top badge: "Driver is on the way!" ── */}
-      <View style={[styles.topBadge, { top: insets.top + 16 }]}>
+      <Animated.View
+        style={[
+          styles.topBadge,
+          {
+            top: insets.top + 16,
+            opacity: badgeAnim,
+            transform: [{ translateY: badgeAnim.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }],
+          },
+        ]}
+      >
         <Car size={13} color={colors.white} />
         <Text style={styles.topBadgeText}>Driver is on the way!</Text>
-      </View>
+      </Animated.View>
 
       {/* ── Unified Central Card ── */}
       <View style={styles.unifiedCardContainer}>
-        <View style={styles.unifiedCard}>
+        <Animated.View
+          style={[
+            styles.unifiedCard,
+            {
+              opacity: cardAnim,
+              transform: [
+                { scale: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+                { translateY: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+              ],
+            },
+          ]}
+        >
           {/* 1. Driver Profile Section */}
-          <DriverProfileCard 
-            driver={driver} 
-            avatarUrl={`${avatarUrl}?bust=${avatarBust}`} 
-            rating={rating} 
+          <DriverProfileCard
+            driver={driver}
+            avatarUrl={`${avatarUrl}?bust=${avatarBust}`}
+            rating={rating}
             onCall={handleCall}
+            hideSOSButton
           />
 
           <View style={styles.cardDivider} />
@@ -507,7 +559,7 @@ export default function DriverMatchedScreen({ navigation }) {
           <View style={styles.progressSection}>
             <View style={styles.progressTopRow}>
               <Text style={styles.progressTitle}>{arrivalStatusText}</Text>
-              <Text style={styles.progressEta}>{etaText}</Text>
+              {etaText && <Text style={styles.progressEta}>{etaText}</Text>}
             </View>
             <View style={styles.progressTrack}>
               <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
@@ -555,27 +607,41 @@ export default function DriverMatchedScreen({ navigation }) {
             </View>
           </View>
 
-          {fare !== '0.00' && (
-            <View style={styles.fareRow}>
-              <Text style={styles.fareLabel}>ESTIMATED FARE</Text>
-              <Text style={styles.fareAmount}>ETB {fare}</Text>
-            </View>
-          )}
-
           <View style={styles.cardDivider} />
 
-          {/* 3. Footer Action: Cancel */}
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={handleCancel}
-            disabled={cancelLoading}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.cancelText}>
-              {cancelLoading ? 'Cancelling…' : 'Cancel Trip'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+          {/* 3. Footer Actions: Cancel + SOS — SOS is a static circular
+              icon here (no ambient pulse), distinct from the pulsing pill
+              variant DriverProfileCard still uses on other screens. */}
+          <View style={styles.footerActionsRow}>
+            <Animated.View style={{ flex: 1, transform: [{ scale: cancelPressScale }] }}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={handleCancel}
+                onPressIn={handleCancelPressIn}
+                onPressOut={handleCancelPressOut}
+                disabled={cancelLoading}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.cancelText}>
+                  {cancelLoading ? 'Cancelling…' : 'Cancel Trip'}
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+            <Animated.View style={{ transform: [{ scale: sosPressScale }] }}>
+              <TouchableOpacity
+                style={styles.sosCircleBtn}
+                onPress={handleSOS}
+                onPressIn={handleSOSPressIn}
+                onPressOut={handleSOSPressOut}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Emergency SOS — call 9040"
+              >
+                <AlertTriangle size={20} color={colors.white} />
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </Animated.View>
       </View>
 
       {/* Support Footer */}
@@ -609,7 +675,7 @@ const styles = StyleSheet.create({
   },
   mapOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 103, 79, 0.65)', // Emerald Overlay
+    backgroundColor: 'rgba(47, 112, 199, 0.65)', // Emerald Overlay
   },
 
 
@@ -705,7 +771,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: 'rgba(0, 103, 79, 0.16)',
+    borderColor: 'rgba(47, 112, 199, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -733,16 +799,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   locationLabel: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: fontWeight.bold,
-    color: '#94A3B8',
-    letterSpacing: 0.5,
+    color: '#7C8CA3',
+    letterSpacing: 0.6,
     marginBottom: 2,
   },
   locationAddress: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: fontWeight.semibold,
-    color: '#334155',
+    color: '#1E293B',
   },
   locationConnector: {
     paddingLeft: 3.5,
@@ -754,26 +820,14 @@ const styles = StyleSheet.create({
     height: 4,
     backgroundColor: '#CBD5E1',
   },
-  fareRow: {
+  footerActionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  fareLabel: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    color: '#64748B',
-  },
-  fareAmount: {
-    fontSize: 14,
-    fontWeight: fontWeight.bold,
-    color: colors.primary,
-  },
-  cancelBtn: {
+    gap: 10,
     margin: 16,
     marginTop: 8,
+  },
+  cancelBtn: {
     paddingVertical: 14,
     borderRadius: 12,
     backgroundColor: '#FEF2F2',
@@ -786,6 +840,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: fontWeight.bold,
     color: '#EF4444',
+  },
+  sosCircleBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.26,
+    shadowRadius: 6,
+    elevation: 5,
   },
   supportFooter: {
     position: 'absolute',

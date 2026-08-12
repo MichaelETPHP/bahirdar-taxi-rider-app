@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { fetchVehicleCategories } from '../services/authService';
 import { getFareEstimate } from '../services/tripService';
+import useTripHistoryStore from './tripHistoryStore';
 
 const useRideStore = create(
   persist(
@@ -112,7 +113,12 @@ const useRideStore = create(
 
   setDriverLocation: (loc) => set({ driverLocation: loc }),
 
-  setTripStatus: (status) => set({ tripStatus: status }),
+  setTripStatus: (status) => {
+    // A newly-completed trip belongs in "recent" immediately, not after the
+    // cache's TTL expires — every completion path funnels through here.
+    if (status === 'completed') useTripHistoryStore.getState().invalidate();
+    set({ tripStatus: status });
+  },
 
   setFinalFare: (fare) => set({ finalFare: fare }),
 

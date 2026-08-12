@@ -8,11 +8,14 @@
       "distribution": "internal",
       "channel": "development",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.3:3000/api/v1",
-        "EXPO_PUBLIC_SOCKET_URL": "http://192.168.1.3:3000",
-        "EXPO_PUBLIC_OSRM_ADDIS_URL": "http://192.168.1.3:3000/osrm/addis",
-        "EXPO_PUBLIC_OSRM_BAHIRDAR_URL": "http://192.168.1.3:3000/osrm/bahirdar",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB1GXudutcUp6RUCEeiX-zRnVYaKdXsyVQ"
+        "EXPO_PUBLIC_API_URL": "http://192.168.8.196:3000/api/v1",
+        "EXPO_PUBLIC_SOCKET_URL": "http://192.168.8.196:3000",
+        "EXPO_PUBLIC_OSRM_ADDIS_URL": "https://taxiapi.zmichael.click/osrm/addis",
+        "EXPO_PUBLIC_OSRM_BAHIRDAR_URL": "https://taxiapi.zmichael.click/osrm/bahirdar",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDqk1PB63xPc8inypQBY-XhMX6Z9moxg44",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "872882912380-bbj4kv3s67egf1ut9jj4j4g1b7acle5l.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "872882912380-f4bhhp9eqb4gi53dh38p9tb5ij4enacq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY": "AIzaSyD98rjvovnbS20hL3yZw7fF1B-iA3SSEmY"
       }
     },
     "preview": {
@@ -26,7 +29,10 @@
         "EXPO_PUBLIC_SOCKET_URL": "https://taxiapi.zmichael.click",
         "EXPO_PUBLIC_OSRM_ADDIS_URL": "https://taxiapi.zmichael.click/osrm/addis",
         "EXPO_PUBLIC_OSRM_BAHIRDAR_URL": "https://taxiapi.zmichael.click/osrm/bahirdar",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB1GXudutcUp6RUCEeiX-zRnVYaKdXsyVQ"
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB1GXudutcUp6RUCEeiX-zRnVYaKdXsyVQ",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "872882912380-bbj4kv3s67egf1ut9jj4j4g1b7acle5l.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "872882912380-f4bhhp9eqb4gi53dh38p9tb5ij4enacq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY": "AIzaSyD98rjvovnbS20hL3yZw7fF1B-iA3SSEmY"
       }
     },
     "production": {
@@ -41,7 +47,10 @@
         "EXPO_PUBLIC_SOCKET_URL": "https://taxiapi.zmichael.click",
         "EXPO_PUBLIC_OSRM_ADDIS_URL": "https://taxiapi.zmichael.click/osrm/addis",
         "EXPO_PUBLIC_OSRM_BAHIRDAR_URL": "https://taxiapi.zmichael.click/osrm/bahirdar",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB1GXudutcUp6RUCEeiX-zRnVYaKdXsyVQ"
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB1GXudutcUp6RUCEeiX-zRnVYaKdXsyVQ",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "872882912380-bbj4kv3s67egf1ut9jj4j4g1b7acle5l.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "872882912380-f4bhhp9eqb4gi53dh38p9tb5ij4enacq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY": "AIzaSyD98rjvovnbS20hL3yZw7fF1B-iA3SSEmY"
       }
     }
   },

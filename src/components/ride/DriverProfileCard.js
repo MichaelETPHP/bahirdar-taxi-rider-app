@@ -1,13 +1,47 @@
 import React, { useEffect, useRef } from 'react';
 import { Image } from 'expo-image';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Animated, Easing } from 'react-native';
-import { Phone, Star, AlertTriangle } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { Phone, Star, AlertTriangle, Globe } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
 import { formatEthiopianPhone } from '../../utils/phoneFormatter';
+import useAuthStore from '../../store/authStore';
+import useRideStore from '../../store/rideStore';
+import { startOutgoingCall } from '../../services/callEngine';
 
-export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, hideCallButton = false }) {
+/** Pulsing ring that invites a tap — same visual language as the live-driver
+ * marker's GPS ripple, reused here so "this is live/actionable" reads
+ * consistently across the app. */
+function CallRingPulse() {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(scale,   { toValue: 1.8, duration: 1300, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0,   duration: 1300, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        ]),
+        Animated.timing(scale,   { toValue: 1,   duration: 0, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.5, duration: 0, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.callRing, { opacity, transform: [{ scale }] }]}
+    />
+  );
+}
+
+export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, hideCallButton = false, hideSOSButton = false }) {
   const [avatarError, setAvatarError] = React.useState(false);
   React.useEffect(() => { setAvatarError(false); }, [avatarUrl]);
   const driverNameFull = driver?.name || driver?.full_name || driver?.fullName || 'Driver';
@@ -17,6 +51,22 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
   const carPlate = driver?.vehicle?.plateNumber || driver?.plate_number || driver?.plateNumber || driver?.vehicle?.plate_number || '—';
   const phone = formatEthiopianPhone(driver?.phone);
   const displayRating = typeof rating === 'number' ? rating.toFixed(1) : '5.0';
+  const speaksEnglish = driver?.speaks_english === true || driver?.speaksEnglish === true;
+
+  // Google-only accounts have no Ethiopian phone number, so a tel: call is
+  // impossible for them — same signal the backend uses everywhere else to
+  // identify a diaspora rider.
+  const riderUser = useAuthStore((s) => s.user);
+  const isDiasporaRider = !riderUser?.phone;
+  const tripId = useRideStore((s) => s.tripId);
+  const showCallBtn = !hideCallButton && !isDiasporaRider;
+  const showSOSBtn = !hideSOSButton;
+
+  const handleInAppCall = () => {
+    if (!tripId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    startOutgoingCall({ tripId, peerName: driverNameFull, peerRole: 'driver', peerAvatarUrl: avatarUrl });
+  };
 
   const handleSOS = () => {
     Linking.openURL('tel:9040');
@@ -43,6 +93,16 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
     ).start();
   }, [pulseAnim]);
 
+  // Press feedback (scale 0.96) for the three tappable actions — the SOS
+  // button composes this with its own ambient pulse (two `scale` transforms
+  // on the same node apply multiplicatively, so both read correctly).
+  const callPressScale = useRef(new Animated.Value(1)).current;
+  const inAppCallPressScale = useRef(new Animated.Value(1)).current;
+  const sosPressScale = useRef(new Animated.Value(1)).current;
+
+  const pressIn = (anim) => Animated.spring(anim, { toValue: 0.96, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
+  const pressOut = (anim) => Animated.spring(anim, { toValue: 1, useNativeDriver: true, friction: 5, tension: 160 }).start();
+
   return (
     <View style={styles.card}>
       {/* Top Row: Avatar & Basic Info */}
@@ -65,16 +125,55 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
         </View>
         
         <View style={styles.metaCol}>
-          <Text style={styles.driverName} numberOfLines={1}>{driverNameFull}</Text>
-          <View style={styles.ratingPhoneRow}>
+          <View style={styles.nameRatingRow}>
+            <Text style={styles.driverName} numberOfLines={1}>{driverNameFull}</Text>
             <View style={styles.ratingBadge}>
               <Star size={10} color="#F59E0B" fill="#F59E0B" />
               <Text style={styles.ratingText}>{displayRating}</Text>
             </View>
-            <Text style={styles.dot}>•</Text>
-            <Text style={styles.phoneText}>{phone}</Text>
           </View>
+
+          {speaksEnglish && (
+            <View style={styles.langBadge}>
+              <Globe size={10} color="#0369A1" />
+              <Text style={styles.langBadgeText}>English</Text>
+            </View>
+          )}
+
+          {/* Actual registered phone number — formatted, never masked, and
+              always dials the same number driver.phone holds. Shown for
+              every rider, diaspora included — the blue in-app call button
+              is an addition alongside it, not a replacement. */}
+          <TouchableOpacity
+            style={styles.phoneRow}
+            onPress={() => phone && phone !== '—' && Linking.openURL(`tel:${driver?.phone}`)}
+            activeOpacity={0.7}
+            disabled={!phone || phone === '—'}
+            accessibilityRole="button"
+            accessibilityLabel={`Call ${driverNameFull} at ${phone}`}
+          >
+            <Phone size={12} color={colors.primary} />
+            <Text style={styles.phoneTextClickable}>{phone}</Text>
+          </TouchableOpacity>
         </View>
+
+        {isDiasporaRider && (
+          <Animated.View style={{ transform: [{ scale: inAppCallPressScale }] }}>
+            <TouchableOpacity
+              style={styles.inAppCallBtn}
+              onPress={handleInAppCall}
+              onPressIn={() => pressIn(inAppCallPressScale)}
+              onPressOut={() => pressOut(inAppCallPressScale)}
+              activeOpacity={0.85}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Call driver in-app"
+            >
+              <CallRingPulse />
+              <Phone size={17} color={colors.white} fill={colors.white} />
+            </TouchableOpacity>
+          </Animated.View>
+        )}
       </View>
 
       {/* Middle Row: Vehicle Details */}
@@ -94,21 +193,48 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
         </View>
       </View>
 
-      {/* Bottom Row: Actions */}
-      <View style={styles.actionRow}>
-        {!hideCallButton && (
-          <TouchableOpacity style={styles.callBtn} onPress={onCall} activeOpacity={0.8}>
-            <Phone size={18} color={colors.white} />
-            <Text style={styles.callBtnText}>Call Driver</Text>
-          </TouchableOpacity>
-        )}
-        <Animated.View style={[hideCallButton && { flex: 1 }, { transform: [{ scale: pulseAnim }] }]}>
-          <TouchableOpacity style={[styles.sosBtn, hideCallButton && { paddingVertical: 14, width: '100%' }]} onPress={handleSOS} activeOpacity={0.85}>
-            <AlertTriangle size={18} color={colors.white} />
-            <Text style={styles.sosBtnText}>SOS 9040</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+      {/* Bottom Row: Actions — the tel: call pill is useless for a diaspora
+          rider (no SIM to dial from), so it's replaced by the in-app call
+          button up in the name row instead of being shown here too. SOS is
+          opt-out (hideSOSButton) for screens that place their own SOS
+          affordance elsewhere (e.g. DriverMatchedScreen, next to Cancel Trip). */}
+      {(showCallBtn || showSOSBtn) && (
+        <View style={styles.actionRow}>
+          {showCallBtn && (
+            <Animated.View style={{ flex: 1, transform: [{ scale: callPressScale }] }}>
+              <TouchableOpacity
+                style={styles.callBtn}
+                onPress={onCall}
+                onPressIn={() => pressIn(callPressScale)}
+                onPressOut={() => pressOut(callPressScale)}
+                activeOpacity={0.85}
+              >
+                <Phone size={18} color={colors.white} />
+                <Text style={styles.callBtnText}>Call Driver</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+          {showSOSBtn && (
+            <Animated.View
+              style={[
+                !showCallBtn && { flex: 1 },
+                { transform: [{ scale: pulseAnim }, { scale: sosPressScale }] },
+              ]}
+            >
+              <TouchableOpacity
+                style={[styles.sosBtn, !showCallBtn && { paddingVertical: 11, width: '100%' }]}
+                onPress={handleSOS}
+                onPressIn={() => pressIn(sosPressScale)}
+                onPressOut={() => pressOut(sosPressScale)}
+                activeOpacity={0.85}
+              >
+                <AlertTriangle size={15} color={colors.white} />
+                <Text style={styles.sosBtnText}>SOS 9040</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -142,11 +268,32 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: colors.white,
   },
   metaCol: { flex: 1, justifyContent: 'center' },
-  driverName: {
-    fontSize: 18, fontWeight: fontWeight.bold, color: '#0F172A', marginBottom: 4,
+  nameRatingRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6,
   },
-  ratingPhoneRow: {
-    flexDirection: 'row', alignItems: 'center',
+  driverName: {
+    fontSize: 18, fontWeight: fontWeight.bold, color: '#0F172A', flexShrink: 1,
+  },
+  langBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+    marginBottom: 9,
+  },
+  langBadgeText: { fontSize: 10, fontWeight: fontWeight.bold, color: '#0369A1' },
+  inAppCallBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: colors.primaryDark,
+    alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
+    marginLeft: 10,
+    ...shadow.sm,
+  },
+  callRing: {
+    position: 'absolute',
+    top: 0, left: 0,
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: colors.primaryDark,
   },
   ratingBadge: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7',
@@ -155,9 +302,11 @@ const styles = StyleSheet.create({
   ratingText: {
     fontSize: 11, fontWeight: fontWeight.bold, color: '#B45309',
   },
-  dot: { marginHorizontal: 6, color: '#CBD5E1', fontSize: 12 },
-  phoneText: {
-    fontSize: 13, color: '#64748B', fontWeight: fontWeight.medium,
+  phoneRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+  },
+  phoneTextClickable: {
+    fontSize: 13.5, color: '#1E293B', fontWeight: fontWeight.bold, letterSpacing: 0.3,
   },
   vehicleBox: {
     flexDirection: 'row', alignItems: 'center',
@@ -190,20 +339,20 @@ const styles = StyleSheet.create({
     color: colors.white, fontSize: 15, fontWeight: fontWeight.bold,
   },
   sosBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
     backgroundColor: '#DC2626',
-    paddingHorizontal: 16, 
-    paddingVertical: 12,
-    borderRadius: 12, 
-    borderWidth: 2,
-    borderColor: '#FEF2F2',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
     shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.26,
+    shadowRadius: 6,
+    elevation: 5,
   },
   sosBtnText: {
-    color: colors.white, fontSize: 15, fontWeight: fontWeight.bold, letterSpacing: 0.5,
+    color: colors.white, fontSize: 13.5, fontWeight: fontWeight.bold, letterSpacing: 0.3,
   },
 });

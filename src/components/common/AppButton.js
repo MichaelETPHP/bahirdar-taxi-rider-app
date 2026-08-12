@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
   pressOverlaySecondary: {
-    backgroundColor: 'rgba(0,103,79,0.10)',
+    backgroundColor: 'rgba(47,112,199,0.10)',
   },
   label: {
     fontSize: fontSize.xl,

@@ -5,6 +5,8 @@ import { Car } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { shadow } from '../../constants/layout';
 import { normalizeDriverCarIconUrl } from '../../utils/driverCategoryIcon';
+import useCachedCarIconUri from '../../hooks/useCachedCarIconUri';
+import useRoadSnappedCoordinate from '../../hooks/useRoadSnappedCoordinate';
 
 const MarkerAnimated = Marker.Animated;
 
@@ -125,20 +127,21 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
   // Android: heading state drives the native `rotation` prop on the car marker.
   const [heading, setHeading] = useState(driver.heading || 0);
 
+  // Snaps the raw GPS point to the nearest road (falls back to the raw point
+  // instantly, corrects to the snapped one once OSRM resolves) so the car
+  // sits on the street instead of slightly off-road.
+  const { lat: snapLat, lng: snapLng } = useRoadSnappedCoordinate(driver.lat, driver.lng);
+
   // AnimatedRegion drives smooth position for MarkerAnimated (both platforms)
   const coordinate = useRef(new AnimatedRegion({
-    latitude:  driver.lat ?? 0,
-    longitude: driver.lng ?? 0,
+    latitude:  snapLat ?? 0,
+    longitude: snapLng ?? 0,
     latitudeDelta: 0,
     longitudeDelta: 0,
   })).current;
 
-  // iOS rotation via Animated.Value interpolation
-  const animHeading = useRef(new Animated.Value((driver.heading || 0) - 90)).current;
-  const rotateDeg   = animHeading.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] });
-
   const animVal      = useRef(new Animated.Value(0)).current;
-  const prevCoordRef = useRef({ latitude: driver.lat, longitude: driver.lng });
+  const prevCoordRef = useRef({ latitude: snapLat, longitude: snapLng });
   const prevHeadRef  = useRef(driver.heading || 0);
   const routeRef     = useRef([]);
   const carIconUrl = useMemo(
@@ -150,6 +153,10 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
     ),
     [driver?.carIconUrl, driver?.car_icon_url, driver?.vehicle?.categoryIconUrl, driver?.vehicle?.car_icon_url]
   );
+  // iOS-only: Marker's native `image` prop (unlike a child <Image>) renders
+  // through a path that isn't affected by the custom-Marker-children bug —
+  // but it only accepts local files, hence the cache-then-reference dance.
+  const cachedCarIconUri = useCachedCarIconUri(Platform.OS === 'ios' ? carIconUrl : null);
   if (routeCoords && routeCoords.length > 2 && routeCoords !== routeRef.current) {
     routeRef.current = routeCoords;
   }
@@ -164,8 +171,8 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
   useEffect(() => {
     const startLat = prevCoordRef.current.latitude;
     const startLng = prevCoordRef.current.longitude;
-    const endLat   = driver.lat;
-    const endLng   = driver.lng;
+    const endLat   = snapLat;
+    const endLng   = snapLng;
     const endHead  = driver.heading || 0;
 
     setRippleTrigger(n => n + 1);
@@ -175,7 +182,6 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
     // Snap for large jumps or first render
     if (dist > 0.005 || (startLat === 0 && startLng === 0)) {
       coordinate.setValue({ latitude: endLat, longitude: endLng, latitudeDelta: 0, longitudeDelta: 0 });
-      animHeading.setValue(endHead - 90);
       setHeading(endHead);
       prevCoordRef.current = { latitude: endLat, longitude: endLng };
       prevHeadRef.current  = endHead;
@@ -199,7 +205,6 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
       const r = interpolatePathAndHeading(animPath, value, endHead);
       if (!r) return;
       coordinate.setValue({ latitude: r.coordinate.latitude, longitude: r.coordinate.longitude, latitudeDelta: 0, longitudeDelta: 0 });
-      animHeading.setValue(r.heading - 90);
     });
 
     Animated.timing(animVal, { toValue: 1, duration: 2800, easing: Easing.linear, useNativeDriver: false })
@@ -211,7 +216,7 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
       });
 
     return () => animVal.removeListener(id);
-  }, [driver.lat, driver.lng, driver.heading]);
+  }, [snapLat, snapLng, driver.heading]);
 
   if (!driver.lat || !driver.lng) return null;
 
@@ -278,24 +283,27 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
     );
   }
 
-  // ── iOS: single MarkerAnimated, Animated.View rotation works fine ──────────
+  // ── iOS: native `image`/`pinColor` props, no custom children ───────────────
+  // Custom Marker children (the pulse ring, name bubble, and a child <Image>
+  // for the car photo) silently fail to render on iOS under this project's
+  // react-native-maps + New Architecture setup — proved this while debugging
+  // the current-location marker. The native `image` prop renders through a
+  // different path that isn't affected, so the car icon uses that instead;
+  // it falls back to a plain colored pin while the icon is still downloading
+  // to local cache (see useCachedCarIconUri) or if caching fails. The pulse
+  // ring and name bubble have no equivalent native-prop path, so they're
+  // Android-only for now.
   return (
     <MarkerAnimated
       coordinate={coordinate}
       onPress={onPress}
-      tracksViewChanges={!imageLoaded}
       anchor={{ x: 0.5, y: 0.5 }}
+      rotation={heading - 90}
+      flat
       zIndex={100}
-    >
-      <View style={styles.root} collapsable={false}>
-        <ActivePulse />
-        <GPSRipple trigger={rippleTrigger} />
-        {isLive && !!name && <NameBubble name={name} carText={carText} />}
-        <Animated.View style={[styles.carContainer, { transform: [{ rotate: rotateDeg }] }]}>
-          {renderCarVisual()}
-        </Animated.View>
-      </View>
-    </MarkerAnimated>
+      image={cachedCarIconUri ? { uri: cachedCarIconUri } : undefined}
+      pinColor={!cachedCarIconUri ? colors.primary : undefined}
+    />
   );
 });
 
@@ -341,7 +349,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: 'rgba(0, 103, 79, 0.16)',
+    borderColor: 'rgba(47, 112, 199, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
     ...shadow.sm,
@@ -349,12 +357,12 @@ const styles = StyleSheet.create({
   pulse: {
     position: 'absolute', top: 50, left: 50,
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(0, 103, 79, 0.18)',
+    backgroundColor: 'rgba(47, 112, 199, 0.18)',
   },
   gpsRipple: {
     position: 'absolute', top: 50, left: 50,
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'transparent',
-    borderWidth: 2.5, borderColor: 'rgba(0, 103, 79, 0.65)',
+    borderWidth: 2.5, borderColor: 'rgba(47, 112, 199, 0.65)',
   },
 });

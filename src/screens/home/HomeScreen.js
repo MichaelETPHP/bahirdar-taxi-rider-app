@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import ProfessionalRideMap from '../../components/map/ProfessionalRideMap';
@@ -16,8 +17,6 @@ import ProfessionalRoutePolyline from '../../components/map/ProfessionalRoutePol
 import { buildAvatarUrl } from '../../utils/avatarUrl';
 import {
   MapPin,
-  Clock,
-  Flag,
   RefreshCw,
   Hand,
   History,
@@ -27,15 +26,16 @@ import {
   Smile,
   AlertTriangle,
   ArrowLeft,
+  Wallet,
 } from 'lucide-react-native';
 import HamburgerButton from '../../components/ui/HamburgerButton';
-import LocationPinButton from '../../components/ui/LocationPinButton';
 import BottomSheet from '../../components/ui/BottomSheet';
 import CustomDrawer from '../../components/ui/CustomDrawer';
 import RideTypeSelector from '../../components/ride/RideTypeSelector';
 import LocationBar from '../../components/ride/LocationBar';
 import RecentTrips from '../../components/ride/RecentTrips';
 import PromoBanner from '../../components/home/PromoBanner';
+import WelcomeBanner from '../../components/common/WelcomeBanner';
 import AppButton from '../../components/common/AppButton';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
@@ -71,6 +71,10 @@ const SHEET_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.52;
 
 
 const MAP_PADDING = { top: 0, right: 0, bottom: SHEET_COLLAPSED_HEIGHT, left: 0 };
+
+const WALLET_PILL_COLLAPSED_WIDTH = 44; // matches the original icon-only circle exactly
+const WALLET_PILL_EXPANDED_WIDTH = 132; // fits "12,345 ETB" comfortably
+const WALLET_HINT_VISIBLE_MS = 3000;
 
 // Throttle socket updates to 500ms to prevent constant re-renders
 function createThrottle(intervalMs) {
@@ -164,6 +168,14 @@ export default function HomeScreen({ navigation }) {
   const mapRef = useRef(null);
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
+  const justAuthenticated = useAuthStore((s) => s.justAuthenticated);
+  const clearJustAuthenticated = useAuthStore((s) => s.clearJustAuthenticated);
+  // Wallet balance hint — expanded (icon + amount) once ever on first app
+  // open, then bounces back down to icon-only after 6s and stays that way
+  // forever after. Starts collapsed so repeat opens never flash the expanded
+  // state before the AsyncStorage check resolves.
+  const walletPillWidth = useRef(new Animated.Value(WALLET_PILL_COLLAPSED_WIDTH)).current;
+  const walletTextOpacity = useRef(new Animated.Value(0)).current;
   const { destination, recentDestinations, setDestination, setPickup, pickup, userCoords, setUserCoords, clearStops } = useLocationStore();
   const resetRideState = useRideStore((s) => s.reset);
   const { currentLocation, currentAddress, loading: locLoading, permissionDenied, refresh: refreshLocation } = useLocationV2();
@@ -228,13 +240,6 @@ export default function HomeScreen({ navigation }) {
     return routeInfo?.duration_min ?? 0;
   }, [routeDurationMin, routeInfo?.duration_min]);
 
-  // Arrival time = now + route duration
-  const arrivalTime = useMemo(() => {
-    if (!destination || routeDurationMinFinal <= 0) return null;
-    const eta = new Date(Date.now() + routeDurationMinFinal * 60 * 1000);
-    return eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-  }, [destination, routeDurationMinFinal]);
-
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(true);
   // `sheetDragging` = the BottomSheet is being dragged up/down right now.
@@ -245,7 +250,10 @@ export default function HomeScreen({ navigation }) {
   // triggers a React re-render.
   const [sheetDragging, setSheetDragging] = useState(false);
     const isMapScrollEnabledStore = useRideStore((state) => state.isMapScrollEnabled);
-    const mapScrollEnabled = !destination && !sheetDragging && isMapScrollEnabledStore;
+    // Map stays pannable even after a destination is picked — riders often
+    // want to inspect the route/pickup area while choosing a ride type.
+    // Only an active sheet drag or the carousel's touch lock freeze it.
+    const mapScrollEnabled = !sheetDragging && isMapScrollEnabledStore;
     const rideSheetHeight = destination ? SCREEN_HEIGHT * 0.58 : SHEET_COLLAPSED_HEIGHT;
     const homeSheetCanExpand = !destination;
   const [isInServiceArea, setIsInServiceArea] = useState(true);
@@ -295,6 +303,40 @@ export default function HomeScreen({ navigation }) {
       console.error('   Expected key in Constants.expoConfig?.extra?.googleMapsKey or process.env');
     }
   }, []);
+
+  // Wallet balance reveal — expands to show the amount every time this
+  // screen gains focus (cold app open, or navigating back from the Wallet
+  // screen), then springs shut to icon-only after 3s. Runs on every focus
+  // (not just once) via useFocusEffect, which fires on both those cases.
+  useFocusEffect(
+    useCallback(() => {
+      // Snap straight to expanded — this is the starting reveal, not an
+      // entrance worth animating; the collapse is the one moment that earns motion.
+      walletPillWidth.stopAnimation();
+      walletTextOpacity.stopAnimation();
+      walletPillWidth.setValue(WALLET_PILL_EXPANDED_WIDTH);
+      walletTextOpacity.setValue(1);
+
+      const collapseTimer = setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(walletTextOpacity, {
+            toValue: 0,
+            duration: 140,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.spring(walletPillWidth, {
+            toValue: WALLET_PILL_COLLAPSED_WIDTH,
+            bounciness: 18,
+            speed: 10,
+            useNativeDriver: false,
+          }),
+        ]).start();
+      }, WALLET_HINT_VISIBLE_MS);
+
+      return () => clearTimeout(collapseTimer);
+    }, [])
+  );
 
   useEffect(() => {
     if (currentLocation) {
@@ -639,8 +681,15 @@ export default function HomeScreen({ navigation }) {
     return () => clearTimeout(timer);
   }, [destination, displayCoords.latitude, displayCoords.longitude]);
 
-  useEffect(() => {
+  // Guards the revert-after-idle logic below from treating our own
+  // programmatic fitToCoordinates call as a user pan/zoom, which would
+  // otherwise immediately re-arm the revert timer against itself.
+  const isProgrammaticMoveRef = useRef(false);
+  const revertTimerRef = useRef(null);
+
+  const fitToPickupAndDestination = useCallback(() => {
     if (!mapRef.current || !destination) return;
+    isProgrammaticMoveRef.current = true;
     const start = { latitude: pickupCoordinate.latitude, longitude: pickupCoordinate.longitude };
     const end = { latitude: destination.lat, longitude: destination.lng };
     const toFit = routeCoordinates.length >= 2 ? routeCoordinates : [start, end];
@@ -648,7 +697,28 @@ export default function HomeScreen({ navigation }) {
       edgePadding: { top: 88, right: 40, bottom: 220, left: 40 },
       animated: true,
     });
+    // fitToCoordinates has no completion callback, so this just needs to
+    // outlast the animation itself before treating region changes as
+    // user-initiated again.
+    setTimeout(() => { isProgrammaticMoveRef.current = false; }, 900);
+  }, [destination, pickupCoordinate.latitude, pickupCoordinate.longitude, routeCoordinates]);
+
+  useEffect(() => {
+    fitToPickupAndDestination();
   }, [destination?.id || destination?.placeId]);
+
+  // If the rider pans/zooms away from the fitted pickup+destination view,
+  // snap back once they've stopped touching the map for a few seconds —
+  // rather than leaving the map wherever they last dragged it.
+  const handleRouteRegionChangeComplete = useCallback(() => {
+    if (isProgrammaticMoveRef.current || !destination) return;
+    if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+    revertTimerRef.current = setTimeout(fitToPickupAndDestination, 4000);
+  }, [destination, fitToPickupAndDestination]);
+
+  useEffect(() => () => {
+    if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+  }, []);
 
   // NEW: Re-center map dynamically when destination is cleared
   useEffect(() => {
@@ -829,6 +899,7 @@ export default function HomeScreen({ navigation }) {
           showStreetNames={true}
           showRoadLines={true}
           scrollEnabled={mapScrollEnabled}
+          onRegionChangeComplete={destination ? handleRouteRegionChangeComplete : undefined}
           initialRegion={{
             latitude: displayCoords.latitude,
             longitude: displayCoords.longitude,
@@ -863,36 +934,11 @@ export default function HomeScreen({ navigation }) {
         </ProfessionalRideMap>
       </View>
 
-      {/* Route info chip — pointerEvents none so it NEVER blocks map touch */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        {destination && routeDistanceKm != null && (
-          <View style={[styles.routeInfoChip, { top: insets.top + 118 }]}>
-            <MapPin size={11} color={colors.mapCurrentLocation} />
-            <Text style={styles.routeDistanceKm}>{formatDistance(routeDistanceKm)}</Text>
-            {routeDurationMinFinal > 0 && (
-              <>
-                <View style={styles.routeChipDivider} />
-                <Clock size={11} color={colors.primary} />
-                <Text style={styles.routeDistanceKm}>
-                  {routeDurationMinFinal < 60
-                    ? `${Math.round(routeDurationMinFinal)} min`
-                    : `${Math.floor(routeDurationMinFinal / 60)}h ${Math.round(routeDurationMinFinal % 60)}m`}
-                </Text>
-              </>
-            )}
-            {arrivalTime && (
-              <>
-                <View style={styles.routeChipDivider} />
-                <Flag size={11} color={colors.primary} />
-                <Text style={styles.routeDistanceKm}>{arrivalTime}</Text>
-              </>
-            )}
-          </View>
-        )}
-      </View>
 
-      {/* SOS button - rendered directly to avoid full-screen touch blocking */}
-      <MovableCircleButton />
+      {/* SOS button - rendered directly to avoid full-screen touch blocking.
+          Hidden once a destination is picked — DriverProfileCard/
+          DriverMatchedScreen's own SOS affordance takes over from there. */}
+      {!destination && <MovableCircleButton />}
 
       {/* Overlays - only capture touches in their bounds */}
       <View style={[styles.topBar, { top: insets.top + 12 }]} pointerEvents="box-none" collapsable={false}>
@@ -911,38 +957,56 @@ export default function HomeScreen({ navigation }) {
               {showSmile ? (
                 <Text style={{ fontSize: 13, marginLeft: 2 }}>😂</Text>
               ) : (
-                <Hand size={14} color="#00674F" />
+                <Hand size={14} color="#2F70C7" />
               )}
             </Animated.View>
           </Pressable>
 
-          <LocationPinButton onPress={handleRecenter} />
+          <Animated.View style={[styles.walletButton, { width: walletPillWidth }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Open wallet, balance ${Math.round(Number(user?.walletBalance ?? 0)).toLocaleString('en-US')} ETB`}
+              hitSlop={8}
+              onPress={() => navigation.navigate('Wallet')}
+              style={({ pressed }) => [styles.walletButtonInner, pressed && styles.walletButtonPressed]}
+            >
+              <Wallet size={18} color={colors.textPrimary} strokeWidth={2} />
+              <Animated.Text style={[styles.walletButtonText, { opacity: walletTextOpacity }]} numberOfLines={1}>
+                {Math.round(Number(user?.walletBalance ?? 0)).toLocaleString('en-US')}
+                <Text style={styles.walletButtonUnit}> ETB</Text>
+              </Animated.Text>
+            </Pressable>
+          </Animated.View>
         </View>
 
-        {/* Current pickup location */}
-        <Pressable
-          style={styles.currentLocationCard}
-          onPress={handleRecenter}
-          android_ripple={{ color: 'rgba(0,103,79,0.08)' }}
-        >
-          <View style={styles.currentLocationIconWrap}>
-            <MapPin size={17} color={colors.primary} />
-          </View>
-          <View style={styles.currentLocationTextWrap}>
-            <Text style={styles.currentLocationEyebrow}>Pickup location</Text>
-            <Text style={styles.currentLocationTitle} numberOfLines={1}>
-              {displayLocationName}
-            </Text>
-            <Text style={styles.currentLocationSubtitle} numberOfLines={1}>
-              {displayLocationAddress}
-            </Text>
-          </View>
-          <View style={styles.currentLocationAction}>
-            <Animated.View style={{ transform: [{ rotate: refreshSpin }] }}>
-              <RefreshCw size={14} color={colors.primary} />
-            </Animated.View>
-          </View>
-        </Pressable>
+        {/* Current pickup location — once a destination is picked, the map
+            itself (pickup + destination markers, route line, distance/time
+            chip) already shows this; the card is just clutter at that point. */}
+        {!destination && (
+          <Pressable
+            style={styles.currentLocationCard}
+            onPress={handleRecenter}
+            android_ripple={{ color: 'rgba(47,112,199,0.08)' }}
+          >
+            <View style={styles.currentLocationIconWrap}>
+              <MapPin size={17} color={colors.textPrimary} />
+            </View>
+            <View style={styles.currentLocationTextWrap}>
+              <Text style={styles.currentLocationEyebrow}>Pickup location</Text>
+              <Text style={styles.currentLocationTitle} numberOfLines={1}>
+                {displayLocationName}
+              </Text>
+              <Text style={styles.currentLocationSubtitle} numberOfLines={1}>
+                {displayLocationAddress}
+              </Text>
+            </View>
+            <View style={styles.currentLocationAction}>
+              <Animated.View style={{ transform: [{ rotate: refreshSpin }] }}>
+                <RefreshCw size={14} color={colors.textPrimary} />
+              </Animated.View>
+            </View>
+          </Pressable>
+        )}
       </View>
 
       {/* Bottom sheet — self-positions at bottom, pointerEvents managed internally */}
@@ -1053,7 +1117,7 @@ export default function HomeScreen({ navigation }) {
                   handleClearDestinationFlow();
                 }}
               >
-                <ArrowLeft size={22} color={colors.textPrimary} />
+                <ArrowLeft size={22} color={colors.white} />
               </Pressable>
 
               <View style={{ flex: 1 }}>
@@ -1085,6 +1149,13 @@ export default function HomeScreen({ navigation }) {
 
       {/* Promotional overlay — slides up on first open */}
       <PromoBanner />
+
+      {/* One-time login confirmation — clears itself so it never repeats */}
+      <WelcomeBanner
+        visible={justAuthenticated}
+        name={user?.fullName}
+        onHide={clearJustAuthenticated}
+      />
 
       {/* Location permission gate — blocks the screen until user enables location */}
       {permissionDenied && (
@@ -1175,6 +1246,44 @@ const styles = StyleSheet.create({
     gap: 8,
     zIndex: 2,
   },
+  walletButton: {
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.06)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  walletButtonInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    // 13 exactly centers the 18px icon inside the 44px collapsed circle
+    // (44 - 18) / 2 = 13 — the pill only needs to look centered at rest,
+    // which is the collapsed state; the expanded state has room to spare.
+    paddingHorizontal: 13,
+  },
+  walletButtonText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.bold,
+    color: colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  walletButtonUnit: {
+    fontSize: 11,
+    fontWeight: fontWeight.semibold,
+    color: colors.textSecondary,
+  },
+  walletButtonPressed: {
+    transform: [{ scale: 0.96 }],
+    opacity: 0.9,
+  },
   topBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1249,36 +1358,6 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium,
     flexShrink: 1,
   },
-  routeInfoChip: {
-    position: 'absolute',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: borderRadius.pill,
-    backgroundColor: 'rgba(255,255,255,0.98)',
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-    zIndex: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  routeChipDivider: {
-    width: 1,
-    height: 14,
-    backgroundColor: colors.border,
-    marginHorizontal: 2,
-  },
-  routeDistanceKm: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
-  },
   sheetWrapper: {
     position: 'absolute',
     bottom: 0,
@@ -1319,10 +1398,8 @@ const styles = StyleSheet.create({
   actionBackBtn: {
     width: 52,
     height: 52,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
+    borderRadius: 26,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1331,6 +1408,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingVertical: 10,
     marginTop: 0,
+    backgroundColor: colors.primary,
   },
 
   sheet: {
@@ -1347,10 +1425,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 54,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 103, 79, 0.16)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#000000',
     borderRadius: 22,
-    backgroundColor: '#E8F6F0',
+    backgroundColor: colors.white,
     paddingHorizontal: 12,
   },
   destinationOnlyMain: {
@@ -1431,7 +1509,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: 'rgba(0,103,79,0.06)',
+    backgroundColor: 'rgba(47,112,199,0.06)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1583,7 +1661,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1616,7 +1694,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(0,103,79,0.08)',
+    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 10,

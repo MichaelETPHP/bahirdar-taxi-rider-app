@@ -28,12 +28,14 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
 export default function ProfileSetupScreen({ navigation }) {
   const { t } = useTranslation();
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const insets = useSafeAreaInsets();
   const token = useAuthStore((s) => s.token);
   const updateUser = useAuthStore((s) => s.updateUser);
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
+  const googleProfile = useAuthStore((s) => s.googleProfile);
+  const setGoogleProfile = useAuthStore((s) => s.setGoogleProfile);
+  const [name, setName] = useState(googleProfile?.name || '');
+  const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const isNameValid = name.trim().length > 0;
 
@@ -41,9 +43,13 @@ export default function ProfileSetupScreen({ navigation }) {
     if (!isNameValid || loading) return;
     setLoading(true);
     try {
-      const res = await updateProfile({ fullName: name.trim() }, token);
+      const res = await updateProfile(
+        { fullName: name.trim(), googleIdToken: googleProfile?.idToken },
+        token
+      );
       const savedName = res?.data?.full_name ?? res?.data?.user?.fullName ?? name.trim();
       updateUser({ fullName: savedName, isVerified: true });
+      setGoogleProfile(null);
       setAuthenticated(true, false);
     } catch (err) {
       Alert.alert('Error', err.message || 'Could not save your name. Try again.');

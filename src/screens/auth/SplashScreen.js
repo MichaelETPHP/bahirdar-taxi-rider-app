@@ -87,6 +87,12 @@ export default function SplashScreen({ onFinish }) {
   }, []);
 
   useEffect(() => {
+    // Only the logo bounce-in + text fade (~900ms combined) actually gates
+    // navigation — this was previously the FULL sequence including a
+    // decorative 2500ms bar-fill, forcing a ~3.4s minimum splash on every
+    // single launch regardless of how fast the real network/location
+    // checks resolved. The bar is purely cosmetic — let it keep animating
+    // on its own below, unawaited, instead of blocking on it.
     Animated.sequence([
       Animated.parallel([
         Animated.spring(logoScale, {
@@ -106,18 +112,19 @@ export default function SplashScreen({ onFinish }) {
         duration: 400,
         useNativeDriver: true,
       }),
-      Animated.timing(barWidth, {
-        toValue: width * 0.6,
-        duration: 2500,
-        useNativeDriver: false,
-      }),
     ]).start(() => {
       animationFinished.current = true;
-      console.log('[Splash] Animation finished. checking access...');
-      
+      console.log('[Splash] Intro animation finished. checking access...');
+
       // Re-trigger check to be sure, or proceed if already known good
       checkConnectivity();
     });
+
+    Animated.timing(barWidth, {
+      toValue: width * 0.6,
+      duration: 2500,
+      useNativeDriver: false,
+    }).start();
   }, [onFinish]);
 
   return (

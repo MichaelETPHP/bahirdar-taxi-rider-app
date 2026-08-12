@@ -53,3 +53,5 @@ Claude_understand/
 Guide/
 *.md
 *.txt
+*.zip
+*.bat

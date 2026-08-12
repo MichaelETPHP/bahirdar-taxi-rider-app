@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, TouchableWithoutFeedback,
+  View, Text, TouchableOpacity, TouchableWithoutFeedback,
   StyleSheet, Animated, Dimensions, Linking, Share, PanResponder,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { X, Share2, ExternalLink, Play } from 'lucide-react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,7 +41,7 @@ function MediaContent({ promo }) {
           activeOpacity={0.9}
           onPress={() => Linking.openURL(promo.video_url).catch(() => {})}
         >
-          <Image source={{ uri: thumb }} style={styles.media} resizeMode="cover" />
+          <Image source={{ uri: thumb }} style={styles.media} contentFit="cover" cachePolicy="disk" />
           <View style={styles.ytPlayOverlay}>
             <View style={styles.ytPlayBtn}>
               <Play size={26} color="#fff" fill="#fff" />
@@ -70,7 +71,13 @@ function MediaContent({ promo }) {
       <Image
         source={{ uri: versionedUrl(promo.image_url, promo.updated_at || promo.id) }}
         style={styles.media}
-        resizeMode="cover"
+        contentFit="cover"
+        // The URL already carries the promo's updated_at/id as a version
+        // tag, so the same promotion always resolves to the same URL and
+        // this disk cache serves it instantly with no network call — a new
+        // promotion (different updated_at/id) gets a different URL and is
+        // fetched + cached fresh automatically.
+        cachePolicy="disk"
       />
     );
   }

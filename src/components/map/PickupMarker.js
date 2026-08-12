@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
 
-// colors.mapCurrentLocation is #10B981 (Bright Green)
 import { colors } from '../../constants/colors';
 
 export default React.memo(function PickupMarker({ coordinate, title = 'Pickup' }) {

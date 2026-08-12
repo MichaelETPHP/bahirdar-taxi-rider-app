@@ -57,7 +57,7 @@ const PlayStoreIcon = ({ size = 22 }) => (
   </Svg>
 );
 import { colors } from '../../constants/colors';
-import { fontSize, fontWeight, fontFamilyBold, fontFamilySemiBold, fontFamilyRegular } from '../../constants/typography';
+import { fontSize, fontWeight, fontFamilyBold, fontFamilySemiBold, fontFamilyRegular, fontFamilyLight } from '../../constants/typography';
 import { borderRadius } from '../../constants/layout';
 import useAuthStore from '../../store/authStore';
 import useLocationStore from '../../store/locationStore';
@@ -99,9 +99,12 @@ function CustomDrawer({ visible, onClose, navigation }) {
     user?.avatarUpdatedAt || user?.updated_at || null,
   );
 
+  // Google-only accounts have no phone at all — show their email instead,
+  // never a permanent "Loading..." that was never going to resolve.
   const displayPhone = phone
     ? (phone.startsWith('+251') ? phone : `+251 ${phone.slice(1)}`)
-    : 'Loading...';
+    : null;
+  const displayEmail = !phone ? user?.email : null;
 
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -321,9 +324,15 @@ function CustomDrawer({ visible, onClose, navigation }) {
                 <CircleCheck size={14} color={colors.verified} />
               )}
             </View>
-            <Text style={styles.userPhone} numberOfLines={1}>
-              {displayPhone}
-            </Text>
+            {displayPhone ? (
+              <Text style={styles.userPhone} numberOfLines={1}>
+                {displayPhone}
+              </Text>
+            ) : displayEmail ? (
+              <Text style={styles.userEmail} numberOfLines={1}>
+                {displayEmail}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -500,6 +509,12 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     fontWeight: fontWeight.regular,
     fontFamily: fontFamilyRegular,
+  },
+  userEmail: {
+    fontSize: fontSize.sm,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: fontWeight.regular,
+    fontFamily: fontFamilyLight,
   },
   content: {
     flex: 1,

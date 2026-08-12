@@ -1,0 +1,28 @@
+diff --git a/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java b/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
+index 025480ac97460cc45775ea11aa43af36522d5df6..f42e16c660d954f4dac31059a694bc66f06725ef 100644
+--- a/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
++++ b/android/src/main/java/io/wazo/callkeep/RNCallKeepModule.java
+@@ -434,7 +434,11 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
+         this.hasListeners = false;
+     }
+ 
+-    @ReactMethod
++    // @ReactMethod annotation removed — the New Architecture's TurboModule
++    // interop forbids two @ReactMethod methods sharing a JS-exposed name
++    // ("Module exports two methods to JavaScript with the same name"), and
++    // the JS layer (index.js) only ever calls the 4-arg overload below on
++    // Android, so this 3-arg one was unreachable from JS anyway.
+     public void displayIncomingCall(String uuid, String number, String callerName) {
+         this.displayIncomingCall(uuid, number, callerName, false, null);
+     }
+@@ -483,7 +487,9 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
+         conn.onAnswer();
+     }
+ 
+-    @ReactMethod
++    // @ReactMethod annotation removed — same TurboModule duplicate-name
++    // conflict as displayIncomingCall above; index.js only ever calls the
++    // 4-arg overload below on Android.
+     public void startCall(String uuid, String number, String callerName) {
+         this.startCall(uuid, number, callerName, false, null);
+     }

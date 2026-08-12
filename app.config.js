@@ -5,6 +5,7 @@ export default {
     owner: "zmichaeleth",
     name: 'Bahiran Ride',
     slug: 'BahirdarRide',
+    scheme: 'bahirdarride',
     version: '1.1.0',
     orientation: 'portrait',
     icon: './assets/icon.png',
@@ -12,17 +13,25 @@ export default {
     splash: {
       image: './assets/splash.png',
       resizeMode: 'contain',
-      backgroundColor: '#00674F',
+      backgroundColor: '#2F70C7',
       android12: {
         image: './assets/icon.png',
-        backgroundColor: '#00674F',
+        backgroundColor: '#2F70C7',
       },
     },
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.bahirdar.ride',
+      // Required alongside Google Sign-In per App Store rule 4.8 (any
+      // third-party login on iOS must also offer Sign in with Apple).
+      // Generates the com.apple.developer.applesignin entitlement at
+      // prebuild/EAS-build time — needs a new build, not a JS-only change.
+      usesAppleSignIn: true,
       config: {
-        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+        // Separate from EXPO_PUBLIC_GOOGLE_MAPS_API_KEY — that one is
+        // restricted to Android apps in Google Cloud Console, so it can't
+        // be reused here.
+        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY,
       },
       infoPlist: {
         NSAppTransportSecurity: {
@@ -34,7 +43,7 @@ export default {
     android: {
       adaptiveIcon: {
         foregroundImage: './assets/icon.png',
-        backgroundColor: '#00674F',
+        backgroundColor: '#2F70C7',
       },
 
       package: 'com.bahirdar.rider',
@@ -48,6 +57,12 @@ export default {
         'android.permission.ACCESS_FINE_LOCATION',
         'android.permission.ACCESS_COARSE_LOCATION',
         'android.permission.INTERNET',
+        'android.permission.RECORD_AUDIO',
+        // CallKeep's VoiceConnectionService calls TelecomManager.getPhoneAccount()
+        // the instant an incoming call reaches the Telecom framework — without
+        // this, that throws an uncaught SecurityException and kills the app.
+        // Not added by @config-plugins/react-native-callkeep itself.
+        'android.permission.READ_PHONE_NUMBERS',
       ],
       config: {
         googleMaps: {
@@ -57,7 +72,7 @@ export default {
     },
     androidStatusBar: {
       barStyle: 'light-content',
-      backgroundColor: '#00674F',
+      backgroundColor: '#2F70C7',
       translucent: false,
     },
     web: {
@@ -65,7 +80,7 @@ export default {
     },
     notification: {
       icon: './assets/icon.png',
-      color: '#00674F',
+      color: '#2F70C7',
     },
     plugins: [
       [
@@ -85,7 +100,7 @@ export default {
         'expo-notifications',
         {
           icon: './assets/icon.png',
-          color: '#00674F',
+          color: '#2F70C7',
           defaultChannel: 'trip-updates',
         },
       ],
@@ -99,6 +114,42 @@ export default {
       '@react-native-community/datetimepicker',
       '@maplibre/maplibre-react-native',
       'expo-secure-store',
+      [
+        '@react-native-google-signin/google-signin',
+        {
+          // Reversed form of the iOS OAuth Client ID — registers a URL scheme
+          // so the sign-in flow can redirect back into the app after auth.
+          iosUrlScheme: 'com.googleusercontent.apps.872882912380-f4bhhp9eqb4gi53dh38p9tb5ij4enacq',
+        },
+      ],
+      [
+        'react-native-maps',
+        {
+          // Android already gets its key from android.config.googleMaps.apiKey
+          // (Expo's built-in manifest injection, no plugin needed there) — iOS
+          // has no such built-in support; this plugin (react-native-maps >=1.22)
+          // wires up the Google Maps iOS SDK + AppDelegate init. Uses a
+          // separate iOS-restricted key — EXPO_PUBLIC_GOOGLE_MAPS_API_KEY is
+          // restricted to Android apps and can't serve iOS requests.
+          iosGoogleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY,
+        },
+      ],
+      [
+        '@config-plugins/react-native-webrtc',
+        {
+          // In-app voice call to the driver (diaspora riders only) —
+          // audio-only today; camera string still required by the plugin
+          // schema even though video isn't used yet.
+          cameraPermission: 'Bahiran Ride does not use your camera for voice calls.',
+          microphonePermission: 'Allow Bahiran Ride to use your microphone for in-app voice calls with your driver.',
+        },
+      ],
+      // Real native call UI (CallKit on iOS, ConnectionService on Android) so
+      // an incoming in-app call rings and answers like a normal phone call,
+      // including over the lock screen. No options — this plugin wires
+      // everything (VoIP background mode, framework linking, Android
+      // permissions/manifest services) automatically.
+      '@config-plugins/react-native-callkeep',
     ],
     extra: {
       apiUrl:         process.env.EXPO_PUBLIC_API_URL,

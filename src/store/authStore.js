@@ -16,9 +16,18 @@ const useAuthStore = create((set, get) => ({
   isAuthenticated: false,
   isNewUser: false,
   sessionExpiresAt: null,
+  // True for one HomeScreen mount right after a successful login (phone OTP,
+  // Google, or finishing ProfileSetup) — the welcome banner reads this once,
+  // then clears it, so it never reappears on a later app reopen/refresh.
+  justAuthenticated: false,
+  // Name/email/photo from a completed Google sign-in on the login screen —
+  // phone verification is still required, this only prefills ProfileSetup
+  // for brand-new accounts. Cleared once consumed there, or on logout.
+  googleProfile: null,
 
   setPhone: (phone) => set({ phone }),
   setUser: (user) => set({ user }),
+  setGoogleProfile: (googleProfile) => set({ googleProfile }),
 
   setTokens: async (accessToken, refreshToken, expiresIn = 3600, user = null) => {
     const currentPhone = get().phone;
@@ -33,7 +42,9 @@ const useAuthStore = create((set, get) => ({
   },
 
   setAuthenticated: (isAuthenticated, isNewUser = false) =>
-    set({ isAuthenticated, isNewUser }),
+    set({ isAuthenticated, isNewUser, justAuthenticated: isAuthenticated }),
+
+  clearJustAuthenticated: () => set({ justAuthenticated: false }),
 
   updateUser: (updates) =>
     set((state) => ({ user: { ...state.user, ...updates } })),
@@ -56,10 +67,12 @@ const useAuthStore = create((set, get) => ({
           email:       u.email        ?? state.user?.email,
           gender:      u.gender       ?? state.user?.gender,
           dateOfBirth: u.date_of_birth ?? state.user?.dateOfBirth,
+          createdAt:   u.created_at    ?? state.user?.createdAt,
           avatarUpdatedAt: u.updated_at ?? state.user?.avatarUpdatedAt ?? state.user?.updated_at,
           avatarUrl:   u.avatar_url || u.avatarUrl || u.profileImage || state.user?.avatarUrl,
           preferredLang: u.preferred_lang || state.user?.preferredLang,
           isVerified:  u.is_verified  ?? state.user?.isVerified,
+          walletBalance: u.wallet_balance ?? state.user?.walletBalance,
         },
       }));
     } catch (_) {}
@@ -138,6 +151,8 @@ const useAuthStore = create((set, get) => ({
       isAuthenticated: false,
       isNewUser: false,
       sessionExpiresAt: null,
+      justAuthenticated: false,
+      googleProfile: null,
     });
   },
 
@@ -157,6 +172,8 @@ const useAuthStore = create((set, get) => ({
       isAuthenticated: false,
       isNewUser: false,
       sessionExpiresAt: null,
+      justAuthenticated: false,
+      googleProfile: null,
     });
   },
 }));

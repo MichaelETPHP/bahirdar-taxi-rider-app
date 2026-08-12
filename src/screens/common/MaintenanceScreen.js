@@ -82,10 +82,10 @@ const styles = StyleSheet.create({
   timeValue: {
     fontSize: 18,
     fontWeight: fontWeight.bold,
-    color: colors.success || '#00674F',
+    color: colors.success || '#2F70C7',
   },
   retryBtn: {
-    backgroundColor: colors.primary || '#00674F',
+    backgroundColor: colors.primary || '#2F70C7',
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 25,

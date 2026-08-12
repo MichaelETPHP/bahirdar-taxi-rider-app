@@ -453,7 +453,7 @@ export default function SearchingScreen({ navigation }) {
 
       {/* ── Emerald gradient overlay (bottom two-thirds) ── */}
       <LinearGradient
-        colors={['transparent', 'rgba(0,103,79,0.18)', 'rgba(0,103,79,0.72)', colors.primary]}
+        colors={['transparent', 'rgba(47,112,199,0.18)', 'rgba(47,112,199,0.72)', colors.primary]}
         locations={[0, 0.3, 0.62, 1]}
         style={styles.gradient}
         pointerEvents="none"

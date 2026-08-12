@@ -40,6 +40,7 @@ export function parseTripPollResponse(res) {
       phone:      trip.driver_phone  ?? null,
       avatar_url: trip.driver_avatar ?? trip.avatar_url ?? null,
       rating:     trip.driver_rating ?? null,
+      speaks_english: trip.driver_speaks_english === true,
       car_icon_url: markerMeta.carIconUrl,
       carIconUrl: markerMeta.carIconUrl,
       vehicle: {

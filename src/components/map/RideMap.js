@@ -95,7 +95,7 @@ function RideMap({
         
         // ── Native Loading fallback ──
         loadingEnabled={true}
-        loadingIndicatorColor="#00674F"
+        loadingIndicatorColor="#2F70C7"
         loadingBackgroundColor="#F5F5F5"
       >
         {/* Only mount children after map is ready to prevent UI glitches/crashes */}
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#00674F',
+    backgroundColor: '#2F70C7',
     borderWidth: 2,
     borderColor: '#fff',
   },

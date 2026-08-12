@@ -9,6 +9,7 @@ import {
   TextInput,
   Linking,
   Animated,
+  Easing,
   Platform,
   ActivityIndicator,
   Dimensions,
@@ -44,13 +45,22 @@ import VersionFooter from '../../components/common/VersionFooter';
 // ─────────────────────────────────────────────────────────────────────────────
 const { width: SW } = Dimensions.get('window');
 const PAD   = SW < 375 ? 14 : 16;
-const SILVER = '#9CA3AF';
+
+// One distinct, semantically-fitting color per setting — replaces the
+// previous uniform gray on both the main settings list and this same
+// section as it reappears in the settings modal below.
+const SETTING_COLORS = {
+  language:    '#0EA5E9', // sky — language/globe
+  notification: '#F97316', // amber-orange — alerts
+  emergency:   '#F43F5E', // rose — safety/urgency
+  savedPlace:  '#10B981', // emerald — places/map
+};
 
 const SECTION1_ITEMS = [
-  { key: 'language',         icon: Globe,       screen: 'Language',         color: SILVER },
-  { key: 'notification',     icon: Bell,         screen: 'Notification',     color: SILVER },
-  { key: 'emergencyContact', icon: Phone,        screen: 'EmergencyContact', color: SILVER },
-  { key: 'savedPlace',       icon: MapPin,       screen: 'SavedPlace',       color: SILVER },
+  { key: 'language',         icon: Globe,       screen: 'Language',         color: SETTING_COLORS.language },
+  { key: 'notification',     icon: Bell,         screen: 'Notification',     color: SETTING_COLORS.notification },
+  { key: 'emergencyContact', icon: Phone,        screen: 'EmergencyContact', color: SETTING_COLORS.emergency },
+  { key: 'savedPlace',       icon: MapPin,       screen: 'SavedPlace',       color: SETTING_COLORS.savedPlace },
 ];
 
 const SECTION2_ITEMS = [
@@ -178,8 +188,8 @@ export default function ProfileScreen({ navigation }) {
     const run = () => {
       if (cancelled) return;
       Animated.sequence([
-        Animated.timing(shineAnim, { toValue: 1.18, duration: 900, useNativeDriver: true }),
-        Animated.timing(shineAnim, { toValue: 0.88, duration: 900, useNativeDriver: true }),
+        Animated.timing(shineAnim, { toValue: 1.08, duration: 1100, easing: Easing.out(Easing.sin), useNativeDriver: true }),
+        Animated.timing(shineAnim, { toValue: 1,    duration: 1100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]).start(() => run());
     };
     run();
@@ -347,6 +357,7 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const walletBalance = user?.walletBalance ?? 0;
+  const memberSinceYear = user?.createdAt ? new Date(user.createdAt).getFullYear() : null;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render - Single Page Professional Design
@@ -491,7 +502,7 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Calendar size={14} color={colors.primary} />
-            <Text style={styles.statVal}>2024</Text>
+            <Text style={styles.statVal}>{memberSinceYear || '—'}</Text>
             <Text style={styles.statLbl}>Member</Text>
           </View>
         </View>
@@ -499,22 +510,30 @@ export default function ProfileScreen({ navigation }) {
         {/* Settings Items */}
         <View style={styles.settingsCard}>
           <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Language')} activeOpacity={0.7}>
-            <Globe size={16} color={colors.textSecondary} />
+            <View style={[styles.settingIconBadge, { backgroundColor: `${SETTING_COLORS.language}1F` }]}>
+              <Globe size={15} color={SETTING_COLORS.language} />
+            </View>
             <Text style={styles.settingText}>Language</Text>
             <ChevronRight size={14} color={colors.border} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Notification')} activeOpacity={0.7}>
-            <Bell size={16} color={colors.textSecondary} />
+            <View style={[styles.settingIconBadge, { backgroundColor: `${SETTING_COLORS.notification}1F` }]}>
+              <Bell size={15} color={SETTING_COLORS.notification} />
+            </View>
             <Text style={styles.settingText}>Notifications</Text>
             <ChevronRight size={14} color={colors.border} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('EmergencyContact')} activeOpacity={0.7}>
-            <Phone size={16} color={colors.textSecondary} />
+            <View style={[styles.settingIconBadge, { backgroundColor: `${SETTING_COLORS.emergency}1F` }]}>
+              <Phone size={15} color={SETTING_COLORS.emergency} />
+            </View>
             <Text style={styles.settingText}>Emergency Contact</Text>
             <ChevronRight size={14} color={colors.border} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.settingRow, styles.settingRowLast]} onPress={() => navigation.navigate('SavedPlace')} activeOpacity={0.7}>
-            <MapPin size={16} color={colors.textSecondary} />
+            <View style={[styles.settingIconBadge, { backgroundColor: `${SETTING_COLORS.savedPlace}1F` }]}>
+              <MapPin size={15} color={SETTING_COLORS.savedPlace} />
+            </View>
             <Text style={styles.settingText}>Saved Places</Text>
             <ChevronRight size={14} color={colors.border} style={{ marginLeft: 'auto' }} />
           </TouchableOpacity>
@@ -884,7 +903,7 @@ const styles = StyleSheet.create({
 
   // ── Profile Name Display
   profileNameDisplay: {
-    fontSize: 22,
+    fontSize: fontSize['3xl'],
     fontWeight: fontWeight.bold,
     fontFamily: fontFamilyBold,
     color: colors.textPrimary,
@@ -920,7 +939,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statVal: {
-    fontSize: 16,
+    fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
     fontFamily: fontFamilyBold,
     color: colors.primary,
@@ -956,6 +975,13 @@ const styles = StyleSheet.create({
   },
   settingRowLast: {
     borderBottomWidth: 0,
+  },
+  settingIconBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: borderRadius.sm,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   settingText: {
     fontSize: fontSize.md,

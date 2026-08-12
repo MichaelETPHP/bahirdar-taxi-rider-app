@@ -7,6 +7,7 @@ import { X, AlertCircle } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
+import useCancelReasonsStore from '../../store/cancelReasonsStore';
 
 const FALLBACK_REASONS = [
   { id: 1, label: 'Driver is taking too long' },
@@ -22,21 +23,35 @@ export default function CancelReasonModal({
   fetchReasons, // () => Promise<{ data: [{ id, label }] }>
   loading = false,
 }) {
-  const [reasons, setReasons]     = useState(FALLBACK_REASONS);
+  const cachedReasons = useCancelReasonsStore((s) => s.reasons);
+  const [reasons, setReasons]     = useState(cachedReasons.length > 0 ? cachedReasons : FALLBACK_REASONS);
   const [selected, setSelected]   = useState(null);
+  // Only shown when there's truly nothing to display yet (first-ever open,
+  // cold start, empty cache) — a stale-but-present cache renders instantly
+  // and refreshes silently underneath it instead of blocking with a spinner.
   const [fetching, setFetching]   = useState(false);
 
   useEffect(() => {
     if (!visible) { setSelected(null); return; }
     if (!fetchReasons) return;
 
-    setFetching(true);
+    const { reasons: cached, isStale } = useCancelReasonsStore.getState();
+    if (cached.length > 0) {
+      setReasons(cached);
+      if (!isStale()) return; // fresh cache — skip the network round-trip entirely
+    } else {
+      setFetching(true);
+    }
+
     fetchReasons()
       .then((res) => {
         const rows = Array.isArray(res?.data) ? res.data : [];
-        if (rows.length > 0) setReasons(rows);
+        if (rows.length > 0) {
+          setReasons(rows);
+          useCancelReasonsStore.getState().setReasons(rows);
+        }
       })
-      .catch(() => { /* keep fallback */ })
+      .catch(() => { /* keep whatever was already showing (cache or fallback) */ })
       .finally(() => setFetching(false));
   }, [visible]);
 

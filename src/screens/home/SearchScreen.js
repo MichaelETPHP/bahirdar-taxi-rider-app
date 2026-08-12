@@ -71,6 +71,7 @@ export default function SearchScreen({ navigation }) {
   const [saveSheet, setSaveSheet] = useState(null); // { place } | null
   const [savedFeedback, setSavedFeedback] = useState(null); // 'home' | 'work' | null
   const debounceRef = useRef(null);
+  const searchSeqRef = useRef(0);
   const inputRef = useRef(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const resultAnim = useRef(new Animated.Value(0)).current;
@@ -87,8 +88,10 @@ export default function SearchScreen({ navigation }) {
     if (userCoords?.latitude && userCoords?.longitude) {
       return { lat: userCoords.latitude, lng: userCoords.longitude };
     }
-    // fallback: use detected city or Addis (matches HomeScreen default)
-    const center = (detectedCity && CITY_CENTERS[detectedCity]) ? CITY_CENTERS[detectedCity] : CITY_CENTERS.addisababa;
+    // fallback: use detected city, or Bahir Dar — this is a Bahir Dar-only
+    // app, so that's the correct default while GPS/city-detection are still
+    // pending, not Addis Ababa.
+    const center = (detectedCity && CITY_CENTERS[detectedCity]) ? CITY_CENTERS[detectedCity] : CITY_CENTERS.bahirdar;
     return { lat: center.latitude, lng: center.longitude };
   }, [userCoords, detectedCity]);
 
@@ -134,11 +137,19 @@ export default function SearchScreen({ navigation }) {
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Network responses can arrive out of order — e.g. the request for
+    // "Bahir D" can resolve after the request for "Bahir Dar" if the first
+    // one happens to take longer. Without a guard, that stale response
+    // would overwrite the newer, more relevant results. Bumping a sequence
+    // number on every keystroke and only applying a response if it's still
+    // the latest one in flight fixes that, regardless of resolution order.
+    const seq = ++searchSeqRef.current;
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
         const { lat, lng } = getBiasCoords();
         const apiResults = await searchPlaces(query.trim(), lat, lng, SEARCH_RADIUS_KM * 1000);
+        if (seq !== searchSeqRef.current) return; // a newer search has since started
         setResults(
           apiResults.map((p) => ({
             placeId: p.placeId,
@@ -148,9 +159,9 @@ export default function SearchScreen({ navigation }) {
           })),
         );
       } catch {
-        setResults([]);
+        if (seq === searchSeqRef.current) setResults([]);
       } finally {
-        setLoading(false);
+        if (seq === searchSeqRef.current) setLoading(false);
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
@@ -438,7 +449,15 @@ export default function SearchScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+    // Rounded top corners so the modal reads as a sheet sliding up over
+    // Home, not a flat full-screen swap.
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+  },
 
   // ── Header ─────────────────────────────────────────────────────────────
   header: {
@@ -604,16 +623,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 13,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap: 12,
+    gap: 14,
     backgroundColor: colors.background,
   },
   itemIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: `${colors.primary}15`,
     justifyContent: 'center',
     alignItems: 'center',
@@ -626,10 +645,11 @@ const styles = StyleSheet.create({
   },
   itemText: { flex: 1, minWidth: 0 },
   itemName: {
-    fontSize: fontSize.base,
+    fontSize: fontSize.lg,
     fontFamily: fontFamilySemiBold,
     fontWeight: fontWeight.semibold,
     color: colors.textPrimary,
+    letterSpacing: -0.2,
   },
   highlight: {
     color: '#10b981',
@@ -647,7 +667,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium,
   },
   itemAddress: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.base,
     fontFamily: fontFamilyRegular,
     color: colors.textSecondary,
     marginTop: 3,

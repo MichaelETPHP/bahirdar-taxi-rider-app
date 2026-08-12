@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import * as Location from 'expo-location';
 
 import HomeScreen from '../screens/home/HomeScreen';
@@ -18,6 +18,8 @@ import SupportScreen from '../screens/profile/SupportScreen';
 import LanguageScreen from '../screens/profile/LanguageScreen';
 import EmergencyContactScreen from '../screens/profile/EmergencyContactScreen';
 import SavedPlaceScreen from '../screens/profile/SavedPlaceScreen';
+import WalletScreen from '../screens/wallet/WalletScreen';
+import WalletTopUpScreen from '../screens/wallet/WalletTopUpScreen';
 
 const Stack = createStackNavigator();
 
@@ -49,7 +51,21 @@ export default function AppNavigator({ initialRouteName = 'Home' }) {
       <Stack.Screen
         name="Search"
         component={SearchScreen}
-        options={{ presentation: 'modal', lazy: true }}
+        options={{
+          presentation: 'modal',
+          lazy: true,
+          // Default card background is an opaque rectangle the exact size
+          // of the screen — it was hiding SearchScreen's own rounded top
+          // corners behind an identical white square. Transparent here lets
+          // the rounded shape actually show as it slides up.
+          cardStyle: { backgroundColor: 'transparent' },
+          // `presentation: 'modal'` picks a different default transition per
+          // platform — a full slide-up card on iOS vs. a fade-from-bottom on
+          // Android — which would make the rounded-corner reveal look and
+          // move differently on each. Forcing the same interpolator on both
+          // keeps it consistent.
+          cardStyleInterpolator: CardStyleInterpolators.forModalPresentationIOS,
+        }}
       />
       <Stack.Screen name="ConfirmRide" component={ConfirmRideScreen} />
       <Stack.Screen name="Searching" component={SearchingScreen} />
@@ -64,6 +80,12 @@ export default function AppNavigator({ initialRouteName = 'Home' }) {
       <Stack.Screen name="Language" component={LanguageScreen} />
       <Stack.Screen name="EmergencyContact" component={EmergencyContactScreen} />
       <Stack.Screen name="SavedPlace" component={SavedPlaceScreen} />
+      <Stack.Screen name="Wallet" component={WalletScreen} />
+      <Stack.Screen
+        name="WalletTopUp"
+        component={WalletTopUpScreen}
+        options={{ presentation: 'modal' }}
+      />
     </Stack.Navigator>
   );
 }
