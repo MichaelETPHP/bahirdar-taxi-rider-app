@@ -123,14 +123,20 @@ export default function RootNavigator() {
     };
   }, [isAuthenticated, token, user?.id, hydrateActiveTrip, resetTrip]);
 
-  const handleSplashFinish = () => {
+  const handleSplashFinish = async () => {
+    // Awaited, not fire-and-forget — CallKeep requests its own Android
+    // permissions (CALL_PHONE etc.), and the Home screen mounting before
+    // this finishes lets its own location check land at the same moment,
+    // which can make Android's permission system hang one of the two calls
+    // indefinitely (the "stuck on Detecting Location forever" bug). Waiting
+    // here means nothing else can ever start mid-request again, regardless
+    // of what future screens do on mount.
+    try {
+      await setupCallKeep();
+    } catch (err) {
+      console.warn('[RootNavigator] CallKeep setup failed:', err);
+    }
     setSplashFinished(true);
-    // Fired only now, after the splash screen's own location + microphone
-    // permission prompts are fully resolved — CallKeep requests its own
-    // Android permissions (CALL_PHONE etc.), and asking at the same time as
-    // splash's prompts let two native dialogs race, which could leave one
-    // stuck waiting on a popup Android never showed.
-    void setupCallKeep();
   };
 
   // ── Scenario 1: Still loading tokens or animation in progress ──

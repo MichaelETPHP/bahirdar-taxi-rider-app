@@ -31,7 +31,19 @@ export default function useLocation() {
 
     const start = async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
+        // Location was already requested (and, in the normal flow, already
+        // granted) on the splash screen — check first instead of requesting
+        // again here. Re-requesting an already-granted permission is
+        // supposed to be a instant no-op, but this call landing at almost
+        // the same moment as CallKeep's own PermissionsAndroid.requestMultiple()
+        // (fired right after splash finishes) can make Android's permission
+        // system hang one of the two calls indefinitely — exactly the
+        // "stuck on Detecting Location forever" symptom. A plain status
+        // check never touches that system at all, so it can't collide.
+        let { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          ({ status } = await Location.requestForegroundPermissionsAsync());
+        }
 
         if (status !== 'granted') {
           if (mounted) {
