@@ -1,9 +1,10 @@
 import React from 'react';
 import {
-  Alert,
+  ActivityIndicator,
   Animated,
   Easing,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,9 +15,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import {
+  ArrowDownToLine,
   ArrowLeft,
-  CreditCard,
   Eye,
   EyeOff,
   History,
@@ -26,28 +28,74 @@ import {
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import useAuthStore from '../../store/authStore';
-import TransactionHistorySheet from '../../components/wallet/TransactionHistorySheet';
-import DottedWorldMap from '../../components/wallet/DottedWorldMap';
+import { fetchWalletTransactions } from '../../services/walletService';
+import TransactionHistorySheet, { TransactionRow } from '../../components/wallet/TransactionHistorySheet';
+import AboutWalletModal from '../../components/wallet/AboutWalletModal';
+import WalletScreenSkeleton from '../../components/wallet/WalletScreenSkeleton';
 
-const COMING_SOON_MESSAGE = 'Coming soon';
 const BALANCE_HIDDEN_STORAGE_KEY = 'walletBalanceHidden';
 const MASKED_BALANCE = '•••••';
+const RECENT_TRANSACTIONS_LIMIT = 5;
 
 export default function WalletScreen({ navigation }) {
   const user = useAuthStore((s) => s.user);
   const loadProfile = useAuthStore((s) => s.loadProfile);
+  const token = useAuthStore((s) => s.token);
   const balance = Number(user?.walletBalance ?? 0);
   const [transactionsVisible, setTransactionsVisible] = React.useState(false);
+  const [aboutVisible, setAboutVisible] = React.useState(false);
   const [balanceHidden, setBalanceHidden] = React.useState(false);
+  const [recentTransactions, setRecentTransactions] = React.useState([]);
+  const [recentLoading, setRecentLoading] = React.useState(false);
+  // True only until the very first load resolves — after that, focus
+  // refetches use the lighter recentLoading spinner instead of blanking the
+  // screen back to skeleton.
+  const [initialLoading, setInitialLoading] = React.useState(true);
+  // Separate from initialLoading — pull-to-refresh deliberately re-shows the
+  // skeleton every time (not just on first load), per how this screen is
+  // meant to feel: pulling down means "start fresh", not "top up the same view".
+  const [refreshSkeleton, setRefreshSkeleton] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const hasLoadedOnce = React.useRef(false);
   const balanceOpacity = React.useRef(new Animated.Value(1)).current;
+  const showSkeleton = initialLoading || refreshSkeleton;
 
-  // Refresh every time the screen gains focus — catches balance changes from
-  // a top-up or a trip payment that happened while this screen wasn't visible.
+  const loadWalletData = React.useCallback(async () => {
+    await Promise.all([
+      loadProfile(),
+      fetchWalletTransactions(token, { limit: RECENT_TRANSACTIONS_LIMIT })
+        .then((res) => setRecentTransactions(Array.isArray(res?.data) ? res.data : []))
+        .catch(() => setRecentTransactions([])),
+    ]);
+  }, [loadProfile, token]);
+
+  // Refresh every time the screen gains focus — catches balance changes and
+  // new transactions from a top-up or a trip payment that happened while
+  // this screen wasn't visible.
   useFocusEffect(
     React.useCallback(() => {
-      loadProfile();
-    }, [loadProfile])
+      setRecentLoading(true);
+      loadWalletData().finally(() => {
+        setRecentLoading(false);
+        if (!hasLoadedOnce.current) {
+          hasLoadedOnce.current = true;
+          setInitialLoading(false);
+        }
+      });
+    }, [loadWalletData])
   );
+
+  const handleRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    setRefreshSkeleton(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await loadWalletData();
+    } finally {
+      setRefreshing(false);
+      setRefreshSkeleton(false);
+    }
+  }, [loadWalletData]);
 
   // Restore the hide/show preference so it doesn't reset every time the
   // wallet is opened — a privacy choice, not a per-session one.
@@ -83,9 +131,14 @@ export default function WalletScreen({ navigation }) {
     navigation.navigate('WalletTopUp');
   };
 
-  const handleComingSoon = () => {
+  const handleWithdraw = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert(COMING_SOON_MESSAGE, 'This wallet feature is being prepared.');
+    navigation.navigate('WalletWithdraw');
+  };
+
+  const handleOpenAbout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAboutVisible(true);
   };
 
   const handleOpenTransactions = () => {
@@ -97,8 +150,18 @@ export default function WalletScreen({ navigation }) {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        bounces={false}
+        bounces
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            title="Refreshing…"
+            titleColor={colors.textSecondary}
+          />
+        }
       >
         <View style={styles.content}>
           <View style={styles.headerRow}>
@@ -116,7 +179,7 @@ export default function WalletScreen({ navigation }) {
               accessibilityRole="button"
               accessibilityLabel="About wallet"
               hitSlop={8}
-              onPress={handleComingSoon}
+              onPress={handleOpenAbout}
               style={({ pressed }) => pressed && styles.textPressed}
             >
               <Text style={styles.aboutText}>About wallet</Text>
@@ -125,6 +188,10 @@ export default function WalletScreen({ navigation }) {
 
           <Text style={styles.screenTitle}>Wallet</Text>
 
+          {showSkeleton ? (
+            <WalletScreenSkeleton />
+          ) : (
+            <>
           <View style={styles.balanceCardShadow}>
             <LinearGradient
               colors={['#0A1428', '#0F2A52', '#153E78']}
@@ -132,7 +199,12 @@ export default function WalletScreen({ navigation }) {
               end={{ x: 1, y: 1 }}
               style={styles.balanceCard}
             >
-              <DottedWorldMap />
+              <Image
+                source={require('../../../assets/world.png')}
+                style={styles.worldMapBg}
+                contentFit="cover"
+                pointerEvents="none"
+              />
 
               <View>
                 <Text style={styles.brandText}>BAHIRAN ETHIOPIA</Text>
@@ -158,31 +230,67 @@ export default function WalletScreen({ navigation }) {
                 </View>
               </View>
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Top up wallet"
-                onPress={handleTopUp}
-                style={({ pressed }) => [styles.topUpAction, pressed && styles.cardPressed]}
-              >
-                <Plus size={32} color="rgba(255,255,255,0.85)" strokeWidth={1.6} />
-                <Text style={styles.topUpText}>Top up</Text>
-              </Pressable>
+              <View style={styles.cardActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Top up wallet"
+                  onPress={handleTopUp}
+                  style={({ pressed }) => [styles.topUpAction, pressed && styles.topUpActionPressed]}
+                >
+                  <Plus size={16} color={colors.textPrimary} strokeWidth={2.5} />
+                  <Text style={styles.topUpText}>Top Up</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Withdraw from wallet"
+                  onPress={handleWithdraw}
+                  style={({ pressed }) => [styles.withdrawAction, pressed && styles.withdrawActionPressed]}
+                >
+                  <ArrowDownToLine size={16} color="#FFFFFF" strokeWidth={2.5} />
+                  <Text style={styles.withdrawText}>Withdraw</Text>
+                </Pressable>
+              </View>
             </LinearGradient>
           </View>
 
-          <View style={styles.menu}>
-            <WalletRow
-              icon={CreditCard}
-              label="Payment methods"
-              onPress={handleComingSoon}
-            />
-            <WalletRow
-              icon={History}
-              label="Transactions"
-              onPress={handleOpenTransactions}
-              last
-            />
+          <View style={styles.recentSection}>
+            <View style={styles.recentHeader}>
+              <View style={styles.recentTitleRow}>
+                <History size={19} color={colors.textPrimary} strokeWidth={2} />
+                <Text style={styles.recentTitle}>Transaction Details</Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="See all transactions"
+                hitSlop={8}
+                onPress={handleOpenTransactions}
+                style={({ pressed }) => pressed && styles.textPressed}
+              >
+                <Text style={styles.seeAllText}>See all</Text>
+              </Pressable>
+            </View>
+
+            {recentLoading ? (
+              <View style={styles.recentStateWrap}>
+                <ActivityIndicator color={colors.textSecondary} />
+              </View>
+            ) : recentTransactions.length === 0 ? (
+              <View style={styles.recentStateWrap}>
+                <Text style={styles.recentEmptyText}>No transactions yet</Text>
+              </View>
+            ) : (
+              <View style={styles.recentList}>
+                {recentTransactions.map((item, idx) => (
+                  <View key={item.id}>
+                    <TransactionRow item={item} />
+                    {idx < recentTransactions.length - 1 && <View style={styles.recentSeparator} />}
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -190,26 +298,11 @@ export default function WalletScreen({ navigation }) {
         visible={transactionsVisible}
         onClose={() => setTransactionsVisible(false)}
       />
+      <AboutWalletModal
+        visible={aboutVisible}
+        onClose={() => setAboutVisible(false)}
+      />
     </SafeAreaView>
-  );
-}
-
-function WalletRow({ icon: Icon, label, trailing, onPress, last = false }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.menuRow,
-        !last && styles.menuRowBorder,
-        pressed && styles.menuRowPressed,
-      ]}
-    >
-      <Icon size={27} color={colors.textPrimary} strokeWidth={2} />
-      <Text style={styles.menuLabel}>{label}</Text>
-      {!!trailing && <Text style={styles.menuTrailing}>{trailing}</Text>}
-    </Pressable>
   );
 }
 
@@ -281,6 +374,15 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
   },
+  // Full-card background texture.
+  worldMapBg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.13,
+  },
   brandText: {
     marginBottom: 14,
     fontSize: fontSize.sm,
@@ -312,48 +414,87 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     transform: [{ scale: 0.94 }],
   },
-  topUpAction: {
-    alignSelf: 'flex-start',
-    minWidth: 90,
+  cardActions: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  cardPressed: {
-    opacity: 0.65,
-    transform: [{ scale: 0.98 }],
+  topUpAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: colors.white,
+  },
+  topUpActionPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
   },
   topUpText: {
-    marginTop: 5,
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.textPrimary,
+  },
+  // Outline style, on purpose — top-up is the primary action (solid), this
+  // is secondary. Same pill shape keeps them reading as a matched pair.
+  withdrawAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  withdrawActionPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.97 }],
+  },
+  withdrawText: {
+    fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
     color: colors.white,
   },
-  menu: {
+  recentSection: {
     marginTop: 38,
   },
-  menuRow: {
-    minHeight: 72,
+  recentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
-    paddingHorizontal: 4,
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
-  menuRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+  recentTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  menuRowPressed: {
-    opacity: 0.55,
-    transform: [{ scale: 0.99 }],
-  },
-  menuLabel: {
-    flex: 1,
+  recentTitle: {
     fontSize: fontSize.xl,
     fontWeight: fontWeight.semibold,
     color: colors.textPrimary,
     letterSpacing: -0.25,
   },
-  menuTrailing: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.regular,
+  seeAllText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: colors.primary,
+  },
+  recentList: {
+    marginTop: 4,
+  },
+  recentSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+  },
+  recentStateWrap: {
+    paddingVertical: 28,
+    alignItems: 'center',
+  },
+  recentEmptyText: {
+    fontSize: fontSize.md,
     color: colors.textSecondary,
   },
 });

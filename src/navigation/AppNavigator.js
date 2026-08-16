@@ -20,6 +20,7 @@ import EmergencyContactScreen from '../screens/profile/EmergencyContactScreen';
 import SavedPlaceScreen from '../screens/profile/SavedPlaceScreen';
 import WalletScreen from '../screens/wallet/WalletScreen';
 import WalletTopUpScreen from '../screens/wallet/WalletTopUpScreen';
+import WalletWithdrawScreen from '../screens/wallet/WalletWithdrawScreen';
 
 const Stack = createStackNavigator();
 
@@ -84,6 +85,11 @@ export default function AppNavigator({ initialRouteName = 'Home' }) {
       <Stack.Screen
         name="WalletTopUp"
         component={WalletTopUpScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="WalletWithdraw"
+        component={WalletWithdrawScreen}
         options={{ presentation: 'modal' }}
       />
     </Stack.Navigator>

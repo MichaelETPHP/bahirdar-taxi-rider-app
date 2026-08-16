@@ -10,6 +10,7 @@ import useRideStore from '../store/rideStore';
 import useSessionManager from '../hooks/useSessionManager';
 import { connectSocket, disconnectSocket, joinRiderRoom } from '../services/socketService';
 import { attachCallSocketListeners } from '../services/callEngine';
+import { setupCallKeep } from '../services/callKeepService';
 import { getActiveTrip } from '../services/tripService';
 
 import SplashScreen from '../screens/auth/SplashScreen';
@@ -124,6 +125,12 @@ export default function RootNavigator() {
 
   const handleSplashFinish = () => {
     setSplashFinished(true);
+    // Fired only now, after the splash screen's own location + microphone
+    // permission prompts are fully resolved — CallKeep requests its own
+    // Android permissions (CALL_PHONE etc.), and asking at the same time as
+    // splash's prompts let two native dialogs race, which could leave one
+    // stuck waiting on a popup Android never showed.
+    void setupCallKeep();
   };
 
   // ── Scenario 1: Still loading tokens or animation in progress ──

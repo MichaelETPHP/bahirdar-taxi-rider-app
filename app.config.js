@@ -1,5 +1,28 @@
 // app.config.js — replaces app.json so we can inject env vars at build time.
 // All EXPO_PUBLIC_* vars are available here via process.env.
+
+// Only the "development" eas.json profile points at a plain-http local IP
+// (for `expo start` iteration); preview/production always use the https
+// taxiapi.zmichael.click API. ATS is only disabled for that http case — an
+// App Store production build never carries NSAllowsArbitraryLoads, since
+// Apple review can flag it as an unjustified security downgrade.
+const usesInsecureApi = (process.env.EXPO_PUBLIC_API_URL || '').startsWith('http://');
+
+// Expo's Android Google Maps config plugin silently OMITS the
+// com.google.android.geo.API_KEY meta-data tag (no error, no warning) when
+// this is empty — the app then builds and installs fine, but crashes the
+// instant a map screen mounts with "API key not found". Failing loudly here
+// at config-resolution time, instead of at runtime on a user's phone, is the
+// whole point — this must throw before any build (dev, preview, production)
+// can ship without it.
+if (!process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) {
+  throw new Error(
+    'EXPO_PUBLIC_GOOGLE_MAPS_API_KEY is missing — Android build would install ' +
+    'but crash on first map screen. Set it in the eas.json build profile (or ' +
+    '.env.development for `expo start`) before continuing.'
+  );
+}
+
 export default {
   expo: {
     owner: "zmichaeleth",
@@ -34,9 +57,9 @@ export default {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY,
       },
       infoPlist: {
-        NSAppTransportSecurity: {
-          NSAllowsArbitraryLoads: true,
-        },
+        ...(usesInsecureApi ? {
+          NSAppTransportSecurity: { NSAllowsArbitraryLoads: true },
+        } : {}),
         ITSAppUsesNonExemptEncryption: false,
       },
     },
@@ -107,8 +130,12 @@ export default {
       [
         'expo-location',
         {
-          locationAlwaysAndWhenInUsePermission:
-            'Allow Bahiran Ride to use your location.',
+          // Foreground-only — the app never calls
+          // requestBackgroundPermissionsAsync(), so it must not declare an
+          // Always-location usage string. Apple review checks that the
+          // permission you request on-device matches what you declared.
+          locationWhenInUsePermission:
+            'Bahiran Ride uses your location to match you with nearby drivers and show your trip route in real time.',
         },
       ],
       '@react-native-community/datetimepicker',
@@ -125,11 +152,17 @@ export default {
       [
         'react-native-maps',
         {
-          // Android already gets its key from android.config.googleMaps.apiKey
-          // (Expo's built-in manifest injection, no plugin needed there) — iOS
-          // has no such built-in support; this plugin (react-native-maps >=1.22)
-          // wires up the Google Maps iOS SDK + AppDelegate init. Uses a
-          // separate iOS-restricted key — EXPO_PUBLIC_GOOGLE_MAPS_API_KEY is
+          // react-native-maps ships its OWN Android config plugin
+          // (node_modules/react-native-maps/plugin/build/android.js), which
+          // takes over from Expo's standard android.config.googleMaps.apiKey
+          // mechanism entirely — that field is silently ignored once this
+          // plugin is present. It reads androidGoogleMapsApiKey specifically;
+          // without it, its else-branch actively REMOVES any existing
+          // com.google.android.geo.API_KEY meta-data tag from the manifest,
+          // which is exactly what caused a "API key not found" crash on
+          // Android despite EXPO_PUBLIC_GOOGLE_MAPS_API_KEY being set.
+          androidGoogleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+          // Separate iOS-restricted key — EXPO_PUBLIC_GOOGLE_MAPS_API_KEY is
           // restricted to Android apps and can't serve iOS requests.
           iosGoogleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY,
         },
@@ -150,6 +183,18 @@ export default {
       // everything (VoIP background mode, framework linking, Android
       // permissions/manifest services) automatically.
       '@config-plugins/react-native-callkeep',
+      [
+        '@stripe/stripe-react-native',
+        {
+          // Diaspora wallet top-up (card / Apple Pay / Google Pay). Adds the
+          // Apple Pay entitlement + merchant ID at build time — must match
+          // the Merchant ID registered in the Apple Developer account and
+          // linked in the Stripe Dashboard (Settings > Payment methods >
+          // Apple Pay), or Apple Pay confirmation fails at runtime.
+          merchantIdentifier: 'merchant.com.bahirdar.ride',
+          enableGooglePay: true,
+        },
+      ],
     ],
     extra: {
       apiUrl:         process.env.EXPO_PUBLIC_API_URL,

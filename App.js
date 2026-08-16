@@ -8,11 +8,14 @@ import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as Font from 'expo-font';
+import { Asset } from 'expo-asset';
+import { Image as ExpoImage } from 'expo-image';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { enableScreens } from 'react-native-screens';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Provider as PaperProvider } from 'react-native-paper';
+import { StripeProvider } from '@stripe/stripe-react-native';
 import RootNavigator from './src/navigation/RootNavigator';
 import SplashLoader from './src/components/common/SplashLoader';
 import { navigationRef } from './src/navigation/RootNavigator';
@@ -22,6 +25,8 @@ import { checkMaintenanceStatus } from './src/api/maintenance';
 import useMaintenanceStore from './src/store/maintenanceStore';
 import { migrateSecureStorage } from './src/lib/migrateSecureStorage';
 import useAuthStore from './src/store/authStore';
+import useRideStore from './src/store/rideStore';
+import { normalizeAvatarUrl } from './src/utils/avatarUrl';
 import {
   startIntegrityMonitoring,
   checkDeviceIntegrity,
@@ -37,7 +42,6 @@ import { configureGoogleSignIn } from './src/lib/googleAuth';
 import { registerDevice } from './src/services/authService';
 import useCallStore from './src/store/callStore';
 import { acceptIncomingCall, declineIncomingCall } from './src/services/callEngine';
-import { setupCallKeep } from './src/services/callKeepService';
 
 // Move any plaintext-stored session data into SecureStore before anything
 // reads auth state (idempotent; reads after this also migrate lazily).
@@ -68,6 +72,47 @@ async function loadCustomFonts() {
     });
   } catch {
     // Font files not yet downloaded — app continues with system font, no warning needed
+  }
+}
+
+// Login (PhoneEntryScreen) and ProfileSetupScreen both render this as a
+// full-screen background the instant they mount — without a head start it's
+// decoded from scratch right as the screen appears, which can show as a
+// blank/flashed frame first. Priming it into the asset cache here, in
+// parallel with everything else App.js already does at startup, means it's
+// ready before either screen is ever reached.
+async function preloadBackgroundPattern() {
+  try {
+    await Asset.loadAsync(require('./assets/bg-pattern.png'));
+  } catch {
+    // Non-fatal — the screen still renders the image normally, just without
+    // the head start.
+  }
+}
+
+// Ride category icons are remote and were previously only ever requested
+// once RideTypeSelector mounted — i.e. after the rider had already picked a
+// destination. Categories need no auth, so the fetch (and the icon
+// downloads it enables) can start the moment the app opens instead of
+// waiting for the rider to get that far, so by the time the category sheet
+// actually opens, expo-image serves every icon from its own disk cache
+// instead of the network.
+async function preloadCategoryIcons() {
+  try {
+    await useRideStore.getState().loadCategories();
+    const categories = useRideStore.getState().categories;
+    // image_url ("Rider Type Image URL") is what RideTypeCard.js actually
+    // displays; car_icon_url ("Map Car Icon") is only its fallback. Must
+    // match RideTypeCard.js's own precedence exactly (including the
+    // normalizeAvatarUrl call there), or this prefetches the wrong — or a
+    // bare relative-path — URL that expo-image can't actually cache.
+    const urls = categories
+      .map((c) => normalizeAvatarUrl(c.image_url || c.imageUrl || c.imageURL || c.car_icon_url || c.carIconUrl))
+      .filter(Boolean);
+    await Promise.all(urls.map((url) => ExpoImage.prefetch(url).catch(() => {})));
+  } catch {
+    // Non-fatal — RideTypeSelector's own loadCategories() call still covers
+    // this, just without the head start.
   }
 }
 
@@ -237,11 +282,13 @@ export default function App() {
     runMaintenanceCheck();
   }, []);
 
-  // Native call UI (CallKit / ConnectionService) — set up once, independent
-  // of ride state, so it's ready the moment a call:invite arrives.
-  useEffect(() => {
-    void setupCallKeep();
-  }, []);
+  // Native call UI (CallKit / ConnectionService) setup moved to
+  // RootNavigator's handleSplashFinish — it requests its own Android
+  // permissions (CALL_PHONE etc.), and firing that at the same time as the
+  // splash screen's own location/microphone requests let two native
+  // permission dialogs race, which could leave one of them hung waiting on
+  // a popup Android never showed. Sequencing it after splash finishes
+  // avoids that.
 
   // INSA: device integrity — a high-risk device (rooted / hooking tools /
   // emulator) never reaches the navigator: the whole app is replaced by
@@ -290,6 +337,8 @@ export default function App() {
   useEffect(() => {
     loadCustomFonts();
     applyGlobalFont();
+    preloadBackgroundPattern();
+    preloadCategoryIcons();
   }, []);
 
   useEffect(() => {
@@ -397,14 +446,19 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
-        <PaperProvider>
-          <SafeAreaProvider>
-            <StatusBar style="light" backgroundColor="#2F70C7" />
-            <RootNavigator />
-          </SafeAreaProvider>
-        </PaperProvider>
-      </QueryClientProvider>
+      <StripeProvider
+        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+        merchantIdentifier="merchant.com.bahirdar.ride"
+      >
+        <QueryClientProvider client={queryClient}>
+          <PaperProvider>
+            <SafeAreaProvider>
+              <StatusBar style="light" backgroundColor="#2F70C7" />
+              <RootNavigator />
+            </SafeAreaProvider>
+          </PaperProvider>
+        </QueryClientProvider>
+      </StripeProvider>
     </GestureHandlerRootView>
   );
 }

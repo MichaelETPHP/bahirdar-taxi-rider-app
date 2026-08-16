@@ -17,6 +17,7 @@ export const colors = {
   mapCurrentLocation: '#2F70C7', // brand blue, matches `primary`
   mapDestination: '#EF4444',
   error: '#EF4444',
+  errorLight: '#F87171',
   success: '#10B981',
   warning: '#F59E0B',
 

@@ -51,6 +51,27 @@ export default function useLocation() {
           // Don't geocode stale position — wait for fresh fix
         }
 
+        // No cached position (fresh install, or app unused long enough for
+        // the 60s cache above to have expired) — waiting on watchPositionAsync's
+        // Accuracy.High below for the FIRST fix can mean 10-30+s of GPS cold
+        // start before the rider sees anything. A Balanced-accuracy fix
+        // (network/WiFi-based, not satellite) is usually near-instant — fire
+        // it now, unawaited, purely to unblock the screen sooner. It doesn't
+        // block starting the high-accuracy watch below; whichever resolves
+        // first wins, and the watch keeps silently refining the position
+        // afterward regardless — the rider never waits on that part.
+        if (!last) {
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+            .then((loc) => {
+              if (!mounted || !loc?.coords) return;
+              const { latitude, longitude, accuracy } = loc.coords;
+              setCurrentLocation({ lat: latitude, lng: longitude, accuracy });
+              setUserCoords({ latitude, longitude });
+              setLoading(false);
+            })
+            .catch(() => {});
+        }
+
         // Watch for live position updates
         subscriber = await Location.watchPositionAsync(GEO_OPTIONS, async (loc) => {
           if (!mounted) return;

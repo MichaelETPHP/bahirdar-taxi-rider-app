@@ -1,129 +1,40 @@
-import { memo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
-import { Marker } from 'react-native-maps';
-import { MapPin } from 'lucide-react-native';
+import React from 'react';
+import { Marker, Circle } from 'react-native-maps';
 import { colors } from '../../constants/colors';
-import { fontSize, fontWeight } from '../../constants/typography';
 
-/**
- * Uber-Style Destination Marker with 'Red Light' Pulse
- */
+// Deliberately a native pin, not a custom child View — same fix as
+// UberUserLocationMarker (see its own comment for the full explanation):
+// on this project's react-native-maps 1.29.0 + New Architecture setup,
+// a <Marker> whose child is a custom View (this used to render a
+// pulse-ring + red circle + icon + label) silently renders nothing on
+// iOS — Android tolerated it, which is why this only ever broke on iOS.
+// Native pins go through a different rendering path and are unaffected.
+//
+// The halo is a `Circle`, not a Marker child, for the same reason it
+// works on the pickup marker — it's a separate native map overlay, so
+// it isn't touched by that bug and renders reliably on both platforms.
 function UberDestinationMarker({ coordinate, title, onPress }) {
-  const pulseAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2000,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: false,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: false,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [pulseAnim]);
-
-  const scale = pulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.8],
-  });
-
-  const opacity = pulseAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.5, 0.3, 0],
-  });
+  if (!coordinate) return null;
 
   return (
-    <Marker
-      coordinate={coordinate}
-      onPress={onPress}
-      tracksViewChanges={false}
-      zIndex={499}
-      anchor={{ x: 0.5, y: 0.5 }}
-    >
-      <View style={styles.container} collapsable={false}>
-        {/* Pulsing light ring */}
-        <Animated.View
-          style={[
-            styles.pulseRing,
-            {
-              transform: [{ scale }],
-              opacity,
-            },
-          ]}
-        />
-
-        {/* Main marker - red circle */}
-        <View style={styles.markerBody}>
-          <MapPin size={22} color={colors.white} strokeWidth={2.5} />
-        </View>
-
-        {/* Location label */}
-        {title && (
-          <View style={styles.labelContainer}>
-            <Text style={styles.labelText} numberOfLines={1}>
-              {title}
-            </Text>
-          </View>
-        )}
-      </View>
-    </Marker>
+    <>
+      <Circle
+        center={coordinate}
+        radius={30}
+        fillColor="rgba(239, 68, 68, 0.12)"
+        strokeColor="rgba(239, 68, 68, 0.35)"
+        strokeWidth={1}
+        zIndex={498}
+      />
+      <Marker
+        coordinate={coordinate}
+        title={title}
+        pinColor={colors.mapDestination}
+        onPress={onPress}
+        zIndex={499}
+      />
+    </>
   );
 }
 
-export default memo(UberDestinationMarker);
-
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 60,
-    height: 60,
-  },
-
-  pulseRing: {
-    position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.mapDestination,
-  },
-
-  markerBody: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.mapDestination,
-    borderWidth: 2,
-    borderColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  labelContainer: {
-    position: 'absolute',
-    top: -25,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#eee',
-    minWidth: 60,
-  },
-
-  labelText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#000',
-    textAlign: 'center',
-  },
-});
+export default React.memo(UberDestinationMarker);

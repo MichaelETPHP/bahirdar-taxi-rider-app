@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getRouteFromBackend } from '../services/routeServiceV2';
+import { buildSimulatedCurve } from '../utils/routeSimulation';
 import useAuthStore from '../store/authStore';
 
 /**
@@ -43,12 +44,11 @@ export default function useRoute(origin, destination) {
       !Number.isFinite(dest.latitude)  || !Number.isFinite(dest.longitude)
     ) return;
 
-    const fallback = [
-      { latitude: orig.latitude, longitude: orig.longitude },
-      { latitude: dest.latitude, longitude: dest.longitude },
-    ];
+    // Simulated, not a bare straight line — cheap to compute, so it's ready
+    // instantly with no visible flash before the real route arrives (or
+    // stays as the visual, unchanged, if OSRM never gives real road points).
+    const fallback = buildSimulatedCurve(orig, dest);
 
-    // Show straight line immediately while the real route loads (UX: something appears instantly)
     setCoordinates(fallback);
     setLoading(true);
 
@@ -79,7 +79,7 @@ export default function useRoute(origin, destination) {
         if (hasRoadPoints) {
           setCoordinates(result.coordinates);
         } else {
-          console.warn('[useRoute] Backend returned insufficient road points. Keeping straight line.');
+          console.warn('[useRoute] Backend returned insufficient road points. Using simulated curve.');
           setCoordinates(fallback);
         }
 

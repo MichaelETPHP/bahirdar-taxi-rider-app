@@ -17,26 +17,29 @@ import useAuthStore from '../../store/authStore';
 
 const TYPE_LABELS = {
   trip_charge: 'Trip payment',
-  topup: 'Wallet top-up',
-  refund: 'Refund',
+  wallet_topup: 'Wallet top-up',
+  refund: 'Withdrawal',
   bonus: 'Bonus',
   adjustment: 'Adjustment',
 };
 
-function formatType(type) {
+export function formatType(type) {
   if (TYPE_LABELS[type]) return TYPE_LABELS[type];
   return String(type || 'Transaction')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function formatDate(iso) {
+export function formatDate(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
     ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
-function TransactionRow({ item }) {
+// Exported — WalletScreen reuses this for its on-card recent-activity
+// preview, so a transaction looks identical whether seen there or in the
+// full history sheet.
+export function TransactionRow({ item }) {
   const amount = parseFloat(item.amount_etb) || 0;
   const isCredit = amount >= 0;
   return (
@@ -44,13 +47,13 @@ function TransactionRow({ item }) {
       <View style={[styles.iconWrap, isCredit ? styles.iconWrapCredit : styles.iconWrapDebit]}>
         {isCredit
           ? <ArrowDownLeft size={16} color={colors.success} strokeWidth={2.25} />
-          : <ArrowUpRight size={16} color={colors.textPrimary} strokeWidth={2.25} />}
+          : <ArrowUpRight size={16} color={colors.errorLight} strokeWidth={2.25} />}
       </View>
       <View style={styles.rowText}>
         <Text style={styles.rowTitle}>{formatType(item.type)}</Text>
         <Text style={styles.rowDate}>{formatDate(item.created_at)}</Text>
       </View>
-      <Text style={[styles.rowAmount, isCredit && styles.rowAmountCredit]}>
+      <Text style={[styles.rowAmount, isCredit ? styles.rowAmountCredit : styles.rowAmountDebit]}>
         {isCredit ? '+' : '−'}{Math.abs(amount).toLocaleString('en-US', { maximumFractionDigits: 2 })} ETB
       </Text>
     </View>
@@ -65,7 +68,7 @@ export default function TransactionHistorySheet({ visible, onClose }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchWalletTransactions(token);
+      const res = await fetchWalletTransactions(token, { limit: 200 });
       setTransactions(Array.isArray(res?.data) ? res.data : []);
     } catch (_) {
       setTransactions([]);
@@ -91,7 +94,7 @@ export default function TransactionHistorySheet({ visible, onClose }) {
           <View style={styles.handle} />
 
           <View style={styles.header}>
-            <Text style={styles.title}>Transactions</Text>
+            <Text style={styles.title}>Transaction Details</Text>
             <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
               <X size={16} color={colors.textSecondary} strokeWidth={2.25} />
             </Pressable>
@@ -193,7 +196,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16,185,129,0.12)',
   },
   iconWrapDebit: {
-    backgroundColor: colors.backgroundAlt,
+    backgroundColor: 'rgba(248,113,113,0.12)',
   },
   rowText: {
     flex: 1,
@@ -215,6 +218,9 @@ const styles = StyleSheet.create({
   },
   rowAmountCredit: {
     color: colors.success,
+  },
+  rowAmountDebit: {
+    color: colors.errorLight,
   },
   separator: {
     height: StyleSheet.hairlineWidth,

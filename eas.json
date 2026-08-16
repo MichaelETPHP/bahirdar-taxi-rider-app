@@ -15,7 +15,8 @@
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDqk1PB63xPc8inypQBY-XhMX6Z9moxg44",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "872882912380-bbj4kv3s67egf1ut9jj4j4g1b7acle5l.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "872882912380-f4bhhp9eqb4gi53dh38p9tb5ij4enacq.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY": "AIzaSyD98rjvovnbS20hL3yZw7fF1B-iA3SSEmY"
+        "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY": "AIzaSyD98rjvovnbS20hL3yZw7fF1B-iA3SSEmY",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51U4FRHCFwjw4di9Xj9LsK2Bf7Dqm730ysq6FIiDVYGy7LLbQhiCeGt6S8to1FYPbMgfKHsds07JkuIBUVtgqqJ5h00u3UFjdmq"
       }
     },
     "preview": {
@@ -32,7 +33,8 @@
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB1GXudutcUp6RUCEeiX-zRnVYaKdXsyVQ",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "872882912380-bbj4kv3s67egf1ut9jj4j4g1b7acle5l.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "872882912380-f4bhhp9eqb4gi53dh38p9tb5ij4enacq.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY": "AIzaSyD98rjvovnbS20hL3yZw7fF1B-iA3SSEmY"
+        "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY": "AIzaSyD98rjvovnbS20hL3yZw7fF1B-iA3SSEmY",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51U4FRHCFwjw4di9Xj9LsK2Bf7Dqm730ysq6FIiDVYGy7LLbQhiCeGt6S8to1FYPbMgfKHsds07JkuIBUVtgqqJ5h00u3UFjdmq"
       }
     },
     "production": {
@@ -50,7 +52,8 @@
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyB1GXudutcUp6RUCEeiX-zRnVYaKdXsyVQ",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "872882912380-bbj4kv3s67egf1ut9jj4j4g1b7acle5l.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "872882912380-f4bhhp9eqb4gi53dh38p9tb5ij4enacq.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY": "AIzaSyD98rjvovnbS20hL3yZw7fF1B-iA3SSEmY"
+        "EXPO_PUBLIC_GOOGLE_MAPS_IOS_API_KEY": "AIzaSyD98rjvovnbS20hL3yZw7fF1B-iA3SSEmY",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51U4FRHCFwjw4di9Xj9LsK2Bf7Dqm730ysq6FIiDVYGy7LLbQhiCeGt6S8to1FYPbMgfKHsds07JkuIBUVtgqqJ5h00u3UFjdmq"
       }
     }
   },

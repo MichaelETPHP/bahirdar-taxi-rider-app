@@ -48,6 +48,10 @@ export default function ConfirmRideScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const mapRef = useRef(null);
   const [loading, setLoading] = useState(false);
+  // Measured, not guessed — footerCard's minHeight can grow with content, so
+  // a flat edgePadding number drifts out of sync and hides the pickup/
+  // destination pins behind it on devices it wasn't eyeballed against.
+  const [footerHeight, setFooterHeight] = useState(0);
 
   const { userCoords, pickup, destination } = useLocationStore();
   const { categories, selectedCategoryId, setTripData, setTripStatus, fareEstimates, routeInfo, hydrateActiveTrip } = useRideStore();
@@ -86,18 +90,21 @@ export default function ConfirmRideScreen({ navigation, route }) {
 
   const handleRecenter = useCallback(() => {
     if (mapRef.current && userCoords && destination) {
+      // 260 is a safe fallback for the sliver of time before the footer's
+      // first onLayout fires; footerHeight (once measured) is exact.
+      const bottomClearance = (footerHeight || 260) + 24;
       mapRef.current.fitToCoordinates(
         [
           { latitude: userCoords.latitude, longitude: userCoords.longitude },
           { latitude: destination.lat, longitude: destination.lng },
         ],
         {
-          edgePadding: { top: 60, right: 30, bottom: 240, left: 30 },
+          edgePadding: { top: 60, right: 30, bottom: bottomClearance, left: 30 },
           animated: true,
         }
       );
     }
-  }, [userCoords, destination]);
+  }, [userCoords, destination, footerHeight]);
 
   // Auto-focus on the route once coordinates are available
   useEffect(() => {
@@ -314,7 +321,10 @@ export default function ConfirmRideScreen({ navigation, route }) {
       </View>
 
       {/* Footer card — trip details + confirm button */}
-      <View style={[styles.footerCard, { paddingBottom: Math.max(12, insets.bottom) + 6 }]}>
+      <View
+        style={[styles.footerCard, { paddingBottom: Math.max(12, insets.bottom) + 6 }]}
+        onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
+      >
         <View style={styles.table}>
           <View style={styles.tableRow}>
             <Text style={styles.tableLabel}>Pickup</Text>

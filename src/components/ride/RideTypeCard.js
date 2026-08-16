@@ -11,14 +11,8 @@ import { Image } from 'expo-image';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
+import { normalizeAvatarUrl } from '../../utils/avatarUrl';
 
-
-const PALETTE = [
-  { color: '#2F70C7', bgColor: '#E5EEFB' },
-  { color: '#0369A1', bgColor: '#E0F2FE' },
-  { color: '#7C3AED', bgColor: '#EDE9FE' },
-  { color: '#B45309', bgColor: '#FEF3C7' },
-];
 
 const SHIMMER_TRANSLATE = { inputRange: [-1.5, 1.5], outputRange: [-450, 450] };
 
@@ -50,11 +44,6 @@ function RideTypeCard({
 
 
 
-  const palette = useMemo(
-    () => PALETTE[(category.display_order - 1) % PALETTE.length] || PALETTE[0],
-    [category.display_order],
-  );
-
 
   const opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -63,7 +52,25 @@ function RideTypeCard({
   const label = lang === 'am' && category.name_am        ? category.name_am        : category.name;
   const desc  = lang === 'am' && category.description_am ? category.description_am : category.description;
   const fare  = serverFare != null ? parseFloat(serverFare) : null;
-  const categoryImageUrl = category.image_url || category.imageUrl || category.imageURL || '';
+  // These are two DIFFERENT fields for two different UI spots, per the
+  // admin panel's own field labels (VehicleCategoryModal.tsx):
+  //   image_url      — "Rider Type Image URL" — THIS card (category picker)
+  //   car_icon_url   — "Map Car Icon"          — DriverMarker.js (map pin)
+  // image_url is the correct primary field here; car_icon_url is only a
+  // fallback in case a category has a map icon uploaded but no rider-type
+  // image yet, so the card shows something rather than nothing.
+  //
+  // normalizeAvatarUrl matters just as much as the field priority above —
+  // the backend can return a bare relative path (e.g. "/uploads/econ.png"),
+  // which expo-image's <Image source={{ uri }}> silently fails to load as a
+  // remote URI. Every other image in this app (avatars, driver car icons via
+  // driverCategoryIcon.js) already goes through this same normalizer; this
+  // card was the one place that didn't, which alone is enough to make a
+  // populated image_url still render as the fallback icon.
+  const categoryImageUrl = normalizeAvatarUrl(
+    category.image_url || category.imageUrl || category.imageURL ||
+    category.car_icon_url || category.carIconUrl || ''
+  );
 
 
   const shimmerPos = useRef(new Animated.Value(-1.5)).current;
@@ -99,12 +106,12 @@ function RideTypeCard({
     onPress?.();
   }, [onPress, scaleAnim]);
 
-  const iconCircleStyle = useMemo(() => ([
-    styles.iconCircle,
-    {
-      backgroundColor: selected ? palette.bgColor : '#F3F4F6',
-    },
-  ]), [selected, palette.bgColor]);
+  // Always the same neutral white circle, regardless of selected state —
+  // these hold real vehicle photos now (not tinted icons), so the backdrop
+  // has to stay consistent or a photo would visibly shift color/tint the
+  // moment its card gets selected. Uber/Bolt use the same plain-white
+  // convention for this exact reason.
+  const iconCircleStyle = styles.iconCircle;
 
   const shimmerStyle = useMemo(() => ([
     StyleSheet.absoluteFill,
@@ -131,17 +138,17 @@ function RideTypeCard({
 
         <View style={styles.cardMain}>
           <Animated.View style={iconCircleStyle}>
-            {categoryImageUrl ? (
+            {/* No generic-icon fallback by design — a category with no
+                uploaded image shows an empty circle rather than a car icon
+                that could be mistaken for the real vehicle image. Fix the
+                image from the admin panel's category upload, not here. */}
+            {!!categoryImageUrl && (
               <Image
                 source={{ uri: categoryImageUrl }}
                 style={styles.vehicleImage}
                 contentFit="contain"
                 transition={200}
               />
-            ) : (
-              <View style={styles.vehiclePlaceholder}>
-                <Car size={36} color={selected ? palette.color : colors.textSecondary} />
-              </View>
             )}
           </Animated.View>
 
@@ -378,19 +385,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 0,
     overflow: 'hidden', // Ensures the image stays circular
+    backgroundColor: '#FFFFFF', // Fixed, never tinted — see iconCircleStyle comment above
   },
   vehicleImage: {
     width: '100%',
     height: '100%',
-    transform: [{ scale: 1.15 }], // Slight zoom for professional look
+    // No scale transform here on purpose — even with contentFit="contain"
+    // (which already prevents cropping within the Image's own bounds), a
+    // scale-up pushes the image past the circle's clipped edges, silently
+    // cropping it anyway. Full image, no crop, means no transform at all.
   },
-  vehiclePlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
   categoryImage: {
     width: 130,
     height: 70,

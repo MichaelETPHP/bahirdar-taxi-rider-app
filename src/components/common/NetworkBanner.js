@@ -12,6 +12,12 @@ const BASE_BANNER_HEIGHT = 40;
 const INTERNET_CHECK_URL = 'https://dns.google/resolve?name=example.com&type=A';
 const CHECK_TIMEOUT_MS   = 4000;
 const CHECK_INTERVAL_MS  = 8000;  // every 8s is enough — was 5s which was too aggressive
+// A single failed check is not proof of a real outage — a normal, brief
+// network hiccup (Wi-Fi handoff, one slow packet) fails one check all the
+// time on a perfectly fine connection. Only flip to "offline" once this many
+// checks have failed BACK TO BACK — a real outage stays failed across all of
+// them, a one-off blip doesn't.
+const CONSECUTIVE_FAILURES_TO_GO_OFFLINE = 2;
 
 async function hasRealInternet() {
   try {
@@ -31,6 +37,7 @@ export default function NetworkBanner() {
   const [showConnected, setShowConnected] = useState(false);
   const prevOffline = useRef(false);
   const mountedRef  = useRef(true);
+  const consecutiveFailures = useRef(0);
 
   const TOTAL_HEIGHT = BASE_BANNER_HEIGHT + insets.top;
   const slideAnim   = useRef(new Animated.Value(-TOTAL_HEIGHT)).current;
@@ -43,9 +50,14 @@ export default function NetworkBanner() {
       if (!mountedRef.current) return;
 
       if (!online) {
-        setIsOffline(true);
-        prevOffline.current = true;
+        consecutiveFailures.current += 1;
+        if (consecutiveFailures.current >= CONSECUTIVE_FAILURES_TO_GO_OFFLINE) {
+          setIsOffline(true);
+          prevOffline.current = true;
+        }
+        // Below the threshold — a single blip. Stay quiet and check again.
       } else {
+        consecutiveFailures.current = 0;
         // Was offline → now back online: show green "Restored" banner briefly
         if (prevOffline.current) {
           setShowConnected(true);

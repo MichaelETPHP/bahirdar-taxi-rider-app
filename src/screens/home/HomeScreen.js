@@ -170,10 +170,10 @@ export default function HomeScreen({ navigation }) {
   const token = useAuthStore((s) => s.token);
   const justAuthenticated = useAuthStore((s) => s.justAuthenticated);
   const clearJustAuthenticated = useAuthStore((s) => s.clearJustAuthenticated);
-  // Wallet balance hint — expanded (icon + amount) once ever on first app
-  // open, then bounces back down to icon-only after 6s and stays that way
-  // forever after. Starts collapsed so repeat opens never flash the expanded
-  // state before the AsyncStorage check resolves.
+  // Balance hint — expanded (icon + amount) once ever on first app open,
+  // then bounces back down to icon-only after 6s and stays that way forever
+  // after. Starts collapsed so repeat opens never flash the expanded state
+  // before the AsyncStorage check resolves.
   const walletPillWidth = useRef(new Animated.Value(WALLET_PILL_COLLAPSED_WIDTH)).current;
   const walletTextOpacity = useRef(new Animated.Value(0)).current;
   const { destination, recentDestinations, setDestination, setPickup, pickup, userCoords, setUserCoords, clearStops } = useLocationStore();
@@ -304,10 +304,10 @@ export default function HomeScreen({ navigation }) {
     }
   }, []);
 
-  // Wallet balance reveal — expands to show the amount every time this
-  // screen gains focus (cold app open, or navigating back from the Wallet
-  // screen), then springs shut to icon-only after 3s. Runs on every focus
-  // (not just once) via useFocusEffect, which fires on both those cases.
+  // Balance reveal — expands to show the amount every time this screen
+  // gains focus (cold app open, or navigating back from the Wallet screen),
+  // then springs shut to icon-only after 3s. Runs on every focus (not just
+  // once) via useFocusEffect, which fires on both those cases.
   useFocusEffect(
     useCallback(() => {
       // Snap straight to expanded — this is the starting reveal, not an
@@ -693,15 +693,20 @@ export default function HomeScreen({ navigation }) {
     const start = { latitude: pickupCoordinate.latitude, longitude: pickupCoordinate.longitude };
     const end = { latitude: destination.lat, longitude: destination.lng };
     const toFit = routeCoordinates.length >= 2 ? routeCoordinates : [start, end];
+    // Bottom clearance must match the sheet's actual on-screen height, not a
+    // flat guess — the category-picking sheet covers 58% of the screen
+    // (rideSheetHeight below), so a fixed 220 left both pins hidden behind
+    // it on anything but the shortest devices. +24 is breathing room above
+    // the sheet's drag handle, so the pins don't land flush against it.
     mapRef.current.fitToCoordinates(toFit, {
-      edgePadding: { top: 88, right: 40, bottom: 220, left: 40 },
+      edgePadding: { top: 88, right: 40, bottom: rideSheetHeight + 24, left: 40 },
       animated: true,
     });
     // fitToCoordinates has no completion callback, so this just needs to
     // outlast the animation itself before treating region changes as
     // user-initiated again.
     setTimeout(() => { isProgrammaticMoveRef.current = false; }, 900);
-  }, [destination, pickupCoordinate.latitude, pickupCoordinate.longitude, routeCoordinates]);
+  }, [destination, pickupCoordinate.latitude, pickupCoordinate.longitude, routeCoordinates, rideSheetHeight]);
 
   useEffect(() => {
     fitToPickupAndDestination();
@@ -885,7 +890,7 @@ export default function HomeScreen({ navigation }) {
     <View style={styles.container} collapsable={false}>
       {/* Splash Loader — Shown while GPS is initialising */}
       {locLoading && !permissionDenied && (
-        <SplashLoader text="Detecting Location (ጠብቅ ...)" />
+        <SplashLoader />
       )}
 
 
@@ -917,14 +922,19 @@ export default function HomeScreen({ navigation }) {
           />
           {useMemo(() => (
             <>
+              {/* iOS react-native-maps often stacks overlays by mount order
+                  rather than the zIndex prop — the route polyline used to
+                  mount after the destination pin and visually paint over it,
+                  leaving the pin invisible at its own endpoint. Markers that
+                  need to sit above the route now render after it. */}
+              {destination && routeCoordinates.length >= 2 && (
+                <ProfessionalRoutePolyline coordinates={routeCoordinates} />
+              )}
               {destination && (
                 <UberDestinationMarker
                   coordinate={{ latitude: destination.lat, longitude: destination.lng }}
                   title={destination.name || destination.address || t('home.whereTo')}
                 />
-              )}
-              {destination && routeCoordinates.length >= 2 && (
-                <ProfessionalRoutePolyline coordinates={routeCoordinates} />
               )}
               {drivers.map((driver) => (
                 <DriverMarker key={driver.id} driver={driver} />

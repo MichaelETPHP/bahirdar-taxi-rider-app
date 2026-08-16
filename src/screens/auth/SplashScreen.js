@@ -13,6 +13,7 @@ import { Image } from 'expo-image';
 import { WifiOff, RefreshCw } from 'lucide-react-native';
 import * as Network from 'expo-network';
 import * as Location from 'expo-location';
+import { Audio } from 'expo-av';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 
@@ -51,7 +52,15 @@ export default function SplashScreen({ onFinish }) {
 
       const current = await Location.getForegroundPermissionsAsync();
       let locationGranted = current.status === Location.PermissionStatus.GRANTED;
-      if (!locationGranted && current.status === Location.PermissionStatus.UNDETERMINED) {
+      // Try the native prompt whenever it's not granted yet — not just the
+      // very first time (UNDETERMINED). Gating on UNDETERMINED meant any
+      // later re-check (the 3s interval below, or reopening the app) skipped
+      // straight to the "open Settings" fallback instead of re-showing the
+      // native Allow/Deny dialog, even when Android would still show it.
+      // requestForegroundPermissionsAsync() is safe to call either way — if
+      // Android has permanently blocked re-asking, it just resolves to
+      // 'denied' with no dialog, same as before.
+      if (!locationGranted) {
         const requested = await Location.requestForegroundPermissionsAsync();
         locationGranted = requested.status === Location.PermissionStatus.GRANTED;
       }
@@ -60,6 +69,19 @@ export default function SplashScreen({ onFinish }) {
         setIsLocationDenied(true);
         setHasChecked(true);
         return;
+      }
+
+      // Microphone — for in-app voice calls. Asked upfront here (sequentially,
+      // only after location's own prompt is fully resolved — firing two
+      // native permission dialogs back to back can make Android silently
+      // drop the second one) so riders see it once at launch instead of
+      // being surprised by it mid-call later. Not a hard gate like location:
+      // the app is fully usable without calling, so a decline here doesn't
+      // block startup — just means voice calls won't work until they
+      // enable it (same prompt fires again next time a call starts).
+      const currentMic = await Audio.getPermissionsAsync();
+      if (currentMic.status !== 'granted') {
+        await Audio.requestPermissionsAsync();
       }
 
       setHasChecked(true);
