@@ -553,18 +553,6 @@ export default function App() {
     );
   }
 
-  // Offline right now — at launch or any time later. Outranks maintenance/
-  // update checks below since those already fail open when offline anyway.
-  // Its own polling effect above flips this back to false the moment a
-  // check succeeds, so the app resumes on its own once reconnected.
-  if (isOffline) {
-    return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <NoInternetScreen onConnected={() => setIsOffline(false)} />
-      </GestureHandlerRootView>
-    );
-  }
-
   if (isMaintenanceMode && maintenanceData) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -602,6 +590,10 @@ export default function App() {
           </PaperProvider>
         </QueryClientProvider>
       </StripeProvider>
+      {/* Overlay, not a screen swap — the rider's current screen stays
+          mounted and dimly visible underneath, so reconnecting drops them
+          back exactly where they were instead of a jarring re-mount. */}
+      {isOffline && <NoInternetScreen onConnected={() => setIsOffline(false)} />}
     </GestureHandlerRootView>
   );
 }
