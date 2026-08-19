@@ -4,13 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WifiOff } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontWeight } from '../../constants/typography';
+import { hasRealInternet } from '../../utils/networkCheck';
 
 const BASE_BANNER_HEIGHT = 40;
 
-// Checks REAL internet connectivity — not the local API server.
-// Uses a reliable public DNS endpoint so it works regardless of API server state.
-const INTERNET_CHECK_URL = 'https://dns.google/resolve?name=example.com&type=A';
-const CHECK_TIMEOUT_MS   = 4000;
 const CHECK_INTERVAL_MS  = 8000;  // every 8s is enough — was 5s which was too aggressive
 // A single failed check is not proof of a real outage — a normal, brief
 // network hiccup (Wi-Fi handoff, one slow packet) fails one check all the
@@ -18,18 +15,6 @@ const CHECK_INTERVAL_MS  = 8000;  // every 8s is enough — was 5s which was too
 // checks have failed BACK TO BACK — a real outage stays failed across all of
 // them, a one-off blip doesn't.
 const CONSECUTIVE_FAILURES_TO_GO_OFFLINE = 2;
-
-async function hasRealInternet() {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
-    const res = await fetch(INTERNET_CHECK_URL, { method: 'GET', signal: controller.signal });
-    clearTimeout(timer);
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
 
 export default function NetworkBanner() {
   const insets = useSafeAreaInsets();

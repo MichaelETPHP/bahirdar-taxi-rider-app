@@ -414,7 +414,7 @@ function CustomDrawer({ visible, onClose, navigation }) {
                 onPress={() => Linking.openURL(item.url)}
                 activeOpacity={0.7}
               >
-                {IconComponent && <IconComponent size={17} color={colors.textPrimary || '#000'} />}
+                {IconComponent && <IconComponent size={11} color={colors.textPrimary || '#000'} />}
               </TouchableOpacity>
             );
           })}
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 20,
+    gap: 10,
     paddingVertical: 20,
     paddingHorizontal: 20,
     borderTopWidth: 1,
@@ -585,9 +585,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
   socialBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',

@@ -27,6 +27,8 @@ import useMaintenanceStore from './src/store/maintenanceStore';
 import UpdateRequiredScreen from './src/screens/common/UpdateRequiredScreen';
 import { checkAppVersion } from './src/api/appVersion';
 import useUpdateStore from './src/store/updateStore';
+import NoInternetScreen from './src/screens/common/NoInternetScreen';
+import { hasRealInternet } from './src/utils/networkCheck';
 import { registerBackgroundCallTask } from './src/services/backgroundCallTask';
 import { migrateSecureStorage } from './src/lib/migrateSecureStorage';
 import useAuthStore from './src/store/authStore';
@@ -304,6 +306,19 @@ export default function App() {
   const { isMaintenanceMode, maintenanceData, setMaintenance } = useMaintenanceStore();
   const { updateRequired, updateInfo, setUpdateRequired } = useUpdateStore();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  // Cold-start-offline gate — checked once at boot, separate from
+  // NetworkBanner's mid-session strip. `null` = still checking (render
+  // nothing extra yet, avoids a flash of the offline card on a normal
+  // connection while the very first check is in flight).
+  const [isOfflineAtBoot, setIsOfflineAtBoot] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    hasRealInternet().then((online) => {
+      if (!cancelled) setIsOfflineAtBoot(!online);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const runMaintenanceCheck = async () => {
     try {
@@ -502,6 +517,18 @@ export default function App() {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <RootBlockScreen />
+      </GestureHandlerRootView>
+    );
+  }
+
+  // Truly offline at launch — nothing else below here would load anyway
+  // (maintenance/version checks already fail open when offline, so this
+  // isn't redundant with them, just faster to the point). Recovers on its
+  // own via NoInternetScreen's silent background polling.
+  if (isOfflineAtBoot) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <NoInternetScreen onConnected={() => setIsOfflineAtBoot(false)} />
       </GestureHandlerRootView>
     );
   }
