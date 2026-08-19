@@ -8,6 +8,7 @@ import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as Font from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
 import { Asset } from 'expo-asset';
 import { Image as ExpoImage } from 'expo-image';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -42,6 +43,13 @@ import { configureGoogleSignIn } from './src/lib/googleAuth';
 import { registerDevice } from './src/services/authService';
 import useCallStore from './src/store/callStore';
 import { acceptIncomingCall, declineIncomingCall } from './src/services/callEngine';
+
+// Keeps the native splash screen up past Android's own auto-dismiss timing
+// (which used to race ahead of the JS bundle finishing) until App() below
+// explicitly hides it — closing the white-flash gap between the native
+// splash and this app's own JS SplashLoader, since the two now show the
+// exact same image with no un-rendered frame in between.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // Move any plaintext-stored session data into SecureStore before anything
 // reads auth state (idempotent; reads after this also migrate lazily).
@@ -235,27 +243,53 @@ async function ensureNotificationPermissions() {
 const PUSH_DEVICE_ID =
   Constants.installationId ?? Constants.deviceId ?? `push-device-${Platform.OS}`;
 
-/** Server push (FCM/APNs via Expo). Needs `extra.eas.projectId` in app config
- * and a dev/standalone build on Android SDK 53+. Saves the token to the
- * backend so it can actually reach this device — previously this only
- * logged the token locally and never persisted it, so the backend had no
- * way to push anything to a rider at all. */
-async function registerExpoPushTokenIfConfigured() {
-  const projectId =
-    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-  if (!projectId) return;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Server push. Android now registers a real native FCM device token
+ * (needs google-services.json in the build — already wired via
+ * app.config.js's googleServicesFile) so the backend can send through
+ * Firebase directly instead of relaying through Expo's push service. iOS
+ * keeps the Expo token path (needs `extra.eas.projectId`) since it isn't
+ * part of this migration — Expo's relay still owns iOS APNs delivery.
+ * Saves the token to the backend so it can actually reach this device —
+ * previously this only logged the token locally and never persisted it, so
+ * the backend had no way to push anything to a rider at all.
+ *
+ * Retries the SAVE step a few times with a short backoff — this used to be
+ * a single best-effort attempt with a comment saying "retried on next app
+ * start," but that only helps if the rider actually restarts the app. A
+ * transient failure right after login (the exact moment this fires) could
+ * otherwise leave a rider permanently unreachable by push/admin-call until
+ * their next cold start, which for an already-open session might be days. */
+async function registerPushTokenIfConfigured() {
   try {
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    let token = null;
+    if (Platform.OS === 'android') {
+      const devicePushToken = await Notifications.getDevicePushTokenAsync();
+      token = devicePushToken?.data ?? null;
+      if (__DEV__ && token) console.log('[notifications] Native FCM device token:', token);
+    } else {
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+      if (!projectId) return;
+      const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+      token = data ?? null;
+      if (__DEV__ && token) console.log('[notifications] Expo push token:', token);
+    }
     if (!token) return;
-    if (__DEV__) {
-      console.log('[notifications] Expo push token:', token);
+
+    const RETRY_DELAYS_MS = [0, 3000, 8000];
+    for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt++) {
+      if (RETRY_DELAYS_MS[attempt] > 0) await sleep(RETRY_DELAYS_MS[attempt]);
+      try {
+        await registerDevice(token, PUSH_DEVICE_ID, Platform.OS);
+        return; // saved — done
+      } catch (err) {
+        if (__DEV__) console.warn(`[notifications] Save push token attempt ${attempt + 1} failed:`, err?.message ?? err);
+      }
     }
-    try {
-      await registerDevice(token, PUSH_DEVICE_ID, Platform.OS);
-    } catch (err) {
-      if (__DEV__) console.warn('[notifications] Failed to save push token:', err?.message ?? err);
-      // Non-fatal — token will be retried on next app start.
-    }
+    // All attempts failed — falls back to the next app-start/login retry,
+    // same safety net as before.
   } catch {
     // Expo Go limitations, missing google-services.json, etc.
   }
@@ -280,6 +314,14 @@ export default function App() {
 
   useEffect(() => {
     runMaintenanceCheck();
+  }, []);
+
+  // Hides the native splash the instant this component has actually
+  // mounted and painted its first frame — which is always either
+  // SplashLoader (same splash.png, so the handoff is invisible) or real
+  // content, never a blank Activity background.
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
   }, []);
 
   // Native call UI (CallKit / ConnectionService) setup moved to
@@ -384,7 +426,7 @@ export default function App() {
         });
 
         if (allowed) {
-          await registerExpoPushTokenIfConfigured();
+          await registerPushTokenIfConfigured();
         }
       } catch (e) {
         if (__DEV__) {
@@ -403,11 +445,11 @@ export default function App() {
   // may have logged in yet — saving the push token then would 401 (the
   // endpoint requires auth) and never retry. Re-attempt whenever auth state
   // flips to true, mirroring the driver app's syncPushToken pattern.
-  // registerExpoPushTokenIfConfigured() is idempotent, so this is safe to
+  // registerPushTokenIfConfigured() is idempotent, so this is safe to
   // run again even if the mount-time attempt already succeeded.
   useEffect(() => {
     if (!isAuthenticated) return;
-    registerExpoPushTokenIfConfigured().catch(() => {});
+    registerPushTokenIfConfigured().catch(() => {});
   }, [isAuthenticated]);
 
   // INSA: hold a lightweight loading screen until the FIRST device-integrity

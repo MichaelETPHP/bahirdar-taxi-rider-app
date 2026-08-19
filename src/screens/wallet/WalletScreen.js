@@ -29,6 +29,7 @@ import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import useAuthStore from '../../store/authStore';
 import { fetchWalletTransactions } from '../../services/walletService';
+import { listenForWalletUpdate, removeWalletUpdateListener } from '../../services/socketService';
 import TransactionHistorySheet, { TransactionRow } from '../../components/wallet/TransactionHistorySheet';
 import AboutWalletModal from '../../components/wallet/AboutWalletModal';
 import WalletScreenSkeleton from '../../components/wallet/WalletScreenSkeleton';
@@ -96,6 +97,22 @@ export default function WalletScreen({ navigation }) {
       setRefreshSkeleton(false);
     }
   }, [loadWalletData]);
+
+  // Live transaction updates — the balance itself is already kept in sync
+  // globally (RootNavigator listens once and writes into the auth store),
+  // this only needs to prepend the new row into the on-screen preview list
+  // so a top-up/withdrawal/trip charge shows up instantly, no pull needed.
+  React.useEffect(() => {
+    const onWalletUpdate = (data) => {
+      if (!data?.transaction) return;
+      setRecentTransactions((prev) => {
+        if (prev.some((t) => t.id === data.transaction.id)) return prev;
+        return [data.transaction, ...prev].slice(0, RECENT_TRANSACTIONS_LIMIT);
+      });
+    };
+    listenForWalletUpdate(onWalletUpdate);
+    return () => removeWalletUpdateListener(onWalletUpdate);
+  }, []);
 
   // Restore the hide/show preference so it doesn't reset every time the
   // wallet is opened — a privacy choice, not a per-session one.

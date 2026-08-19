@@ -29,19 +29,10 @@ export default {
     name: 'Bahiran Ride',
     slug: 'BahirdarRide',
     scheme: 'bahirdarride',
-    version: '1.1.0',
+    version: '1.1.4',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
-    splash: {
-      image: './assets/splash.png',
-      resizeMode: 'contain',
-      backgroundColor: '#2F70C7',
-      android12: {
-        image: './assets/icon.png',
-        backgroundColor: '#2F70C7',
-      },
-    },
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.bahirdar.ride',
@@ -70,12 +61,13 @@ export default {
       },
 
       package: 'com.bahirdar.rider',
-      usesCleartextTraffic: true,
+      googleServicesFile: './google-services.json',
       // INSA Finding 1 (CWE-538): forbid ADB/cloud backup extraction of the
       // app sandbox — this app stores auth tokens and PII.
       allowBackup: false,
-      // minSdk/targetSdk are NOT set here — prebuild ignores these keys.
-      // They are enforced via the expo-build-properties plugin below.
+      // minSdk/targetSdk/usesCleartextTraffic are NOT set here — this
+      // Expo SDK version silently ignores all three at this top level.
+      // They only take effect via the expo-build-properties plugin below.
       permissions: [
         'android.permission.ACCESS_FINE_LOCATION',
         'android.permission.ACCESS_COARSE_LOCATION',
@@ -107,6 +99,47 @@ export default {
     },
     plugins: [
       [
+        // Replaces the legacy top-level `splash` key, which SDK 54 mostly
+        // ignores on Android — that gap was the native white cold-start
+        // flash between the launcher icon and this image ever appearing,
+        // regardless of the color configured there. This plugin also sets
+        // the root Activity's window background to the same blue, so even
+        // the very first native frame (before this image itself decodes)
+        // is on-brand instead of white.
+        'expo-splash-screen',
+        {
+          image: './assets/splash.png',
+          resizeMode: 'cover',
+          backgroundColor: '#2F70C7',
+          dark: {
+            image: './assets/splash.png',
+            backgroundColor: '#2F70C7',
+          },
+          // Android-only override: the native cold-start icon (Android 12+
+          // system SplashScreen, plus the pre-12 fallback) is a separate,
+          // OS-controlled small centered icon — always small, never
+          // full-screen, regardless of resizeMode. It is NOT the same asset
+          // as the custom full-screen splash rendered by
+          // src/screens/auth/SplashScreen.js, so this can't affect that.
+          // Uses the same square logo as the launcher icon so it reads as a
+          // clean round badge instead of a shrunk crop of splash.png.
+          android: {
+            image: './assets/icon.png',
+            resizeMode: 'contain',
+            imageWidth: 200,
+            // White only for this brief icon screen — the big splash right
+            // after it (src/screens/auth/SplashScreen.js) intentionally
+            // stays blue; confirmed with the user that the resulting
+            // white-to-blue flash between the two is expected.
+            backgroundColor: '#FFFFFF',
+            dark: {
+              image: './assets/icon.png',
+              backgroundColor: '#FFFFFF',
+            },
+          },
+        },
+      ],
+      [
         // INSA Finding 4 (CWE-1104): minSdk 28 gives hardware-backed Keystore
         // (strengthens Finding 3); target/compile 36 is the Expo SDK 54
         // default and meets Play policy (API 36 required from Aug 31, 2026).
@@ -116,6 +149,13 @@ export default {
             minSdkVersion: 28,
             compileSdkVersion: 36,
             targetSdkVersion: 36,
+            // Several vehicle-category icon URLs from the admin panel are
+            // still http:// (only "Damas" is https:// today) — targetSdk 28+
+            // blocks cleartext traffic by default, so without this every
+            // http:// category icon silently fails to load and falls back
+            // to the generic car icon. Ideally those URLs get migrated to
+            // https:// too, but the app must not depend on that happening.
+            usesCleartextTraffic: true,
           },
         },
       ],

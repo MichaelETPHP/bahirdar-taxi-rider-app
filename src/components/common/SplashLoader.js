@@ -56,6 +56,10 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 10000,
+    // Matches the native splash background — without this, the container
+    // is transparent until the image below finishes decoding, showing the
+    // white Activity background through for a frame or two.
+    backgroundColor: colors.primary,
   },
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,

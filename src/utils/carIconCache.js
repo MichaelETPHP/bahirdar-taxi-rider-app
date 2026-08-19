@@ -4,13 +4,13 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 const CACHE_DIR = `${FileSystem.cacheDirectory}driver-car-icons/`;
 
 // Source car icons come from driver/category uploads at whatever resolution
-// they were saved at (often 300px+). react-native-maps' Marker `image` prop on
-// iOS hands the bitmap straight to GMSMarker.icon at its raw pixel size — there
-// is no style/width/height control like a child <Image> gets — so an
-// un-resized source renders huge on the map. Resize once on download and cache
-// the resized file; ~110px lands close to the ~55-60pt size Android renders via
-// its styled child view.
-const ICON_TARGET_WIDTH = 110;
+// they were saved at (often 300px+). react-native-maps' Marker `image` prop
+// (used on both platforms now — see DriverMarker.js) hands the bitmap
+// straight to the native marker at its raw pixel size — there is no style/
+// width/height control like a child <Image> gets, so an un-resized source
+// renders huge on the map. Resize once on download and cache the resized
+// file at the actual on-map target size.
+const ICON_TARGET_WIDTH = 60;
 
 function localFileNameFor(remoteUrl) {
   try {
@@ -48,7 +48,10 @@ export async function getCachedCarIconUri(remoteUrl) {
   const fileName   = localFileNameFor(remoteUrl);
   const rawUri      = `${CACHE_DIR}raw-${fileName}`;
   const resizedName = fileName.replace(/\.[a-z0-9]+$/i, '') || fileName;
-  const resizedUri  = `${CACHE_DIR}${resizedName}.png`;
+  // Width baked into the cache filename so changing ICON_TARGET_WIDTH (like
+  // just now, 110 -> 60) naturally busts old cached files instead of every
+  // device silently keeping whatever oversized icon it already downloaded.
+  const resizedUri  = `${CACHE_DIR}${resizedName}-w${ICON_TARGET_WIDTH}.png`;
 
   const existing = await FileSystem.getInfoAsync(resizedUri).catch(() => null);
   if (existing?.exists) return resizedUri;

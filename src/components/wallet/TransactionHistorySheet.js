@@ -14,6 +14,7 @@ import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { fetchWalletTransactions } from '../../services/walletService';
 import useAuthStore from '../../store/authStore';
+import { listenForWalletUpdate, removeWalletUpdateListener } from '../../services/socketService';
 
 const TYPE_LABELS = {
   trip_charge: 'Trip payment',
@@ -80,6 +81,22 @@ export default function TransactionHistorySheet({ visible, onClose }) {
   useEffect(() => {
     if (visible) load();
   }, [visible, load]);
+
+  // Live-prepend while the sheet is open — only bother wiring this up when
+  // it's actually visible, since a background listener would just be doing
+  // pointless work for a list nobody can see.
+  useEffect(() => {
+    if (!visible) return;
+    const onWalletUpdate = (data) => {
+      if (!data?.transaction) return;
+      setTransactions((prev) => {
+        if (prev.some((t) => t.id === data.transaction.id)) return prev;
+        return [data.transaction, ...prev];
+      });
+    };
+    listenForWalletUpdate(onWalletUpdate);
+    return () => removeWalletUpdateListener(onWalletUpdate);
+  }, [visible]);
 
   return (
     <Modal

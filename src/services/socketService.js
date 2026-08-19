@@ -4,22 +4,23 @@ import { SOCKET_URL } from '../config/api';
 let _socket = null;
 
 /**
- * Connect (or return existing) socket with rider JWT.
- * Non-blocking — returns immediately, connects in background.
+ * Lazily creates the ONE socket instance for the app's lifetime and attaches
+ * its listeners exactly once. Every screen that calls `getSocket()`/
+ * `connectSocket()` gets the SAME object back, so a `.on()` handler attached
+ * by one screen (e.g. TripActiveScreen's `trip:completed` listener) is never
+ * silently orphaned by a later reconnect elsewhere in the app — reconnects
+ * happen ON this object (`.disconnect()` + `.connect()`), never by throwing
+ * it away and creating a new one. Before this, any reconnect (a network
+ * blip, backgrounding — not rare on mobile data) meant already-attached
+ * listeners stopped receiving events for the rest of that session, which is
+ * why the completion screen would intermittently fall back to the stale
+ * upfront fare estimate instead of the real final amount.
  */
-export function connectSocket(token) {
-  if (_socket?.connected) return _socket;
+function ensureSocket() {
+  if (_socket) return _socket;
 
-  // Disconnect stale socket if it exists
-  if (_socket) {
-    _socket.removeAllListeners();
-    _socket.disconnect();
-    _socket = null;
-  }
-
-  // ⚡ Create socket — connects in background (non-blocking)
   _socket = io(SOCKET_URL, {
-    auth: { token },
+    autoConnect: false,
     transports: ['websocket'],
     reconnection: true,
     reconnectionAttempts: Infinity,
@@ -47,12 +48,9 @@ export function connectSocket(token) {
   // Single-session enforcement: server fires this when the same account logs in elsewhere.
   _socket.on('auth:force_logout', async () => {
     if (__DEV__) console.warn('[SOCKET] 🚫 Force logout — account signed in on another device');
-    // Disconnect immediately so the socket stops trying to reconnect with the revoked session.
-    if (_socket) {
-      _socket.removeAllListeners();
-      _socket.disconnect();
-      _socket = null;
-    }
+    // Disconnect immediately so the socket stops trying to reconnect with the
+    // revoked session — the object itself stays alive for the next login.
+    _socket?.disconnect();
     const { showForcedLogoutAlert } = await import('../utils/logoutAlert');
     const authStore = (await import('../store/authStore')).default;
     await showForcedLogoutAlert(async () => {
@@ -63,16 +61,23 @@ export function connectSocket(token) {
   return _socket;
 }
 
+/**
+ * Connect (or reconnect) the shared socket with the rider's current JWT.
+ * Non-blocking — returns immediately, connects in background.
+ */
+export function connectSocket(token) {
+  const socket = ensureSocket();
+  socket.auth = { token };
+  if (!socket.connected) socket.connect();
+  return socket;
+}
+
 export function getSocket() {
   return _socket;
 }
 
 export function disconnectSocket() {
-  if (_socket) {
-    _socket.removeAllListeners();
-    _socket.disconnect();
-    _socket = null;
-  }
+  _socket?.disconnect();
 }
 
 export function isSocketConnected() {
@@ -113,6 +118,26 @@ export function listenForLiveFareUpdate(onUpdate) {
 
 export function removeLiveFareUpdateListener() {
   _socket?.off('trip:fare_update');
+}
+
+/**
+ * Fires whenever the rider's wallet balance changes server-side (top-up
+ * credited, withdrawal, trip fare deducted) — lets balance/transaction UI
+ * update live with no pull-to-refresh. Payload: { balance, transaction }.
+ *
+ * Pass the SAME function reference to removeWalletUpdateListener() to stop
+ * listening — matches addEventListener/removeEventListener semantics, so
+ * more than one independent listener (a global balance sync in the auth
+ * store, plus whichever wallet screen is currently open) can coexist
+ * without one's cleanup silently killing another's.
+ */
+export function listenForWalletUpdate(onUpdate) {
+  if (!_socket) return;
+  _socket.on('wallet:updated', onUpdate);
+}
+
+export function removeWalletUpdateListener(onUpdate) {
+  _socket?.off('wallet:updated', onUpdate);
 }
 
 export function joinRiderRoom(riderId) {

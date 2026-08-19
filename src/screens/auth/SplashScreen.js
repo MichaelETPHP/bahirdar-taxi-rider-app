@@ -155,7 +155,6 @@ export default function SplashScreen({ onFinish }) {
         source={require('../../../assets/splash.png')}
         style={styles.backgroundImage}
         contentFit="cover"
-        transition={300}
         priority="high"
         cachePolicy="disk"
       />
@@ -249,6 +248,12 @@ export default function SplashScreen({ onFinish }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    // Matches the native splash background — without this, the container
+    // is transparent until the image below finishes decoding, showing the
+    // white Activity background through for a frame or two. This screen
+    // can stay up longer than the others (real network/location checks
+    // run here), making that gap the most visible of the three.
+    backgroundColor: colors.primary,
   },
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,

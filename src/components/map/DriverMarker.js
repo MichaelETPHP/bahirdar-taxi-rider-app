@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, Image, Animated, Easing, Platform } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import { Marker, AnimatedRegion } from 'react-native-maps';
-import { Car } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { shadow } from '../../constants/layout';
 import { normalizeDriverCarIconUrl } from '../../utils/driverCategoryIcon';
@@ -122,8 +121,6 @@ function NameBubble({ name, carText }) {
 
 export default React.memo(function DriverMarker({ driver, onPress, routeCoords }) {
   const [rippleTrigger, setRippleTrigger] = useState(0);
-  const [imageLoaded,   setImageLoaded]   = useState(false);
-  const [imageFailed,   setImageFailed]   = useState(false);
   // Android: heading state drives the native `rotation` prop on the car marker.
   const [heading, setHeading] = useState(driver.heading || 0);
 
@@ -139,7 +136,6 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
     latitudeDelta: 0,
     longitudeDelta: 0,
   })).current;
-
   const animVal      = useRef(new Animated.Value(0)).current;
   const prevCoordRef = useRef({ latitude: snapLat, longitude: snapLng });
   const prevHeadRef  = useRef(driver.heading || 0);
@@ -153,20 +149,18 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
     ),
     [driver?.carIconUrl, driver?.car_icon_url, driver?.vehicle?.categoryIconUrl, driver?.vehicle?.car_icon_url]
   );
-  // iOS-only: Marker's native `image` prop (unlike a child <Image>) renders
-  // through a path that isn't affected by the custom-Marker-children bug —
-  // but it only accepts local files, hence the cache-then-reference dance.
-  const cachedCarIconUri = useCachedCarIconUri(Platform.OS === 'ios' ? carIconUrl : null);
+  // Downloads, converts to PNG, and caches the icon locally — was iOS-only
+  // (native `image` prop needs a local file), but the raw remote .webp
+  // streamed live through Android's child <Image> was confirmed to silently
+  // fail to appear in the marker's native view-to-bitmap snapshot (the
+  // fallback generic icon showed instead of the real category photo, even
+  // with cleartext traffic and the data itself both confirmed correct).
+  // Using the same cached-local-PNG file on Android too sidesteps whatever
+  // that WebP/live-stream-specific snapshotting issue is.
+  const cachedCarIconUri = useCachedCarIconUri(carIconUrl);
   if (routeCoords && routeCoords.length > 2 && routeCoords !== routeRef.current) {
     routeRef.current = routeCoords;
   }
-
-  useEffect(() => {
-    setImageLoaded(false);
-    setImageFailed(false);
-    if (!carIconUrl) return;
-    Image.prefetch(carIconUrl).catch(() => {});
-  }, [carIconUrl]);
 
   useEffect(() => {
     const startLat = prevCoordRef.current.latitude;
@@ -223,35 +217,41 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
   const isLive  = !!driver?.live;
   const name    = firstName(driver?.fullName || driver?.name || '');
   const carText = String(driver?.carLabel || '').trim();
-  const renderCarVisual = () => {
-    if (carIconUrl && !imageFailed) {
-      return (
-        <Image
-          source={{ uri: carIconUrl }}
-          resizeMode="contain"
-          fadeDuration={0}
-          style={styles.carImage}
-          onLoad={() => setImageLoaded(true)}
-          onError={() => {
-            setImageFailed(true);
-            setImageLoaded(true);
-          }}
-        />
-      );
-    }
 
-    return (
-      <View style={styles.carFallback}>
-        <Car size={26} color={colors.primary} strokeWidth={2.2} />
-      </View>
-    );
-  };
+  // Car icon: SAME approach on both platforms — the marker's native `image`
+  // prop, fed a locally-cached PNG file (see useCachedCarIconUri). A child
+  // <Image> inside a custom Marker view, captured via tracksViewChanges'
+  // screenshot-to-bitmap mechanism, was confirmed unreliable on Android for
+  // this specific remote .webp source — the fallback rendered instead of the
+  // real photo even with the data, the URL, and cleartext traffic all
+  // verified correct. The native `image` prop bypasses that screenshot path
+  // entirely on both platforms, which is why iOS never had this problem.
+  // Falls back to a plain colored pin while the icon is still downloading to
+  // local cache (first load only) or if caching fails.
+  const carIconMarker = (
+    <MarkerAnimated
+      coordinate={coordinate}
+      onPress={onPress}
+      anchor={{ x: 0.5, y: 0.5 }}
+      rotation={heading - 90}
+      flat
+      zIndex={101}
+      image={cachedCarIconUri ? { uri: cachedCarIconUri } : undefined}
+      // Always a real color, never undefined — react-native-maps' Android
+      // native marker code crashes ("Integer.intValue() on a null object
+      // reference") when pinColor flips from a set color to undefined
+      // between renders, which is exactly what happens the moment the
+      // cached icon finishes downloading. image takes visual priority over
+      // pinColor once it's set, so keeping this always-on is harmless.
+      pinColor={colors.primary}
+    />
+  );
 
-  // ── Android: plain <Marker image> + separate animation overlay ────────────
+  // ── Android: pulse/name-bubble overlay (custom View children — this part
+  // renders fine on Android) + the native-image car marker above ──────────
   if (Platform.OS === 'android') {
     return (
       <>
-        {/* Animation overlay — no image inside, pure views only */}
         <MarkerAnimated
           coordinate={coordinate}
           anchor={{ x: 0.5, y: 0.5 }}
@@ -265,46 +265,18 @@ export default React.memo(function DriverMarker({ driver, onPress, routeCoords }
           </View>
         </MarkerAnimated>
 
-        {/* Car icon — plain Marker so image prop works natively on Android */}
-        <MarkerAnimated
-          coordinate={coordinate}
-          rotation={heading - 90}
-          flat
-          anchor={{ x: 0.5, y: 0.5 }}
-          tracksViewChanges={!!carIconUrl && !imageFailed ? true : !imageLoaded}
-          zIndex={101}
-          onPress={onPress}
-        >
-          <View style={styles.carContainer} collapsable={false}>
-            {renderCarVisual()}
-          </View>
-        </MarkerAnimated>
+        {carIconMarker}
       </>
     );
   }
 
   // ── iOS: native `image`/`pinColor` props, no custom children ───────────────
-  // Custom Marker children (the pulse ring, name bubble, and a child <Image>
-  // for the car photo) silently fail to render on iOS under this project's
-  // react-native-maps + New Architecture setup — proved this while debugging
-  // the current-location marker. The native `image` prop renders through a
-  // different path that isn't affected, so the car icon uses that instead;
-  // it falls back to a plain colored pin while the icon is still downloading
-  // to local cache (see useCachedCarIconUri) or if caching fails. The pulse
-  // ring and name bubble have no equivalent native-prop path, so they're
-  // Android-only for now.
-  return (
-    <MarkerAnimated
-      coordinate={coordinate}
-      onPress={onPress}
-      anchor={{ x: 0.5, y: 0.5 }}
-      rotation={heading - 90}
-      flat
-      zIndex={100}
-      image={cachedCarIconUri ? { uri: cachedCarIconUri } : undefined}
-      pinColor={!cachedCarIconUri ? colors.primary : undefined}
-    />
-  );
+  // Custom Marker children (the pulse ring, name bubble) silently fail to
+  // render on iOS under this project's react-native-maps + New Architecture
+  // setup — proved this while debugging the current-location marker. The
+  // pulse ring and name bubble have no equivalent native-prop path, so
+  // they're Android-only for now.
+  return carIconMarker;
 });
 
 const styles = StyleSheet.create({
@@ -337,22 +309,6 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent', borderRightColor: 'transparent',
     borderTopColor: colors.primary,
     marginTop: -2, alignSelf: 'center',
-  },
-  carContainer: {
-    width: 60, height: 60,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  carImage: { width: 55, height: 55 },
-  carFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(47, 112, 199, 0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadow.sm,
   },
   pulse: {
     position: 'absolute', top: 50, left: 50,

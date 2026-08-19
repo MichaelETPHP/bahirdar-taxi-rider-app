@@ -27,6 +27,7 @@ import GooglePayButton from '../../components/payments/GooglePayButton';
 import SuccessBanner from '../../components/common/SuccessBanner';
 import useAuthStore from '../../store/authStore';
 import { createTopupIntent, fetchTopupRate } from '../../services/walletService';
+import { listenForWalletUpdate, removeWalletUpdateListener } from '../../services/socketService';
 
 const QUICK_AMOUNTS = [25, 50, 100, 200];
 
@@ -60,21 +61,43 @@ function sanitizeAmountInput(text) {
 /**
  * Stripe confirms the charge on the phone instantly, but the wallet is only
  * actually credited a moment later — once the backend's Stripe webhook
- * arrives and processes it. Without this wait, navigating straight back to
- * the wallet card can show the OLD balance for a beat (or until the next
- * focus refresh). Polls the profile until the credit lands, capped so a slow
- * webhook can't strand the rider on this screen indefinitely.
+ * arrives and processes it. Races two ways of finding out the credit landed:
+ *  - the `wallet:updated` socket push, which arrives the instant the server
+ *    commits it (near-instant on a healthy connection)
+ *  - polling the profile, as a fallback for a dropped/slow socket
+ * Whichever confirms first wins; capped so neither a slow webhook nor a dead
+ * socket can strand the rider on this screen indefinitely.
  */
 async function waitForWalletCredit(minExpectedBalance, { attempts = 8, intervalMs = 700 } = {}) {
-  for (let i = 0; i < attempts; i++) {
-    await useAuthStore.getState().loadProfile();
-    const current = Number(useAuthStore.getState().user?.walletBalance ?? 0);
-    if (current >= minExpectedBalance - 0.01) return true;
-    if (i < attempts - 1) {
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
-    }
-  }
-  return false;
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      removeWalletUpdateListener(onSocketUpdate);
+      resolve(result);
+    };
+
+    const onSocketUpdate = (data) => {
+      if (typeof data?.balance === 'number' && data.balance >= minExpectedBalance - 0.01) {
+        finish(true);
+      }
+    };
+    listenForWalletUpdate(onSocketUpdate);
+
+    (async () => {
+      for (let i = 0; i < attempts; i++) {
+        if (settled) return;
+        await useAuthStore.getState().loadProfile();
+        const current = Number(useAuthStore.getState().user?.walletBalance ?? 0);
+        if (current >= minExpectedBalance - 0.01) return finish(true);
+        if (i < attempts - 1) {
+          await new Promise((r) => setTimeout(r, intervalMs));
+        }
+      }
+      finish(false);
+    })();
+  });
 }
 
 export default function WalletTopUpScreen({ navigation }) {
@@ -223,12 +246,25 @@ export default function WalletTopUpScreen({ navigation }) {
       // not the pre-top-up figure.
       setOverlayMessage('Confirming top-up…');
       setPreparingPayment(true);
-      await waitForWalletCredit(startingBalance + creditedEtb);
+      const credited = await waitForWalletCredit(startingBalance + creditedEtb);
       setPreparingPayment(false);
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSuccessMessage(`+${creditedEtb.toLocaleString('en-US')} ETB added to your wallet`);
-      setSuccessVisible(true);
+      if (credited) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setSuccessMessage(`+${creditedEtb.toLocaleString('en-US')} ETB added to your wallet`);
+        setSuccessVisible(true);
+      } else {
+        // Card was charged, but the wallet hasn't been credited yet — the
+        // backend webhook is still catching up (or failed). Don't lie and
+        // say it's done: tell the rider it's still processing so a real
+        // failure doesn't get reported as a false success.
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert(
+          'Payment received',
+          'Your card was charged, but your wallet balance is taking longer than usual to update. Pull to refresh on the Wallet screen in a minute — contact support if it still hasn\'t updated.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }],
+        );
+      }
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Top-up failed', err?.message || 'Something went wrong. Please try again.');

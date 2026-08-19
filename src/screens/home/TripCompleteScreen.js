@@ -58,6 +58,7 @@ export default function TripCompleteScreen({ navigation }) {
   const fare       = finalFare?.amount || tripData?.final_fare_etb || tripData?.total_fare_etb || fareAdjustment?.finalFare || 0;
   const distKm     = finalFare?.distanceKm || tripData?.distance_km || 0;
   const durMin     = finalFare?.durationMin || tripData?.duration_min || 0;
+  const isWalletPaid = tripData?.payment_method === 'wallet';
 
   const toggleTag = (slug) => {
     setSelectedTags((prev) =>
@@ -138,6 +139,12 @@ export default function TripCompleteScreen({ navigation }) {
             <Text style={styles.totalLabel}>Total Paid</Text>
             <Text style={styles.totalValue}>ETB {parseFloat(fare).toFixed(2)}</Text>
           </View>
+          {isWalletPaid && (
+            <View style={styles.walletPaidRow}>
+              <Check size={13} color="#22C55E" />
+              <Text style={styles.walletPaidText}>Paid from your wallet — nothing owed in cash</Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -297,6 +304,12 @@ const styles = StyleSheet.create({
   totalRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   totalLabel:{ fontSize: fontSize.sm, color: colors.textSecondary, fontWeight: fontWeight.medium },
   totalValue:{ fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.primary },
+  walletPaidRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10,
+    backgroundColor: 'rgba(34,197,94,0.08)', paddingHorizontal: 10, paddingVertical: 7,
+    borderRadius: borderRadius.md, borderWidth: 1, borderColor: 'rgba(34,197,94,0.18)',
+  },
+  walletPaidText: { fontSize: fontSize.xs, color: '#16A34A', fontWeight: fontWeight.bold, flexShrink: 1 },
 
   stat:       { flex: 1, alignItems: 'center', gap: 6 },
   statDivider:{ width: 1, height: 32, backgroundColor: colors.border, marginHorizontal: 12 },

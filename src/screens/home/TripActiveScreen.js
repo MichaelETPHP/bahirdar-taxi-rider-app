@@ -135,11 +135,16 @@ export default function TripActiveScreen({ navigation }) {
         if (!status) return;
         if (trip && typeof trip === 'object') mergeTripData(trip);
         if (status === 'completed') {
+          // Real trip-row column names (GET /trips/:id returns the raw row,
+          // no remapping) — final_fare_etb/distance_km/duration_min don't
+          // exist as columns at all, so this fallback poll was silently
+          // falling all the way back to the stale upfront estimate whenever
+          // it won the race against the (now-fixed) socket handler.
           const amount = parseFloat(
-            trip?.final_fare_etb ?? trip?.estimated_fare_etb ?? tripData?.estimated_fare_etb ?? 0
+            trip?.final_fare ?? trip?.total_fare_etb ?? tripData?.estimated_fare_etb ?? 0
           );
-          const distanceKm = parseFloat(trip?.distance_km ?? 0);
-          const durationMin = parseFloat(trip?.duration_min ?? 0);
+          const distanceKm = parseFloat(trip?.actual_distance_km ?? 0);
+          const durationMin = parseFloat(trip?.actual_duration_min ?? 0);
           setFinalFare({ amount, distanceKm, durationMin });
           setTripStatus('completed');
           disconnectSocket();
@@ -171,14 +176,19 @@ export default function TripActiveScreen({ navigation }) {
     const socket = getSocket();
     if (!socket) return;
 
-    const onCompleted = ({ finalFare, distanceKm, durationMin, distance, duration, fare_breakdown, pickup_address, dropoff_address, actual_distance_km, actual_duration_min }) => {
+    // Field names here must match driver.trip.service.ts's riderPayload exactly
+    // (final_fare, breakdown — both snake_case/flat, not finalFare/fare_breakdown)
+    // — a prior mismatch here silently zeroed the amount every time, falling
+    // back all the way to the stale upfront estimate on the completion screen
+    // even though the wallet was already charged the correct final amount.
+    const onCompleted = ({ final_fare, breakdown, pickup_address, dropoff_address, actual_distance_km, actual_duration_min }) => {
       clearInterval(locationPollRef.current);
       clearInterval(tripStatusPollRef.current);
       clearInterval(timerRef.current);
       setFinalFare({
-        amount:      Number(finalFare ?? fare_breakdown?.total_etb ?? tripData?.final_fare_etb ?? 0),
-        distanceKm:  Number(distanceKm ?? actual_distance_km ?? distance ?? tripData?.actual_distance_km ?? 0),
-        durationMin: Number(durationMin ?? actual_duration_min ?? duration ?? tripData?.actual_duration_min ?? 0),
+        amount:      Number(final_fare ?? breakdown?.finalFare ?? tripData?.total_fare_etb ?? 0),
+        distanceKm:  Number(actual_distance_km ?? tripData?.actual_distance_km ?? 0),
+        durationMin: Number(actual_duration_min ?? tripData?.actual_duration_min ?? 0),
       });
       // Merge addresses into tripData so TripCompleteScreen can display them
       if (pickup_address || dropoff_address) {

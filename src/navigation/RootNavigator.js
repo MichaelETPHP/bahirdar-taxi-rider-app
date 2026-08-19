@@ -8,7 +8,7 @@ import AppNavigator from './AppNavigator';
 import useAuthStore from '../store/authStore';
 import useRideStore from '../store/rideStore';
 import useSessionManager from '../hooks/useSessionManager';
-import { connectSocket, disconnectSocket, joinRiderRoom } from '../services/socketService';
+import { connectSocket, disconnectSocket, joinRiderRoom, listenForWalletUpdate, removeWalletUpdateListener } from '../services/socketService';
 import { attachCallSocketListeners } from '../services/callEngine';
 import { setupCallKeep } from '../services/callKeepService';
 import { getActiveTrip } from '../services/tripService';
@@ -27,6 +27,7 @@ export default function RootNavigator() {
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
   const loadTokens = useAuthStore((s) => s.loadTokens);
+  const updateUser = useAuthStore((s) => s.updateUser);
   const hydrateActiveTrip = useRideStore((s) => s.hydrateActiveTrip);
   const resetTrip = useRideStore((s) => s.resetTrip);
   const [bootstrapped, setBootstrapped] = useState(false);
@@ -60,10 +61,21 @@ export default function RootNavigator() {
       connectSocket(token);
       joinRiderRoom(user.id);
       attachCallSocketListeners();
+
+      // Global balance sync — any screen reading user.walletBalance stays
+      // live the moment a top-up/withdrawal/trip fare changes it server-side,
+      // no pull-to-refresh needed anywhere in the app.
+      const onWalletUpdate = (data) => {
+        if (typeof data?.balance === 'number') {
+          updateUser({ walletBalance: data.balance });
+        }
+      };
+      listenForWalletUpdate(onWalletUpdate);
+      return () => removeWalletUpdateListener(onWalletUpdate);
     } else {
       disconnectSocket();
     }
-  }, [isAuthenticated, token, user?.id]);
+  }, [isAuthenticated, token, user?.id, updateUser]);
 
   useEffect(() => {
     let cancelled = false;

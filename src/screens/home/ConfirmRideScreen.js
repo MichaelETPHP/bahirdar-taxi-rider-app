@@ -119,20 +119,27 @@ export default function ConfirmRideScreen({ navigation, route }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
 
-    // Pre-flight wallet check for non-cash payment methods.
-    const paymentMethod = 'cash'; // update here when digital payments are added
-    if (paymentMethod !== 'cash' && fare != null) {
+    // Pre-flight wallet check. Diaspora riders (Google/Apple sign-up) always
+    // pay by wallet — the backend decides this authoritatively and enforces
+    // the same balance check again at trip creation, so this is purely a
+    // friendlier early warning before committing to the search screen.
+    let paymentMethod = 'cash';
+    if (fare != null) {
       try {
         const walletRes = await getWalletBalance(token);
-        const balance = parseFloat(walletRes?.data?.balance ?? walletRes?.balance ?? 0);
-        if (balance < fare) {
-          setLoading(false);
-          Alert.alert(
-            'Insufficient Balance',
-            `Your wallet balance (ETB ${balance.toFixed(2)}) is less than the estimated fare (ETB ${Math.round(fare)}). Please top up before booking.`,
-            [{ text: 'OK' }],
-          );
-          return;
+        const data = walletRes?.data ?? walletRes;
+        if (data?.is_wallet_payer === true) {
+          paymentMethod = 'wallet';
+          const balance = parseFloat(data?.balance ?? 0);
+          if (balance < fare) {
+            setLoading(false);
+            Alert.alert(
+              'Insufficient Wallet Balance',
+              `Your wallet balance (ETB ${balance.toFixed(2)}) is less than the estimated fare (ETB ${Math.round(fare)}). Please top up before booking.`,
+              [{ text: 'OK' }],
+            );
+            return;
+          }
         }
       } catch (_) {
         // Non-fatal — let the backend enforce the balance check on trip creation
@@ -150,7 +157,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
       dropoff_lat: destination.lat,
       dropoff_lng: destination.lng,
       vehicle_category: requestedVehicleCategory,
-      payment_method: 'cash',
+      payment_method: paymentMethod,
       estimated_fare_etb: Number(fare) || 0,
       distance_km: distKm,
       duration_min: durMin,
@@ -178,7 +185,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
           dropoff_lng: destination.lng,
           dropoff_address: destination.name || destination.address || 'Destination',
           vehicle_category: requestedVehicleCategory,
-          payment_method: 'cash',
+          payment_method: paymentMethod,
           distance_km: distKm,
           duration_min: durMin,
           estimated_fare_etb: Math.round(Number(fare) || 0),
