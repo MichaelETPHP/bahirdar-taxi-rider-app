@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WifiOff } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontWeight } from '../../constants/typography';
-import AppButton from '../common/AppButton';
+import AppButton from '../../components/common/AppButton';
 import { hasRealInternet } from '../../utils/networkCheck';
 
 /**
