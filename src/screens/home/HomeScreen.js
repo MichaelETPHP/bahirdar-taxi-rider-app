@@ -641,6 +641,11 @@ export default function HomeScreen({ navigation }) {
 
   const hasInitialRegion = useRef(false);
   const hasRefitForUser = useRef(false);
+  // Guards every programmatic map move (initial center, recenter, route
+  // fit) from being mistaken for a user drag by the region-change handlers
+  // below — declared here, before any effect that touches it.
+  const isProgrammaticMoveRef = useRef(false);
+  const revertTimerRef = useRef(null);
   const MIN_DELTA = 0.003;
   const PADDING = 0.001;
   useEffect(() => {
@@ -666,6 +671,7 @@ export default function HomeScreen({ navigation }) {
     const lngSpan = Math.max(MIN_DELTA, Math.max(...lngs) - Math.min(...lngs) + PADDING);
     const timer = setTimeout(() => {
       if (mapRef.current && !hasInitialRegion.current) {
+        isProgrammaticMoveRef.current = true;
         mapRef.current.animateToRegion(
           {
             latitude: centerLat,
@@ -676,16 +682,11 @@ export default function HomeScreen({ navigation }) {
           250
         );
         hasInitialRegion.current = true;
+        setTimeout(() => { isProgrammaticMoveRef.current = false; }, 450);
       }
     }, 300);
     return () => clearTimeout(timer);
   }, [destination, displayCoords.latitude, displayCoords.longitude]);
-
-  // Guards the revert-after-idle logic below from treating our own
-  // programmatic fitToCoordinates call as a user pan/zoom, which would
-  // otherwise immediately re-arm the revert timer against itself.
-  const isProgrammaticMoveRef = useRef(false);
-  const revertTimerRef = useRef(null);
 
   const fitToPickupAndDestination = useCallback(() => {
     if (!mapRef.current || !destination) return;
@@ -731,6 +732,7 @@ export default function HomeScreen({ navigation }) {
       // Small delay to ensure state has settled and map is ready
       const timer = setTimeout(() => {
         if (mapRef.current && !destination) {
+          isProgrammaticMoveRef.current = true;
           mapRef.current.animateToRegion(
             {
               latitude: displayCoords.latitude,
@@ -740,6 +742,7 @@ export default function HomeScreen({ navigation }) {
             },
             600
           );
+          setTimeout(() => { isProgrammaticMoveRef.current = false; }, 800);
         }
       }, 100);
       return () => clearTimeout(timer);
@@ -773,6 +776,7 @@ export default function HomeScreen({ navigation }) {
 
     InteractionManager.runAfterInteractions(() => {
       if (mapRef.current) {
+        isProgrammaticMoveRef.current = true;
         mapRef.current.animateToRegion(
           {
             latitude: displayCoords.latitude,
@@ -782,9 +786,21 @@ export default function HomeScreen({ navigation }) {
           },
           500
         );
+        setTimeout(() => { isProgrammaticMoveRef.current = false; }, 700);
       }
     });
   }, [displayCoords.latitude, displayCoords.longitude, refreshSpinAnim, refreshLocation]);
+
+  // Before a destination is picked, dragging the map is just "looking
+  // around" — the moment the rider lets go, snap straight back to their
+  // real location instead of leaving the map wherever they dragged it.
+  // (Once a destination exists, handleRouteRegionChangeComplete below takes
+  // over instead, with its own longer idle window — a rider studying a
+  // planned route needs more room to look around than one just browsing.)
+  const handleFreeRegionChangeComplete = useCallback(() => {
+    if (destination || isProgrammaticMoveRef.current) return;
+    handleRecenter();
+  }, [destination, handleRecenter]);
 
   const handlePickupDrag = useCallback((coord) => {
     // Update store with dragged position
@@ -904,7 +920,7 @@ export default function HomeScreen({ navigation }) {
           showStreetNames={true}
           showRoadLines={true}
           scrollEnabled={mapScrollEnabled}
-          onRegionChangeComplete={destination ? handleRouteRegionChangeComplete : undefined}
+          onRegionChangeComplete={destination ? handleRouteRegionChangeComplete : handleFreeRegionChangeComplete}
           initialRegion={{
             latitude: displayCoords.latitude,
             longitude: displayCoords.longitude,
