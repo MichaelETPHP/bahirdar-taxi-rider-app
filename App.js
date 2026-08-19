@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import './src/i18n';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, Text, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
@@ -29,6 +29,7 @@ import { checkAppVersion } from './src/api/appVersion';
 import useUpdateStore from './src/store/updateStore';
 import NoInternetScreen from './src/screens/common/NoInternetScreen';
 import { hasRealInternet } from './src/utils/networkCheck';
+import NetInfo from '@react-native-community/netinfo';
 import { registerBackgroundCallTask } from './src/services/backgroundCallTask';
 import { migrateSecureStorage } from './src/lib/migrateSecureStorage';
 import useAuthStore from './src/store/authStore';
@@ -306,35 +307,48 @@ export default function App() {
   const { isMaintenanceMode, maintenanceData, setMaintenance } = useMaintenanceStore();
   const { updateRequired, updateInfo, setUpdateRequired } = useUpdateStore();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  // Offline gate — the full-screen card, not just a banner, and it applies
-  // any time connectivity is lost, not only at cold start: the rider asked
-  // for "no internet" to be immediately obvious no matter when it happens,
-  // not a small strip they might not notice. Polls continuously; a single
-  // failed check isn't proof of a real outage (a normal Wi-Fi handoff blips
-  // one check on a perfectly fine connection), so it only flips to offline
-  // after two checks fail back to back, but flips back online instantly on
-  // the very next success.
+  // Offline gate — the full-screen card, and it needs to react the instant
+  // connectivity actually drops, since the whole point is catching it
+  // before the rider takes another action on a dead connection. Polling
+  // (even fast polling) always has a built-in delay — the OS telling us
+  // directly, via NetInfo, is the only way to get this close to instant:
+  // it fires on the underlying network state change itself, not on our own
+  // next scheduled check.
   const [isOffline, setIsOffline] = useState(false);
-  const consecutiveFailures = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
-    const check = async () => {
-      const online = await hasRealInternet();
+    let verifyTimer = null;
+
+    const unsubscribe = NetInfo.addEventListener((state) => {
       if (cancelled) return;
-      if (online) {
-        consecutiveFailures.current = 0;
-        setIsOffline(false);
-      } else {
-        consecutiveFailures.current += 1;
-        if (consecutiveFailures.current >= 2) setIsOffline(true);
+      // isInternetReachable is the OS's own reachability probe, once it's
+      // resolved (null briefly right after a state change while still
+      // checking) — trust it over isConnected, since a phone can be
+      // "connected" to Wi-Fi with no real internet behind it at all.
+      if (state.isConnected === false || state.isInternetReachable === false) {
+        clearTimeout(verifyTimer);
+        setIsOffline(true);
+        return;
       }
-    };
-    check();
-    const interval = setInterval(check, 8000);
+      if (state.isInternetReachable === true) {
+        clearTimeout(verifyTimer);
+        setIsOffline(false);
+        return;
+      }
+      // Still resolving — do one quick real-internet check rather than
+      // optimistically clearing the gate before it's actually confirmed.
+      clearTimeout(verifyTimer);
+      verifyTimer = setTimeout(async () => {
+        const online = await hasRealInternet();
+        if (!cancelled) setIsOffline(!online);
+      }, 300);
+    });
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(verifyTimer);
+      unsubscribe();
     };
   }, []);
 
