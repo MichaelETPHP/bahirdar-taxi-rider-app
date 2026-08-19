@@ -24,6 +24,10 @@ import { fontFamily } from './src/constants/typography';
 import MaintenanceScreen from './src/screens/common/MaintenanceScreen';
 import { checkMaintenanceStatus } from './src/api/maintenance';
 import useMaintenanceStore from './src/store/maintenanceStore';
+import UpdateRequiredScreen from './src/screens/common/UpdateRequiredScreen';
+import { checkAppVersion } from './src/api/appVersion';
+import useUpdateStore from './src/store/updateStore';
+import { registerBackgroundCallTask } from './src/services/backgroundCallTask';
 import { migrateSecureStorage } from './src/lib/migrateSecureStorage';
 import useAuthStore from './src/store/authStore';
 import useRideStore from './src/store/rideStore';
@@ -230,6 +234,7 @@ async function ensureNotificationPermissions() {
   await ensureAndroidNotificationChannel();
   await ensureCallInviteChannel();
   await registerCallInviteCategory().catch(() => {});
+  await registerBackgroundCallTask();
 
   let current = await Notifications.getPermissionsAsync();
   if (!isNotificationPermissionGranted(current)) {
@@ -297,6 +302,7 @@ async function registerPushTokenIfConfigured() {
 
 export default function App() {
   const { isMaintenanceMode, maintenanceData, setMaintenance } = useMaintenanceStore();
+  const { updateRequired, updateInfo, setUpdateRequired } = useUpdateStore();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const runMaintenanceCheck = async () => {
@@ -314,6 +320,34 @@ export default function App() {
 
   useEffect(() => {
     runMaintenanceCheck();
+  }, []);
+
+  // Force-update gate — off by default (minVersionCode/minBuildNumber: 0
+  // from checkAppVersion's own fail-open default), only ever kicks in when
+  // an admin has explicitly set a floor for this app+platform higher than
+  // what's actually installed. Not tied to "a newer version merely exists."
+  useEffect(() => {
+    (async () => {
+      try {
+        const info = await checkAppVersion();
+        // Guarded require — same pattern VersionFooter already uses, so a
+        // dev client built before expo-application was added never crashes.
+        let installedBuild = 0;
+        try {
+          const Application = require('expo-application');
+          installedBuild = parseInt(Application.nativeBuildVersion, 10) || 0;
+        } catch { /* module not in this binary yet */ }
+
+        const floor = Platform.OS === 'ios' ? info.minBuildNumber : info.minVersionCode;
+        if (floor && installedBuild && installedBuild < floor) {
+          setUpdateRequired(true, info);
+        } else {
+          setUpdateRequired(false);
+        }
+      } catch {
+        setUpdateRequired(false);
+      }
+    })();
   }, []);
 
   // Hides the native splash the instant this component has actually
@@ -482,6 +516,14 @@ export default function App() {
           contact={maintenanceData.contact}
           onRetry={runMaintenanceCheck}
         />
+      </GestureHandlerRootView>
+    );
+  }
+
+  if (updateRequired) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <UpdateRequiredScreen updateUrl={updateInfo?.updateUrl} />
       </GestureHandlerRootView>
     );
   }

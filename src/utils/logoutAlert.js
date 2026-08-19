@@ -1,4 +1,5 @@
 import { Alert } from 'react-native';
+import useSessionBannerStore from '../store/sessionBannerStore';
 
 /**
  * Decoupled Logout Alert.
@@ -14,49 +15,41 @@ import { Alert } from 'react-native';
 // instead of spawning another dialog.
 let _activeSessionAlert = null;
 
+// Both of these used to be a blocking Alert.alert({ cancelable: false })
+// that could pop up over the splash/login screen the instant a stale stored
+// token failed to refresh at app boot — before the rider had done anything,
+// which read as the app being broken rather than informing them of
+// anything. There's also nothing to actually confirm: onLogout() clears the
+// session either way and the navigator swaps to Login on its own once
+// isAuthenticated flips false.
+//
+// Order matters here: run the logout FIRST, then show the banner. Showing
+// it before onLogout() finishes meant it could appear mid-transition —
+// stacked over a still-changing splash/navigation state — before the rider
+// had actually landed anywhere. Waiting until the account is truly logged
+// out means the banner only ever confirms something that already happened,
+// on top of the Login screen it now belongs to.
 export async function showSessionExpiredAlert(onLogout) {
   if (_activeSessionAlert) return _activeSessionAlert;
 
-  _activeSessionAlert = new Promise((resolve) => {
-    Alert.alert(
-      'Session Expired',
-      'Your session has expired. Please log in again.',
-      [
-        {
-          text: 'Log In',
-          onPress: async () => {
-            if (onLogout) await onLogout();
-            _activeSessionAlert = null;
-            resolve(true);
-          },
-        },
-      ],
-      { cancelable: false }
-    );
-  });
+  _activeSessionAlert = (async () => {
+    if (onLogout) await onLogout();
+    useSessionBannerStore.getState().show('Logged out');
+    _activeSessionAlert = null;
+    return true;
+  })();
   return _activeSessionAlert;
 }
 
 export async function showForcedLogoutAlert(onLogout) {
   if (_activeSessionAlert) return _activeSessionAlert;
 
-  _activeSessionAlert = new Promise((resolve) => {
-    Alert.alert(
-      'Signed Out',
-      'Your account was signed in on another device. You have been logged out.',
-      [
-        {
-          text: 'OK',
-          onPress: async () => {
-            if (onLogout) await onLogout();
-            _activeSessionAlert = null;
-            resolve(true);
-          },
-        },
-      ],
-      { cancelable: false },
-    );
-  });
+  _activeSessionAlert = (async () => {
+    if (onLogout) await onLogout();
+    useSessionBannerStore.getState().show('Logged out — signed in on another device');
+    _activeSessionAlert = null;
+    return true;
+  })();
   return _activeSessionAlert;
 }
 

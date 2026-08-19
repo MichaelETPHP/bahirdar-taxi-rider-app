@@ -15,6 +15,7 @@ import { getActiveTrip } from '../services/tripService';
 
 import SplashScreen from '../screens/auth/SplashScreen';
 import NetworkBanner from '../components/common/NetworkBanner';
+import SessionExpiredBanner from '../components/common/SessionExpiredBanner';
 import CallOverlay from '../components/call/CallOverlay';
 import { parseTripPollResponse } from '../utils/tripLifecycle';
 import { colors } from '../constants/colors';
@@ -153,7 +154,12 @@ export default function RootNavigator() {
 
   // ── Scenario 1: Still loading tokens or animation in progress ──
   if (!bootstrapped || !splashFinished) {
-    return <SplashScreen onFinish={handleSplashFinish} />;
+    return (
+      <>
+        <SplashScreen onFinish={handleSplashFinish} />
+        <SessionExpiredBanner />
+      </>
+    );
   }
 
   if (isAuthenticated && !tripRestoreChecked) {
@@ -171,6 +177,7 @@ export default function RootNavigator() {
           <ActivityIndicator size="large" color={colors.white} />
           <Text style={styles.restoreText}>Restoring your trip…</Text>
         </View>
+        <SessionExpiredBanner />
       </View>
     );
   }
@@ -179,6 +186,7 @@ export default function RootNavigator() {
   return (
     <NavigationContainer ref={navigationRef}>
       <NetworkBanner />
+      <SessionExpiredBanner />
       <Stack.Navigator screenOptions={{ headerShown: false, animationEnabled: false }}>
         {isAuthenticated ? (
           <Stack.Screen name="AppNav">

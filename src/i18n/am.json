@@ -3,7 +3,7 @@
     "welcome": "ወደ ባህርዳር እንኳን ደህና መጡ",
     "welcomeSub": "ለመጀመር ስልክ ቁጥርዎን ያስገቡ",
     "phoneLabel": "ስልክ ቁጥር",
-    "phonePlaceholder": "09 XX XXX XXX",
+    "phonePlaceholder": "09 .. ... ...",
     "phoneInternationalPlaceholder": "የስልክ ቁጥር",
     "phonePrefixError": "ስልክ ቁጥር በ 09 ወይም 07 መጀመር አለበት",
     "phoneInvalid": "ለተመረጠው አገር ትክክለኛ የስልክ ቁጥር ያስገቡ",

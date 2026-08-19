@@ -236,6 +236,34 @@ function subscribeToCallStore() {
   });
 }
 
+/**
+ * Rings a real native incoming-call UI from a backgrounded/killed-app FCM
+ * push, before the app's normal RootNavigator mount has ever happened.
+ * Deliberately reuses setupCallKeep()/subscribeToCallStore() rather than
+ * calling RNCallKeep.displayIncomingCall() directly — that keeps this one
+ * codepath (store transitions idle→incoming, subscription reacts) as the
+ * only place that ever triggers the native ring, so a background-task ring
+ * and a live-socket ring can never drift out of sync with each other.
+ *
+ * Android only: iOS killed-app ringing needs PushKit (a separate,
+ * not-yet-built phase — see the file header above).
+ */
+export async function ringFromBackgroundPush({ tripId, peerName, peerRole }) {
+  if (Platform.OS !== 'android' || !RNCallKeep) return;
+  try {
+    if (!isSetUp) await setupCallKeep();
+  } catch (err) {
+    console.warn('[CallKeep] background ring setup failed:', err);
+    return;
+  }
+  // A background task can fire in the SAME JS context as an already-running
+  // app (Android doesn't always spin up a fresh headless engine) — if the
+  // live socket path already has this call ringing/connecting, don't stomp
+  // on it with a second, redundant setIncoming().
+  if (useCallStore.getState().status !== 'idle') return;
+  useCallStore.getState().setIncoming({ tripId, peerRole, peerName, peerAvatarUrl: null });
+}
+
 // From RNCallKeep.CONSTANTS.END_CALL_REASONS — inlined so this file doesn't
 // need the CONSTANTS export just for two numbers.
 const CALL_END_REASON_REMOTE = 2;

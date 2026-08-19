@@ -716,13 +716,13 @@ export default function PhoneEntryScreen({ navigation }) {
             <View style={[styles.footer, { paddingBottom: Math.max(16, insets.bottom) }]}>
               <View style={styles.socialIcons}>
                 <TouchableOpacity onPress={() => Linking.openURL('https://facebook.com')} style={styles.socialBtn}>
-                  <FacebookIcon size={18} color={colors.white} />
+                  <FacebookIcon size={14} color={colors.white} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => Linking.openURL('https://t.me')} style={styles.socialBtn}>
-                  <TelegramIcon size={18} color={colors.white} />
+                  <TelegramIcon size={14} color={colors.white} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => Linking.openURL('https://instagram.com')} style={styles.socialBtn}>
-                  <InstagramIcon size={18} color={colors.white} />
+                  <InstagramIcon size={14} color={colors.white} />
                 </TouchableOpacity>
               </View>
               <TouchableOpacity
@@ -929,8 +929,8 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   code: {
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     includeFontPadding: false,
     fontWeight: fontWeight.bold,
     color: colors.textPrimary,
@@ -938,8 +938,8 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   phoneInputText: {
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: fontWeight.medium,
     color: colors.textSecondary,
     letterSpacing: 0.4,
@@ -1043,13 +1043,13 @@ const styles = StyleSheet.create({
   socialIcons: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 16,
+    gap: 12,
     marginBottom: 12,
   },
   socialBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',

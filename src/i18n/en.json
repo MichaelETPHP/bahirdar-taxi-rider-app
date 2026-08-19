@@ -3,7 +3,7 @@
     "welcome": "Welcome to Bahiran Ride",
     "welcomeSub": "Enter your phone number to get started",
     "phoneLabel": "Phone Number",
-    "phonePlaceholder": "09 XX XXX XXX",
+    "phonePlaceholder": "09 .. ... ...",
     "phoneInternationalPlaceholder": "Phone number",
     "phonePrefixError": "Phone must start with 09 or 07",
     "phoneInvalid": "Enter a valid phone number for the selected country",

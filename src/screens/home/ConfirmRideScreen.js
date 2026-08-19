@@ -207,13 +207,18 @@ export default function ConfirmRideScreen({ navigation, route }) {
       // ⚠️ Error occurred in background — show alert but don't navigate away
       const code = err.code || '';
       const status = err.status;
+
+      // apiClient's global 401 handler already showed the session-expired
+      // banner and is logging the rider out — a second local alert here
+      // (asking them to tap "Go Back" while the app is already navigating
+      // them to the login screen out from under this one) is redundant and
+      // conflicting, not helpful. Nothing further to show.
+      if (status === 401) return;
+
       let title = 'Error Confirming Trip';
       let msg = err.message || 'Could not confirm trip. Please try again.';
 
-      if (status === 401) {
-        title = 'Session Expired';
-        msg = 'Please log in again.';
-      } else if (status === 402 || code === 'INSUFFICIENT_BALANCE' || code === 'LOW_BALANCE') {
+      if (status === 402 || code === 'INSUFFICIENT_BALANCE' || code === 'LOW_BALANCE') {
         title = 'Insufficient Balance';
         msg = 'Your wallet balance is too low for this trip. Please top up and try again.';
       } else if (status === 403) {
