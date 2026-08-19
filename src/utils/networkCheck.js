@@ -1,8 +1,7 @@
 // Checks REAL internet connectivity — not the local API server. Uses a
 // reliable public DNS endpoint so it works regardless of API server state.
-// Shared by NetworkBanner (mid-session connectivity loss) and
-// NoInternetScreen (cold-start-offline) so both agree on what "online"
-// means instead of drifting apart with their own copies.
+// Used by App.js's continuous offline poll and NoInternetScreen's manual
+// retry, so both agree on what "online" means.
 const INTERNET_CHECK_URL = 'https://dns.google/resolve?name=example.com&type=A';
 const CHECK_TIMEOUT_MS = 4000;
 

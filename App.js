@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import './src/i18n';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Platform, Text, TextInput } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
@@ -306,18 +306,36 @@ export default function App() {
   const { isMaintenanceMode, maintenanceData, setMaintenance } = useMaintenanceStore();
   const { updateRequired, updateInfo, setUpdateRequired } = useUpdateStore();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  // Cold-start-offline gate — checked once at boot, separate from
-  // NetworkBanner's mid-session strip. `null` = still checking (render
-  // nothing extra yet, avoids a flash of the offline card on a normal
-  // connection while the very first check is in flight).
-  const [isOfflineAtBoot, setIsOfflineAtBoot] = useState(null);
+  // Offline gate — the full-screen card, not just a banner, and it applies
+  // any time connectivity is lost, not only at cold start: the rider asked
+  // for "no internet" to be immediately obvious no matter when it happens,
+  // not a small strip they might not notice. Polls continuously; a single
+  // failed check isn't proof of a real outage (a normal Wi-Fi handoff blips
+  // one check on a perfectly fine connection), so it only flips to offline
+  // after two checks fail back to back, but flips back online instantly on
+  // the very next success.
+  const [isOffline, setIsOffline] = useState(false);
+  const consecutiveFailures = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
-    hasRealInternet().then((online) => {
-      if (!cancelled) setIsOfflineAtBoot(!online);
-    });
-    return () => { cancelled = true; };
+    const check = async () => {
+      const online = await hasRealInternet();
+      if (cancelled) return;
+      if (online) {
+        consecutiveFailures.current = 0;
+        setIsOffline(false);
+      } else {
+        consecutiveFailures.current += 1;
+        if (consecutiveFailures.current >= 2) setIsOffline(true);
+      }
+    };
+    check();
+    const interval = setInterval(check, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   const runMaintenanceCheck = async () => {
@@ -521,14 +539,14 @@ export default function App() {
     );
   }
 
-  // Truly offline at launch — nothing else below here would load anyway
-  // (maintenance/version checks already fail open when offline, so this
-  // isn't redundant with them, just faster to the point). Recovers on its
-  // own via NoInternetScreen's silent background polling.
-  if (isOfflineAtBoot) {
+  // Offline right now — at launch or any time later. Outranks maintenance/
+  // update checks below since those already fail open when offline anyway.
+  // Its own polling effect above flips this back to false the moment a
+  // check succeeds, so the app resumes on its own once reconnected.
+  if (isOffline) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <NoInternetScreen onConnected={() => setIsOfflineAtBoot(false)} />
+        <NoInternetScreen onConnected={() => setIsOffline(false)} />
       </GestureHandlerRootView>
     );
   }

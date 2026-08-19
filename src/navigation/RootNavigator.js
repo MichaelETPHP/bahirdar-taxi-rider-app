@@ -14,7 +14,6 @@ import { setupCallKeep } from '../services/callKeepService';
 import { getActiveTrip } from '../services/tripService';
 
 import SplashScreen from '../screens/auth/SplashScreen';
-import NetworkBanner from '../components/common/NetworkBanner';
 import SessionExpiredBanner from '../components/common/SessionExpiredBanner';
 import CallOverlay from '../components/call/CallOverlay';
 import { parseTripPollResponse } from '../utils/tripLifecycle';
@@ -185,7 +184,6 @@ export default function RootNavigator() {
   // ── Scenario 2: Bootstrapped and animation done → Show App ──
   return (
     <NavigationContainer ref={navigationRef}>
-      <NetworkBanner />
       <SessionExpiredBanner />
       <Stack.Navigator screenOptions={{ headerShown: false, animationEnabled: false }}>
         {isAuthenticated ? (

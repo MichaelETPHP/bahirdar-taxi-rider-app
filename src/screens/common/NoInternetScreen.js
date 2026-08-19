@@ -7,18 +7,14 @@ import { fontWeight } from '../../constants/typography';
 import AppButton from '../common/AppButton';
 import { hasRealInternet } from '../../utils/networkCheck';
 
-const SILENT_RECHECK_MS = 5000;
-
 /**
- * Cold-start-offline gate — distinct from NetworkBanner, which handles
- * connectivity dropping mid-session (a lightweight strip, since there's
- * already real content underneath worth not hiding). This is for when
- * there's nothing to show yet at all, so it gets the full, friendlier
- * screen instead of a thin bar.
- *
- * Recovers on its own: polls silently in the background and calls
- * onConnected() the instant real internet comes back, so a rider whose
- * connection returns mid-read never has to remember to tap anything.
+ * Full-screen offline gate — shown by App.js the instant its own
+ * connectivity poll detects no internet, at any point in the app's
+ * lifetime, not just at launch. That same poll keeps running underneath
+ * this screen and flips back automatically the moment a check succeeds
+ * (via onConnected), so this component doesn't need its own duplicate
+ * polling loop — the "Try Again" button below is just for a rider who
+ * wants to check right now instead of waiting for the next automatic one.
  */
 export default function NoInternetScreen({ onConnected }) {
   const [retrying, setRetrying] = useState(false);
@@ -41,18 +37,6 @@ export default function NoInternetScreen({ onConnected }) {
       }),
     ]).start();
   }, [opacity, scale]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const interval = setInterval(async () => {
-      const online = await hasRealInternet();
-      if (!cancelled && online) onConnected?.();
-    }, SILENT_RECHECK_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [onConnected]);
 
   const handleRetry = async () => {
     setRetrying(true);
