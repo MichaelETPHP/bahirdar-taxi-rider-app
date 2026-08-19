@@ -154,6 +154,9 @@ export default function ProfileScreen({ navigation }) {
     : null;
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  // No need to reset this back to false — once logout() resolves,
+  // isAuthenticated flips false and the navigator unmounts this screen.
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // ── Delete modal
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -352,7 +355,14 @@ export default function ProfileScreen({ navigation }) {
   const handleLogout = () => {
     Alert.alert(t('profile.logout'), t('profile.logoutConfirm'), [
       { text: t('common.cancel'), style: 'cancel' },
-      { text: t('drawer.logout'), style: 'destructive', onPress: () => logout() },
+      {
+        text: t('drawer.logout'),
+        style: 'destructive',
+        onPress: () => {
+          setLoggingOut(true);
+          logout();
+        },
+      },
     ]);
   };
 
@@ -768,6 +778,18 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </KeyboardAwareModal>
+
+      {/* Brief, simple confirmation that logout is actually happening —
+          clearing secure storage isn't instant on every device, and a
+          silent tap-then-nothing reads as broken rather than working. */}
+      {loggingOut && (
+        <View style={styles.loggingOutOverlay} pointerEvents="auto">
+          <View style={styles.loggingOutCard}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.loggingOutText}>Signing out…</Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1208,5 +1230,35 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     fontFamily: fontFamilySemiBold,
     color: colors.white
+  },
+
+  // ── Logging out
+  loggingOutOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(13,27,30,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9998,
+    elevation: 9998,
+  },
+  loggingOutCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  loggingOutText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    fontFamily: fontFamilySemiBold,
+    color: colors.textPrimary,
   },
 });
