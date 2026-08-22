@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { Image } from 'expo-image';
 import AuthNavigator from './AuthNavigator';
 import AppNavigator from './AppNavigator';
 import useAuthStore from '../store/authStore';
@@ -18,7 +16,6 @@ import SessionExpiredBanner from '../components/common/SessionExpiredBanner';
 import UpdateBanner from '../components/common/UpdateBanner';
 import CallOverlay from '../components/call/CallOverlay';
 import { parseTripPollResponse } from '../utils/tripLifecycle';
-import { colors } from '../constants/colors';
 
 const Stack = createStackNavigator();
 export const navigationRef = createNavigationContainerRef();
@@ -152,33 +149,20 @@ export default function RootNavigator() {
     setSplashFinished(true);
   };
 
-  // ── Scenario 1: Still loading tokens or animation in progress ──
-  if (!bootstrapped || !splashFinished) {
+  // ── Scenario 1: tokens loading, splash animation running, or trip-restore
+  // check still in flight ── One continuous splash instead of two separate
+  // screens. The trip-restore check (see the effect above) already starts
+  // in parallel with the splash's own network/permission checks — this just
+  // keeps the same brand splash up until every check is truly done, instead
+  // of swapping to a second, differently-captioned screen for whatever's
+  // left. Nothing here waits any longer than before; it just stops
+  // rendering a visible hand-off between two screens for it.
+  if (!bootstrapped || !splashFinished || (isAuthenticated && !tripRestoreChecked)) {
     return (
       <>
         <SplashScreen onFinish={handleSplashFinish} />
         <SessionExpiredBanner />
       </>
-    );
-  }
-
-  if (isAuthenticated && !tripRestoreChecked) {
-    return (
-      <View style={styles.restoreRoot}>
-        <Image
-          source={require('../../assets/splash.png')}
-          style={styles.restoreBg}
-          contentFit="cover"
-          transition={300}
-          priority="high"
-          cachePolicy="disk"
-        />
-        <View style={styles.restoreOverlay}>
-          <ActivityIndicator size="large" color={colors.white} />
-          <Text style={styles.restoreText}>Restoring your trip…</Text>
-        </View>
-        <SessionExpiredBanner />
-      </View>
     );
   }
 
@@ -200,27 +184,3 @@ export default function RootNavigator() {
     </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  restoreRoot: {
-    flex: 1,
-  },
-  restoreBg: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-  },
-  restoreOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  restoreText: {
-    marginTop: 14,
-    fontSize: 16,
-    color: colors.white,
-    fontWeight: '600',
-  },
-});
