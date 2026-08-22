@@ -29,7 +29,7 @@ export default {
     name: 'Bahiran Ride',
     slug: 'BahirdarRide',
     scheme: 'bahirdarride',
-    version: '1.1.4',
+    version: '1.1.11',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
@@ -277,6 +277,16 @@ export default {
       url: 'https://u.expo.dev/2fe9c462-da5d-437a-91bb-b56a4c48e258',
       enabled: true,
       fallbackToCacheTimeout: 0,
+      // Every previous build shipped via manual `expo prebuild` + local
+      // Gradle (see DEPLOYMENT_WITHOUT_EAS_PAID.md) instead of `eas build`,
+      // which is the only thing that normally stamps a channel into the
+      // native app automatically. Without this, the installed app never
+      // tells the update server which branch to check — every `eas update`
+      // published so far went to a branch nobody was listening on. Setting
+      // it explicitly here makes it build-method-independent from now on.
+      requestHeaders: {
+        'expo-channel-name': 'production',
+      },
     },
   },
 };
