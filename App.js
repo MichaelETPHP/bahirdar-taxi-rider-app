@@ -2,7 +2,7 @@ import 'react-native-gesture-handler';
 import './src/i18n';
 
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform, Text, TextInput } from 'react-native';
+import { Platform, Text, TextInput } from 'react-native';
 import { env } from './src/config/env';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
@@ -31,7 +31,7 @@ import useUpdateStore from './src/store/updateStore';
 import NoInternetScreen from './src/screens/common/NoInternetScreen';
 import { hasRealInternet } from './src/utils/networkCheck';
 import NetInfo from '@react-native-community/netinfo';
-import { registerBackgroundCallTask, readAndClearTaskFiredDebugFlag } from './src/services/backgroundCallTask';
+import { registerBackgroundCallTask } from './src/services/backgroundCallTask';
 import { requestBatteryOptimizationExemptionOnce } from './src/utils/batteryOptimization';
 import { migrateSecureStorage } from './src/lib/migrateSecureStorage';
 import useAuthStore from './src/store/authStore';
@@ -240,21 +240,6 @@ async function ensureNotificationPermissions() {
   await ensureCallInviteChannel();
   await registerCallInviteCategory().catch(() => {});
   await registerBackgroundCallTask();
-
-  // TEMPORARY diagnostic — proves on-device whether the background call task
-  // actually ran since the last app open, independent of ringing/CallKeep/
-  // anything downstream. Remove once killed-app call delivery is confirmed
-  // reliable; not meant to ship long-term.
-  readAndClearTaskFiredDebugFlag()
-    .then((flag) => {
-      if (!flag) return;
-      const seconds = Math.round((Date.now() - flag.at) / 1000);
-      Alert.alert(
-        '[Debug] Background call task fired',
-        `${flag.reason}\n${seconds}s before this app open.`
-      );
-    })
-    .catch(() => {});
 
   let current = await Notifications.getPermissionsAsync();
   if (!isNotificationPermissionGranted(current)) {

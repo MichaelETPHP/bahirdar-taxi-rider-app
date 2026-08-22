@@ -11,21 +11,9 @@
  */
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ringFromBackgroundPush } from './callKeepService';
 
 export const BACKGROUND_CALL_TASK = 'BACKGROUND_CALL_TASK';
-
-// Diagnostic only — proves definitively whether this task fires at all when
-// the app is fully killed, independent of anything downstream (ringing,
-// CallKeep, etc). Read this back on the NEXT app open (see App.js) rather
-// than guessing from symptoms. Not user-facing, never surfaced in the UI.
-const TASK_FIRED_LOG_KEY = 'bahiran:debug:backgroundCallTaskFiredAt';
-async function logTaskFired(reason) {
-  try {
-    await AsyncStorage.setItem(TASK_FIRED_LOG_KEY, JSON.stringify({ at: Date.now(), reason }));
-  } catch (_) {}
-}
 
 // The exact shape Android hands back for a data-only FCM message has moved
 // around across expo-notifications versions — read defensively rather than
@@ -41,11 +29,6 @@ function extractCallData(taskData) {
 }
 
 TaskManager.defineTask(BACKGROUND_CALL_TASK, async ({ data, error }) => {
-  // Logged first, before anything else can possibly throw or early-return —
-  // this line alone is what next app-open checks to know the task genuinely
-  // ran, regardless of what happens after.
-  await logTaskFired(error ? `error: ${error.message}` : 'invoked');
-
   if (error) {
     console.warn('[BackgroundCall] task error:', error);
     return;
@@ -66,18 +49,6 @@ TaskManager.defineTask(BACKGROUND_CALL_TASK, async ({ data, error }) => {
     console.warn('[BackgroundCall] ringFromBackgroundPush failed:', err);
   }
 });
-
-/** Diagnostic only — see logTaskFired() above. Call once at app boot. Clears
- * itself either way (one-shot read, not a persistent status). */
-export async function readAndClearTaskFiredDebugFlag() {
-  try {
-    const raw = await AsyncStorage.getItem(TASK_FIRED_LOG_KEY);
-    await AsyncStorage.removeItem(TASK_FIRED_LOG_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (_) {
-    return null;
-  }
-}
 
 export async function registerBackgroundCallTask() {
   try {
