@@ -1,15 +1,13 @@
 /**
- * Native call UI (CallKit on iOS, ConnectionService on Android) — Phase 1
- * of the full "rings like a real phone call" build. This phase covers the
- * app backgrounded-but-alive case (the live socket event already reaches
- * it): instead of our custom JS ringing screen, the OS's own incoming-call
- * UI shows, works over the lock screen, and answers/declines through the
- * system.
+ * Native call UI (CallKit on iOS, ConnectionService on Android) so an
+ * incoming call rings and answers like a normal phone call, over the lock
+ * screen — covers both the app backgrounded-but-alive case (live socket
+ * event) and, on Android, fully killed (backgroundCallTask.js wakes the app
+ * via a data-only FCM push, see ringFromBackgroundPush below).
  *
- * NOT yet covered (needs its own phase): a fully killed app. That requires
- * PushKit (iOS) to wake the process before CallKit can display anything —
- * blocked on an Apple VoIP Services certificate — and an Android headless
- * JS task triggered from a data push for the same "killed app" case there.
+ * NOT yet covered: iOS fully killed. That needs PushKit to wake the process
+ * before CallKit can display anything, blocked on an Apple VoIP Services
+ * certificate — a separate phase.
  *
  * `selfManaged: true` on Android — this app draws no call UI of its own
  * via the system Phone app; it registers as a self-managed ConnectionService
@@ -18,6 +16,7 @@
  */
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import useCallStore from '../store/callStore';
+import { LockScreenCall } from '../../modules/lock-screen-call';
 import { acceptIncomingCall, declineIncomingCall, endCall as engineEndCall, toggleMute } from './callEngine';
 
 const APP_NAME = 'Bahiran Ride';
@@ -197,18 +196,33 @@ function subscribeToCallStore() {
     const prevStatus = lastHandledStatus;
     lastHandledStatus = state.status;
 
+    // Leaving 'incoming' for any reason (answered, declined, missed) — turn
+    // the lock-screen-bypass flags back off immediately. Must not stay on
+    // outside of an actively-ringing call, or normal trip/map screens would
+    // be visible over the lock screen too.
+    if (prevStatus === 'incoming' && state.status !== 'incoming' && Platform.OS === 'android') {
+      LockScreenCall.clear();
+    }
+
     if (state.status === 'incoming' && prevStatus === 'idle') {
       currentCallUUID = generateUuid();
       currentCallDirection = 'incoming';
       RNCallKeep.displayIncomingCall(currentCallUUID, state.peerName, state.peerName, 'generic', false);
       // displayIncomingCall() only tells Android's Telecom system about the
-      // call — it draws no UI itself since we're selfManaged. Without this,
-      // our own React UI updates correctly in the background but the
-      // Activity's window never actually shows over a locked screen, so
-      // nothing is visibly/audibly perceptible despite everything else
-      // working (confirmed via device log: displayIncomingCall fired, ICE
-      // candidates arrived, but nothing appeared on a locked screen).
-      if (Platform.OS === 'android') RNCallKeep.backToForeground();
+      // call — it draws no UI itself since we're selfManaged.
+      // RNCallKeep.backToForeground() alone was confirmed unreliable for
+      // this on real devices (Samsung/One UI): it only applies lock-screen
+      // flags in the branch where getCurrentReactActivity() is null, but a
+      // backgrounded-not-killed app almost always still has a live Activity,
+      // so it silently takes the other branch instead. LockScreenCall (a
+      // small local native module, ported over from the driver app where it
+      // was already built and confirmed working) calls
+      // Activity#setShowWhenLocked/#setTurnScreenOn directly instead — the
+      // current, non-deprecated APIs for this.
+      if (Platform.OS === 'android') {
+        RNCallKeep.backToForeground();
+        LockScreenCall.show();
+      }
       return;
     }
 

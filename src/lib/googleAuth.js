@@ -5,9 +5,16 @@ import {
   isSuccessResponse,
   statusCodes,
 } from '@react-native-google-signin/google-signin';
+import { env } from '../config/env';
 
-const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '';
-const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '';
+// Read through env.js (Constants.expoConfig.extra first, process.env as
+// fallback) — NOT process.env directly. A raw process.env.EXPO_PUBLIC_*
+// reference here depends on the release JS-bundling step having the var in
+// its own environment, which has twice silently produced a bundle with
+// this empty despite exporting it correctly in the build shell. extra is
+// baked in reliably at prebuild time instead. See env.js for the fuller why.
+const WEB_CLIENT_ID = env.googleWebClientId;
+const IOS_CLIENT_ID = env.googleIosClientId;
 
 export function isGoogleSignInConfigured() {
   return WEB_CLIENT_ID.length > 0;

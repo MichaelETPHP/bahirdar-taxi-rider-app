@@ -4,27 +4,105 @@
  * hook tied to a trip screen would tear down mid-call every time the trip
  * advances from DriverMatched → DriverArrived → TripActive).
  *
- * STUN-only for now (Google's public servers) — no TURN server is
- * provisioned yet, so calls can fail to connect on restrictive/symmetric
- * NATs until coturn is running.
+ * Google's public STUN servers plus a self-hosted coturn TURN relay for
+ * restrictive/symmetric NATs. TURN credentials are short-lived and fetched
+ * from the API (see fetchTurnCredentials below) rather than baked in, so a
+ * decompiled app never carries a permanent relay password.
  */
 import { mediaDevices, RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
 import { AppState } from 'react-native';
 import { Audio } from 'expo-av';
 import { getSocket } from './socketService';
+import { apiRequest } from '../lib/apiClient';
 import useCallStore from '../store/callStore';
 import useRideStore from '../store/rideStore';
 import { normalizeAvatarUrl } from '../utils/avatarUrl';
 
-const ICE_SERVERS = [
+const STUN_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
+
+// Cached TURN credentials (short-lived, minted per-user by the API). Kept in
+// module state and refreshed proactively so a call never has to wait on this
+// network round-trip on its critical path — see getIceServers().
+let turnServersCache = [];
+let turnExpiresAt = 0;
+let turnFetchPromise = null;
+
+async function fetchTurnCredentials() {
+  if (turnFetchPromise) return turnFetchPromise;
+  turnFetchPromise = (async () => {
+    try {
+      const res = await apiRequest('GET', '/calls/turn-credentials');
+      const iceServers = res?.data?.iceServers || [];
+      const ttl = res?.data?.ttl || 0;
+      turnServersCache = iceServers;
+      // Refresh at 80% of TTL so we're never caught serving an expired credential.
+      turnExpiresAt = ttl > 0 ? Date.now() + ttl * 1000 * 0.8 : 0;
+    } catch (err) {
+      console.warn('[Call] fetchTurnCredentials failed, falling back to STUN-only:', err?.message ?? err);
+    } finally {
+      turnFetchPromise = null;
+    }
+    return turnServersCache;
+  })();
+  return turnFetchPromise;
+}
+
+async function getIceServers() {
+  if (Date.now() < turnExpiresAt) return [...STUN_SERVERS, ...turnServersCache];
+  const fresh = await fetchTurnCredentials();
+  return [...STUN_SERVERS, ...fresh];
+}
 
 let pc = null;
 let localStream = null;
 let pendingOffer = null; // { trip_id, offer } while an incoming call is ringing, before accept
 let boundSocket = null;  // the exact socket instance listeners are currently bound to
+
+// Killed-app wake path: ringFromBackgroundPush() (callKeepService.js) flips
+// the call store to 'incoming' — and the ring UI renders — the instant the
+// FCM push arrives, WITHOUT waiting for the socket to (re)connect. The
+// actual SDP offer only arrives after that, over the socket's redelivered
+// call:invite (server holds it ~45s — see call.socket.ts). Tapping Accept
+// during that gap used to hit pendingOffer === null and silently no-op —
+// Decline "worked" only because it doesn't need the offer, which read as
+// "Accept is broken." These waiters let acceptIncomingCall() hold briefly
+// for the offer instead of bailing immediately.
+let pendingOfferWaiters = []; // { tripId, resolve }
+
+function resolvePendingOfferWaiters(tripId, offer) {
+  pendingOfferWaiters = pendingOfferWaiters.filter((w) => {
+    if (w.tripId !== tripId) return true;
+    w.resolve(offer);
+    return false;
+  });
+}
+
+// Generous on purpose — this covers socket reconnect + the server's
+// redelivered call:invite arriving, which on a slow/weak connection (common
+// on the networks this app actually runs on) can take meaningfully longer
+// than a good-connection baseline. Still well inside the caller's own 45s
+// watchdog, so it never outlives the call itself.
+function waitForPendingOffer(tripId, timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      pendingOfferWaiters = pendingOfferWaiters.filter((w) => w.resolve !== wrapped);
+      resolve(null);
+    }, timeoutMs);
+    const wrapped = (offer) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(offer);
+    };
+    pendingOfferWaiters.push({ tripId, resolve: wrapped });
+  });
+}
 
 // ICE candidates arrive over the socket the moment the caller creates them —
 // often seconds BEFORE this side has a peer connection (callee: pc isn't
@@ -56,6 +134,15 @@ let watchdogDeadline = null;
 
 function forceIdle(reason) {
   console.warn(`[Call] Watchdog: ${reason}, forcing back to idle`);
+  // Previously reset local state without telling the server — the backend's
+  // activeCallPeers entry for this trip had no expiry of its own, so it just
+  // lingered. Mirrors the same fix on the admin side: giving up locally
+  // should look like a real hangup/decline to the backend too.
+  const tripId = currentTripId();
+  if (tripId) {
+    const wasIncoming = useCallStore.getState().status === 'incoming';
+    getSocket()?.emit(wasIncoming ? 'call:decline' : 'call:end', { trip_id: tripId });
+  }
   cleanupResources();
   useCallStore.getState().reset();
 }
@@ -119,7 +206,8 @@ async function createPeerConnection(tripId) {
   // time off the critical path to "connecting", confirmed via on-device
   // logs showing gathering only starting post-setLocalDescription before
   // this change.
-  const connection = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 1 });
+  const iceServers = await getIceServers();
+  const connection = new RTCPeerConnection({ iceServers, iceCandidatePoolSize: 1 });
 
   connection.addEventListener('icecandidate', (event) => {
     console.log('[Call] local icecandidate', event.candidate ? event.candidate.candidate : '(end of candidates)');
@@ -207,7 +295,29 @@ export async function startOutgoingCall({ tripId, peerName, peerRole, peerAvatar
 }
 
 export async function acceptIncomingCall() {
-  if (!pendingOffer) return;
+  if (!pendingOffer) {
+    // Killed-app wake: the ring UI is already up (useCallStore is
+    // 'incoming') but the redelivered call:invite carrying the actual SDP
+    // offer hasn't landed yet. Hold briefly instead of no-op'ing the tap —
+    // this is what previously made Accept look silently broken while
+    // Decline (which doesn't need the offer) appeared to work fine.
+    const tripId = currentTripId();
+    if (!tripId) return;
+    useCallStore.getState().setAcceptPending(true);
+    const offer = await waitForPendingOffer(tripId);
+    useCallStore.getState().setAcceptPending(false);
+    if (!offer || useCallStore.getState().status !== 'incoming') {
+      // Either it truly never arrived, or the user backed out while waiting.
+      if (!offer) {
+        console.warn('[Call] acceptIncomingCall: offer never arrived for', tripId);
+        cleanupResources();
+        useCallStore.getState().setEnded('failed');
+      }
+      return;
+    }
+    pendingOffer = { trip_id: tripId, offer };
+  }
+
   const { trip_id, offer } = pendingOffer;
   const socket = getSocket();
   if (!socket) return;
@@ -299,6 +409,11 @@ export function attachCallSocketListeners() {
   boundSocket = socket;
   console.log('[Call] attachCallSocketListeners bound', { connected: socket.connected, socketId: socket.id });
 
+  // Warm the TURN credential cache now (fire-and-forget) so it's already
+  // there by the time the user actually taps "Call" — this is the earliest
+  // reliable signal that the app is in an authenticated, call-capable state.
+  fetchTurnCredentials();
+
   // Explicit .off() before every .on(), regardless of the boundSocket
   // fast-path above: Fast Refresh resets this module's `boundSocket` to
   // null on every hot-reload while the underlying socket connection often
@@ -319,6 +434,7 @@ export function attachCallSocketListeners() {
       return;
     }
     pendingOffer = { trip_id, offer };
+    resolvePendingOfferWaiters(trip_id, offer);
     // The driver's name/photo aren't sent over signaling — both are already
     // sitting in this app's matched-driver data from when the trip was
     // matched. Falls back to a generic label only if that data is somehow

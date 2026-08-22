@@ -78,6 +78,17 @@ export default {
         // this, that throws an uncaught SecurityException and kills the app.
         // Not added by @config-plugins/react-native-callkeep itself.
         'android.permission.READ_PHONE_NUMBERS',
+        // Real-device testing showed a killed app not waking for an
+        // incoming-call push at all — Android's per-app battery
+        // optimization (Doze/App Standby) throttling background execution
+        // for apps that haven't been recently used is a well-documented
+        // cause of exactly this on stock/Samsung Android, independent of
+        // anything in this app's own JS. This permission is what lets the
+        // app ASK the user to exempt it (see requestBatteryOptimizationExemption
+        // in src/utils/batteryOptimization.js) — merely declaring it changes
+        // nothing on its own, the user must still grant it via the system
+        // dialog this launches.
+        'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
       ],
       config: {
         googleMaps: {
@@ -242,6 +253,19 @@ export default {
       googleMapsKey:  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       osrmAddisUrl:   process.env.EXPO_PUBLIC_OSRM_ADDIS_URL,
       osrmBahirdarUrl: process.env.EXPO_PUBLIC_OSRM_BAHIRDAR_URL,
+      // Baked in at prebuild time (app.config.js is evaluated once, reliably,
+      // by `expo prebuild`) into the native Constants blob — unlike a raw
+      // process.env.EXPO_PUBLIC_* reference inside application JS, which
+      // depends on the separate `createBundleReleaseJsAndAssets` bundling
+      // step also having these vars in ITS environment. That step has
+      // silently produced a bundle missing these three specific values on
+      // two separate real builds (1.1.7 and 1.1.9) despite the vars being
+      // correctly exported in the build shell — this `extra` route is
+      // immune to whatever's flaky about that step, matching the same
+      // proven-reliable pattern already used for apiUrl/socketUrl/googleMapsKey above.
+      stripePublishableKey: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+      googleWebClientId:    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+      googleIosClientId:    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
       "eas": {
         "projectId": "2fe9c462-da5d-437a-91bb-b56a4c48e258"
       }

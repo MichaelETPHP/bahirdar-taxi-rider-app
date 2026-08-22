@@ -15,6 +15,7 @@ import { getActiveTrip } from '../services/tripService';
 
 import SplashScreen from '../screens/auth/SplashScreen';
 import SessionExpiredBanner from '../components/common/SessionExpiredBanner';
+import UpdateBanner from '../components/common/UpdateBanner';
 import CallOverlay from '../components/call/CallOverlay';
 import { parseTripPollResponse } from '../utils/tripLifecycle';
 import { colors } from '../constants/colors';
@@ -195,6 +196,7 @@ export default function RootNavigator() {
         )}
       </Stack.Navigator>
       {isAuthenticated && <CallOverlay />}
+      <UpdateBanner />
     </NavigationContainer>
   );
 }

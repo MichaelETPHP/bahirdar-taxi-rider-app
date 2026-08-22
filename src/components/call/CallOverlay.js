@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, ChevronDown } from 'lucide-react-native';
@@ -9,12 +9,14 @@ import { shadow, borderRadius } from '../../constants/layout';
 import useCallStore from '../../store/callStore';
 import { acceptIncomingCall, declineIncomingCall, endCall, toggleMute, toggleSpeaker } from '../../services/callEngine';
 
-/** Rings with the device's own default ringtone on Android — a system
- * content:// URI any app can play, no special permission needed. iOS has
- * no equivalent API for third-party apps without CallKit (the full native
- * incoming-call framework, deliberately deferred), so it falls back to the
- * bundled call-ring sound there — a dedicated ringtone, not the trip-offer
- * alert reused from elsewhere in the app. */
+/** Always rings with the app's own bundled call-ring.wav, on both platforms —
+ * a consistent, recognizable "Bahiran Ride is calling" sound regardless of
+ * whatever ringtone the rider happens to have set as their personal phone
+ * ringtone. Previously Android tried the device's own default ringtone
+ * (content://settings/system/ringtone) first — dropped in favor of one
+ * dedicated, always-the-same sound, including for the fully-killed-app
+ * wake path (ringFromBackgroundPush → same 'incoming' status → this same
+ * hook fires once CallOverlay mounts). */
 function useIncomingRingSound(status) {
   const soundRef = useRef(null);
 
@@ -26,27 +28,10 @@ function useIncomingRingSound(status) {
       try {
         await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
 
-        let sound;
-        if (Platform.OS === 'android') {
-          try {
-            ({ sound } = await Audio.Sound.createAsync(
-              { uri: 'content://settings/system/ringtone' },
-              { isLooping: true, volume: 1.0 }
-            ));
-          } catch (_) {
-            // Some devices/ROMs reject the content:// ringtone URI — fall
-            // back rather than ring silently.
-            ({ sound } = await Audio.Sound.createAsync(
-              require('../../../audio/call-ring.wav'),
-              { isLooping: true, volume: 1.0 }
-            ));
-          }
-        } else {
-          ({ sound } = await Audio.Sound.createAsync(
-            require('../../../audio/call-ring.wav'),
-            { isLooping: true, volume: 1.0 }
-          ));
-        }
+        const { sound } = await Audio.Sound.createAsync(
+          require('../../../audio/call-ring.wav'),
+          { isLooping: true, volume: 1.0 }
+        );
 
         if (cancelled) {
           sound.unloadAsync().catch(() => {});
@@ -206,7 +191,7 @@ function formatDuration(secs) {
 
 /** Outgoing / ringing / incoming / connecting / ended — everything before
  * (or after) an established call. */
-function RingingScreen({ status, peerName, peerAvatarUrl, endedReason, insets }) {
+function RingingScreen({ status, peerName, peerAvatarUrl, endedReason, insets, isAcceptPending }) {
   const fade = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.96)).current;
 
@@ -222,7 +207,7 @@ function RingingScreen({ status, peerName, peerAvatarUrl, endedReason, insets })
   const subtitle = isEnded
     ? (ENDED_LABELS[endedReason] || 'Call ended')
     : isIncoming
-      ? 'Incoming voice call'
+      ? (isAcceptPending ? 'Connecting…' : 'Incoming voice call')
       : status === 'connecting'
         ? 'Connecting…'
         : status === 'ringing'
@@ -253,16 +238,28 @@ function RingingScreen({ status, peerName, peerAvatarUrl, endedReason, insets })
           {isIncoming ? (
             <>
               <View style={styles.actionCol}>
-                <TouchableOpacity style={[styles.circleBtn, styles.declineBtn]} onPress={declineIncomingCall} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={[styles.circleBtn, styles.declineBtn, isAcceptPending && styles.circleBtnDisabled]}
+                  onPress={declineIncomingCall}
+                  disabled={isAcceptPending}
+                  activeOpacity={0.85}
+                >
                   <PhoneOff size={26} color={colors.white} />
                 </TouchableOpacity>
                 <Text style={styles.actionLabel}>Decline</Text>
               </View>
               <View style={styles.actionCol}>
-                <TouchableOpacity style={[styles.circleBtn, styles.acceptBtn]} onPress={acceptIncomingCall} activeOpacity={0.85}>
-                  <Phone size={24} color={colors.white} fill={colors.white} />
+                <TouchableOpacity
+                  style={[styles.circleBtn, styles.acceptBtn, isAcceptPending && styles.circleBtnDisabled]}
+                  onPress={acceptIncomingCall}
+                  disabled={isAcceptPending}
+                  activeOpacity={0.85}
+                >
+                  {isAcceptPending
+                    ? <ActivityIndicator color={colors.white} />
+                    : <Phone size={24} color={colors.white} fill={colors.white} />}
                 </TouchableOpacity>
-                <Text style={styles.actionLabel}>Accept</Text>
+                <Text style={styles.actionLabel}>{isAcceptPending ? 'Connecting…' : 'Accept'}</Text>
               </View>
             </>
           ) : (
@@ -390,6 +387,7 @@ export default function CallOverlay() {
   const isMuted = useCallStore((s) => s.isMuted);
   const isSpeakerOn = useCallStore((s) => s.isSpeakerOn);
   const isMinimized = useCallStore((s) => s.isMinimized);
+  const isAcceptPending = useCallStore((s) => s.isAcceptPending);
 
   useIncomingRingSound(status);
   useOutgoingRingbackSound(status);
@@ -418,6 +416,7 @@ export default function CallOverlay() {
       peerAvatarUrl={peerAvatarUrl}
       endedReason={endedReason}
       insets={insets}
+      isAcceptPending={isAcceptPending}
     />
   );
 }
@@ -481,6 +480,7 @@ const styles = StyleSheet.create({
   },
   acceptBtn: { backgroundColor: '#22C55E' },
   declineBtn: { backgroundColor: '#DC2626' },
+  circleBtnDisabled: { opacity: 0.55 },
 
   inCallControls: {
     alignItems: 'center', gap: 40,

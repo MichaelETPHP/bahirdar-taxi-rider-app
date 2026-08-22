@@ -48,7 +48,72 @@ let _onTokenRefreshed = async (newAccessToken, newRefreshToken) => {};
 let _onSessionExpired = async () => {};
 let _onMaintenance = async (data) => {};
 
-let _isRefreshing = false;
+// ── Shared-refresh + proactive-refresh guard ────────────────────────────────
+// Refresh tokens rotate (single-use) — the OLD interceptor let every 401 in a
+// burst of parallel requests (e.g. several screens re-fetching right as the
+// app resumes from background) race its OWN independent refresh call. The
+// first to land succeeded and rotated the token; every other concurrent
+// refresh then got rejected by the server as already-consumed, and each one
+// individually called _onSessionExpired() — logging out a session that had
+// JUST been validly refreshed a moment earlier, and firing the "session
+// expired" banner once per failed request instead of once. This is what
+// "logged out randomly" / "banner shows again and again" actually was.
+let _refreshPromise = null;
+let _sessionExpiredNotifying = false;
+
+function decodeJwtExpiryMs(token) {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('utf8');
+    const { exp } = JSON.parse(json);
+    return typeof exp === 'number' ? exp * 1000 : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function performRefresh(refreshToken) {
+  try {
+    const refreshRes = await fetch(`${API_BASE_URL}/auth/rider/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!refreshRes.ok) return null;
+    const refreshData = await refreshRes.json();
+    const newToken = refreshData?.data?.accessToken;
+    const newRefresh = refreshData?.data?.refreshToken;
+    if (!newToken) return null;
+    await _onTokenRefreshed(newToken, newRefresh || refreshToken);
+    return newToken;
+  } catch (err) {
+    console.error('[API] Refresh error:', err);
+    return null;
+  }
+}
+
+/** Every concurrent caller shares this ONE in-flight refresh instead of each racing their own. */
+function getSharedRefresh() {
+  if (!_refreshPromise) {
+    const refreshToken = _refreshTokenGetter();
+    if (!refreshToken) return Promise.resolve(null);
+    _refreshPromise = performRefresh(refreshToken).finally(() => {
+      _refreshPromise = null;
+    });
+  }
+  return _refreshPromise;
+}
+
+/** Fires _onSessionExpired() at most once per real failure, not once per concurrent request that hit it. */
+async function notifySessionExpiredOnce() {
+  if (_sessionExpiredNotifying) return;
+  _sessionExpiredNotifying = true;
+  try {
+    await _onSessionExpired();
+  } finally {
+    setTimeout(() => { _sessionExpiredNotifying = false; }, 3000);
+  }
+}
 
 /**
  * Initialize the API client with store callbacks.
@@ -72,7 +137,21 @@ export async function apiRequest(method, path, body, options = {}) {
     ...options.headers
   };
 
-  const activeToken = customToken || _tokenGetter();
+  let activeToken = customToken || _tokenGetter();
+
+  // Proactive refresh — if the token is about to expire (<60s left), refresh
+  // BEFORE sending rather than waiting to be told via a 401. Cuts down how
+  // often the reactive path below even gets exercised at all, since a token
+  // that's already about to expire is exactly the situation where a burst
+  // of parallel requests (app resume, screen mount) used to race each other.
+  if (!customToken && activeToken?.startsWith('eyJ') && !options._skipProactiveRefresh) {
+    const expMs = decodeJwtExpiryMs(activeToken);
+    if (expMs && expMs - Date.now() < 60_000 && _refreshTokenGetter()) {
+      const refreshed = await getSharedRefresh();
+      if (refreshed) activeToken = refreshed;
+    }
+  }
+
   if (activeToken) headers['Authorization'] = `Bearer ${activeToken}`;
 
   const _quiet = _isQuiet(path);
@@ -98,39 +177,21 @@ export async function apiRequest(method, path, body, options = {}) {
     clearTimeout(timeoutId);
 
     // ── Token Refresh Interceptor ──────────────────────────────────────
-    if (res.status === 401 && retryCount === 0 && !_isRefreshing) {
-      const refreshToken = _refreshTokenGetter();
-      
-      // Don't attempt refresh if no refresh token or if it's only a local placeholder token
-      if (refreshToken && activeToken?.startsWith('eyJ')) {
-        _isRefreshing = true;
-        try {
-          const refreshRes = await fetch(`${API_BASE_URL}/auth/rider/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
-          });
-
-          if (refreshRes.ok) {
-            const refreshData = await refreshRes.json();
-            const newToken = refreshData?.data?.accessToken;
-            const newRefresh = refreshData?.data?.refreshToken;
-
-            if (newToken) {
-              await _onTokenRefreshed(newToken, newRefresh || refreshToken);
-              _isRefreshing = false;
-              // Retry original request
-              return apiRequest(method, path, body, { ...options, retryCount: 1, customToken: newToken });
-            }
-          }
-        } catch (err) {
-          console.error('[API] Refresh error:', err);
-        } finally {
-          _isRefreshing = false;
-        }
+    // Don't attempt refresh if there's no refresh token, or the token that
+    // just got rejected wasn't even a real JWT (a local placeholder token).
+    if (res.status === 401 && retryCount === 0 && activeToken?.startsWith('eyJ') && _refreshTokenGetter()) {
+      const newToken = await getSharedRefresh();
+      if (newToken) {
+        return apiRequest(method, path, body, { ...options, retryCount: 1, customToken: newToken });
       }
-      // If we reach here, refresh failed or was skipped
-      await _onSessionExpired();
+      // Refresh genuinely failed — every concurrent request that hit this
+      // same failure shares the one notification instead of each firing it.
+      await notifySessionExpiredOnce();
+      throw { status: 401, message: 'Session expired', code: 'UNAUTHORIZED', response: { status: 401, data: null } };
+    }
+    if (res.status === 401 && retryCount === 0) {
+      // No refresh token / not a real JWT to begin with — genuinely nothing to recover.
+      await notifySessionExpiredOnce();
       throw { status: 401, message: 'Session expired', code: 'UNAUTHORIZED', response: { status: 401, data: null } };
     }
     // ──────────────────────────────────────────────────────────────────

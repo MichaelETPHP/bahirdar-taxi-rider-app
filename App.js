@@ -2,7 +2,8 @@ import 'react-native-gesture-handler';
 import './src/i18n';
 
 import React, { useEffect, useState } from 'react';
-import { Platform, Text, TextInput } from 'react-native';
+import { Alert, Platform, Text, TextInput } from 'react-native';
+import { env } from './src/config/env';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
@@ -30,7 +31,8 @@ import useUpdateStore from './src/store/updateStore';
 import NoInternetScreen from './src/screens/common/NoInternetScreen';
 import { hasRealInternet } from './src/utils/networkCheck';
 import NetInfo from '@react-native-community/netinfo';
-import { registerBackgroundCallTask } from './src/services/backgroundCallTask';
+import { registerBackgroundCallTask, readAndClearTaskFiredDebugFlag } from './src/services/backgroundCallTask';
+import { requestBatteryOptimizationExemptionOnce } from './src/utils/batteryOptimization';
 import { migrateSecureStorage } from './src/lib/migrateSecureStorage';
 import useAuthStore from './src/store/authStore';
 import useRideStore from './src/store/rideStore';
@@ -238,6 +240,21 @@ async function ensureNotificationPermissions() {
   await ensureCallInviteChannel();
   await registerCallInviteCategory().catch(() => {});
   await registerBackgroundCallTask();
+
+  // TEMPORARY diagnostic — proves on-device whether the background call task
+  // actually ran since the last app open, independent of ringing/CallKeep/
+  // anything downstream. Remove once killed-app call delivery is confirmed
+  // reliable; not meant to ship long-term.
+  readAndClearTaskFiredDebugFlag()
+    .then((flag) => {
+      if (!flag) return;
+      const seconds = Math.round((Date.now() - flag.at) / 1000);
+      Alert.alert(
+        '[Debug] Background call task fired',
+        `${flag.reason}\n${seconds}s before this app open.`
+      );
+    })
+    .catch(() => {});
 
   let current = await Notifications.getPermissionsAsync();
   if (!isNotificationPermissionGranted(current)) {
@@ -486,13 +503,35 @@ export default function App() {
         subscription = Notifications.addNotificationResponseReceivedListener((response) => {
           const data = response?.notification?.request?.content?.data;
 
-          // Incoming call — Accept/Decline only actually connect anything
-          // if this app's JS process (and its in-memory RTCPeerConnection)
-          // is still alive; a fully killed-and-relaunched process has
-          // nothing to resume, so this is best-effort, not a guarantee. A
-          // plain tap just opens the app — the call overlay renders itself
-          // from whatever the live socket state already is.
+          // Incoming call. Accept/Decline action buttons only actually
+          // connect anything if this app's JS process (and its in-memory
+          // RTCPeerConnection) is still alive — a fully killed-and-relaunched
+          // process has nothing to resume, so those remain best-effort.
+          //
+          // A plain tap (the notification body, not an action button) used
+          // to just open the app and hope — it set nothing, so the call
+          // screen only appeared once/if the socket reconnected AND the
+          // server's redelivered call:invite happened to arrive in time.
+          // On a cold start from fully killed, that could take long enough
+          // to miss the caller's 45s window entirely. Now the tap itself
+          // shows the ringing screen immediately from the notification's
+          // own data — the same way ringFromBackgroundPush() does for the
+          // native-ring path — and acceptIncomingCall() already knows how
+          // to wait for the real SDP offer if it hasn't arrived yet.
           if (data?.type === 'incoming_call') {
+            // Ensure the store has this call's tripId regardless of which of
+            // the three ways the rider interacted with the notification —
+            // declineIncomingCall()'s own currentTripId() fallback and
+            // acceptIncomingCall()'s wait-for-offer path both depend on it
+            // actually being there, not just assumed already set.
+            if (useCallStore.getState().status === 'idle' && data.trip_id) {
+              useCallStore.getState().setIncoming({
+                tripId: data.trip_id,
+                peerRole: data.caller_role || 'admin',
+                peerName: data.caller_name || 'Bahiran Ride',
+                peerAvatarUrl: null,
+              });
+            }
             if (response.actionIdentifier === CALL_ACCEPT_ACTION_ID) {
               acceptIncomingCall();
             } else if (response.actionIdentifier === CALL_DECLINE_ACTION_ID) {
@@ -508,6 +547,9 @@ export default function App() {
 
         if (allowed) {
           await registerPushTokenIfConfigured();
+          // Fire-and-forget — shows at most once per install, only asks,
+          // never blocks anything else in this init sequence.
+          requestBatteryOptimizationExemptionOnce().catch(() => {});
         }
       } catch (e) {
         if (__DEV__) {
@@ -578,7 +620,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StripeProvider
-        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY}
+        publishableKey={env.stripePublishableKey}
         merchantIdentifier="merchant.com.bahirdar.ride"
       >
         <QueryClientProvider client={queryClient}>

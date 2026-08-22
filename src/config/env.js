@@ -41,6 +41,24 @@ export const env = {
   osrmAddisUrl: productionUrl(rawOsrmAddisUrl, LIVE_OSRM_ADDIS_URL),
 
   osrmBahirdarUrl: productionUrl(rawOsrmBahirdarUrl, LIVE_OSRM_BAHIRDAR_URL),
+
+  // extra.* first, same reasoning as googleMapsKey above — a real release
+  // build (createBundleReleaseJsAndAssets) has twice produced a JS bundle
+  // missing these three specific values via the raw process.env.EXPO_PUBLIC_*
+  // path alone, despite the vars being correctly exported in the build
+  // shell. app.config.js's `extra` block is resolved once at prebuild time
+  // and baked into the native Constants blob, immune to that.
+  stripePublishableKey:
+    Constants.expoConfig?.extra?.stripePublishableKey ||
+    process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
+
+  googleWebClientId:
+    Constants.expoConfig?.extra?.googleWebClientId ||
+    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
+
+  googleIosClientId:
+    Constants.expoConfig?.extra?.googleIosClientId ||
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '',
 };
 
 if (__DEV__) {
