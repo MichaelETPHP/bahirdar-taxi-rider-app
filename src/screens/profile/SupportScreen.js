@@ -8,6 +8,7 @@ import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
 import ContactUsModal from '../../components/profile/ContactUsModal';
+import FAQModal from '../../components/profile/FAQModal';
 
 const SUPPORT_ITEMS = [
   { icon: 'faq', iconComp: HelpCircle, labelKey: 'support.faq' },
@@ -17,6 +18,7 @@ const SUPPORT_ITEMS = [
 
 export default function SupportScreen({ navigation }) {
   const [contactVisible, setContactVisible] = useState(false);
+  const [faqVisible, setFaqVisible] = useState(false);
 
   const handleBackPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -28,6 +30,10 @@ export default function SupportScreen({ navigation }) {
   const handleItemPress = (itemKey) => {
     if (itemKey === 'contact') {
       setContactVisible(true);
+      return;
+    }
+    if (itemKey === 'faq') {
+      setFaqVisible(true);
       return;
     }
     Alert.alert(t('common.comingSoon'));
@@ -58,6 +64,7 @@ export default function SupportScreen({ navigation }) {
       </View>
 
       <ContactUsModal visible={contactVisible} onClose={() => setContactVisible(false)} />
+      <FAQModal visible={faqVisible} onClose={() => setFaqVisible(false)} />
     </SafeAreaView>
   );
 }
