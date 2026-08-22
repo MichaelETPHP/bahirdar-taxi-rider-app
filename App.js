@@ -29,6 +29,8 @@ import UpdateRequiredScreen from './src/screens/common/UpdateRequiredScreen';
 import { checkAppVersion } from './src/api/appVersion';
 import useUpdateStore from './src/store/updateStore';
 import NoInternetScreen from './src/screens/common/NoInternetScreen';
+import UpdatingScreen from './src/screens/common/UpdatingScreen';
+import * as Updates from 'expo-updates';
 import { hasRealInternet } from './src/utils/networkCheck';
 import NetInfo from '@react-native-community/netinfo';
 import { registerBackgroundCallTask } from './src/services/backgroundCallTask';
@@ -317,6 +319,16 @@ export default function App() {
   // it fires on the underlying network state change itself, not on our own
   // next scheduled check.
   const [isOffline, setIsOffline] = useState(false);
+
+  // A downloaded OTA update is only forced through the moment it's actually
+  // safe: no ride and no call in progress. UpdateBanner.js shows a small,
+  // non-blocking notice for the unsafe window instead — this is the
+  // mandatory, full-screen side of the same feature.
+  const { isUpdatePending } = Updates.useUpdates();
+  const rideStatusForUpdate = useRideStore((s) => s.status);
+  const callStatusForUpdate = useCallStore((s) => s.status);
+  const forceUpdateNow =
+    isUpdatePending && rideStatusForUpdate === 'idle' && callStatusForUpdate === 'idle';
 
   useEffect(() => {
     let cancelled = false;
@@ -621,6 +633,7 @@ export default function App() {
           mounted and dimly visible underneath, so reconnecting drops them
           back exactly where they were instead of a jarring re-mount. */}
       {isOffline && <NoInternetScreen onConnected={() => setIsOffline(false)} />}
+      {forceUpdateNow && <UpdatingScreen />}
     </GestureHandlerRootView>
   );
 }
