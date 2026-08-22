@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import { X, HelpCircle, Phone, AlertTriangle, ChevronRight } from 'lucide-react-
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { borderRadius, shadow } from '../../constants/layout';
+import ContactUsModal from '../../components/profile/ContactUsModal';
 
 const SUPPORT_ITEMS = [
   { icon: 'faq', iconComp: HelpCircle, labelKey: 'support.faq' },
@@ -15,12 +16,22 @@ const SUPPORT_ITEMS = [
 ];
 
 export default function SupportScreen({ navigation }) {
+  const [contactVisible, setContactVisible] = useState(false);
+
   const handleBackPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.goBack();
   };
 
   const { t } = useTranslation();
+
+  const handleItemPress = (itemKey) => {
+    if (itemKey === 'contact') {
+      setContactVisible(true);
+      return;
+    }
+    Alert.alert(t('common.comingSoon'));
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -36,7 +47,7 @@ export default function SupportScreen({ navigation }) {
           <TouchableOpacity
             key={item.labelKey}
             style={styles.card}
-            onPress={() => Alert.alert(t('common.comingSoon'))}
+            onPress={() => handleItemPress(item.icon)}
             activeOpacity={0.7}
           >
             {React.createElement(item.iconComp, { size: 22, color: colors.primary, style: styles.icon })}
@@ -45,6 +56,8 @@ export default function SupportScreen({ navigation }) {
           </TouchableOpacity>
         ))}
       </View>
+
+      <ContactUsModal visible={contactVisible} onClose={() => setContactVisible(false)} />
     </SafeAreaView>
   );
 }
