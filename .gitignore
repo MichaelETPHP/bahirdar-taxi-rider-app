@@ -55,6 +55,7 @@ modules/*/android/.cxx/
 
 # Claude working notes (not for repo)
 Claude_understand/
+.claude/
 
 # Documentation and Guides (Private)
 Guide/

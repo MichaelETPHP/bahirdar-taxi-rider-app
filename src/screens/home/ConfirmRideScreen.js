@@ -10,7 +10,7 @@ import UberDestinationMarker from '../../components/map/UberDestinationMarker';
 import ProfessionalRoutePolyline from '../../components/map/ProfessionalRoutePolyline';
 import AppButton from '../../components/common/AppButton';
 import LocationPinButton from '../../components/ui/LocationPinButton';
-import { X, MapPin, Clock, Flag, ArrowLeft } from 'lucide-react-native';
+import { X, MapPin, Clock, Flag, ArrowLeft, Banknote, Wallet } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
@@ -53,6 +53,17 @@ export default function ConfirmRideScreen({ navigation, route }) {
   // destination pins behind it on devices it wasn't eyeballed against.
   const [footerHeight, setFooterHeight] = useState(0);
 
+  // Every rider picks Cash or Wallet themselves — no more guessing "diaspora"
+  // from signup method (Google/Apple sign-up does NOT reliably mean diaspora;
+  // a local rider can sign up that way too, and was getting wrongly forced
+  // into wallet-only with no way to pay cash standing right there with money
+  // in hand). walletInfo is fetched once on mount purely to have the real
+  // balance ready for the insufficient-balance check if Wallet is picked —
+  // null while loading, so Confirm stays disabled rather than letting them
+  // pick Wallet against a balance we haven't actually fetched yet.
+  const [walletInfo, setWalletInfo] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState(null);
+
   const { userCoords, pickup, destination } = useLocationStore();
   const { categories, selectedCategoryId, setTripData, setTripStatus, fareEstimates, routeInfo, hydrateActiveTrip } = useRideStore();
   const { token, user } = useAuthStore();
@@ -76,6 +87,25 @@ export default function ConfirmRideScreen({ navigation, route }) {
   const fare = serverEstimate?.fare != null ? parseFloat(serverEstimate.fare) : null;
 
   const isLiveFare = fare != null;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getWalletBalance(token);
+        const data = res?.data ?? res;
+        if (cancelled) return;
+        setWalletInfo({ balance: parseFloat(data?.balance ?? 0) });
+      } catch (_) {
+        // Non-fatal — if they pick Wallet anyway with an unknown (0)
+        // balance, the insufficient-balance check below still catches it
+        // before a trip is created; it just can't happen to under-count a
+        // real balance since 0 can only ever fail that check, never pass it.
+        if (!cancelled) setWalletInfo({ balance: 0 });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token]);
 
   const { coordinates: routeCoords } = useRoute(
     userCoords,
@@ -116,35 +146,29 @@ export default function ConfirmRideScreen({ navigation, route }) {
 
   const handleConfirm = async () => {
     if (!destination || !selectedCategory || !requestedVehicleCategory) return;
+    // Every rider must actively pick Cash or Wallet — no silent default.
+    // Cash needs nothing further; Wallet additionally needs the balance
+    // fetch to have resolved so the check below has a real number to use.
+    if (!paymentMethod || (paymentMethod === 'wallet' && !walletInfo)) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setLoading(true);
 
-    // Pre-flight wallet check. Diaspora riders (Google/Apple sign-up) always
-    // pay by wallet — the backend decides this authoritatively and enforces
-    // the same balance check again at trip creation, so this is purely a
-    // friendlier early warning before committing to the search screen.
-    let paymentMethod = 'cash';
-    if (fare != null) {
-      try {
-        const walletRes = await getWalletBalance(token);
-        const data = walletRes?.data ?? walletRes;
-        if (data?.is_wallet_payer === true) {
-          paymentMethod = 'wallet';
-          const balance = parseFloat(data?.balance ?? 0);
-          if (balance < fare) {
-            setLoading(false);
-            Alert.alert(
-              'Insufficient Wallet Balance',
-              `Your wallet balance (ETB ${balance.toFixed(2)}) is less than the estimated fare (ETB ${Math.round(fare)}). Please top up before booking.`,
-              [{ text: 'OK' }],
-            );
-            return;
-          }
-        }
-      } catch (_) {
-        // Non-fatal — let the backend enforce the balance check on trip creation
+    // This is a friendlier early warning before committing to the search
+    // screen — the backend re-fetches the real balance and enforces this
+    // same check again authoritatively, so a stale/cached number here can
+    // only produce an unnecessary alert, never a wrongly-approved trip.
+    if (paymentMethod === 'wallet' && fare != null) {
+      const balance = walletInfo.balance;
+      if (balance < fare) {
+        Alert.alert(
+          'Insufficient Wallet Balance',
+          `Your wallet balance (ETB ${balance.toFixed(2)}) is less than the estimated fare (ETB ${Math.round(fare)}). Please top up before booking.`,
+          [{ text: 'OK' }],
+        );
+        return;
       }
     }
+
+    setLoading(true);
 
     // ⚡ 1. Set OPTIMISTIC state immediately (no wait)
     const optimisticTripData = {
@@ -370,6 +394,35 @@ export default function ConfirmRideScreen({ navigation, route }) {
           </View>
         </View>
 
+        <View style={styles.paymentRow}>
+          <Pressable
+            style={[styles.paymentOption, paymentMethod === 'cash' && styles.paymentOptionSelected]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setPaymentMethod('cash');
+            }}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+          >
+            <Banknote size={18} color={paymentMethod === 'cash' ? colors.primary : colors.textSecondary} />
+            <Text style={[styles.paymentOptionText, paymentMethod === 'cash' && styles.paymentOptionTextSelected]}>
+              Cash
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.paymentOption, paymentMethod === 'wallet' && styles.paymentOptionSelected]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setPaymentMethod('wallet');
+            }}
+            android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
+          >
+            <Wallet size={18} color={paymentMethod === 'wallet' ? colors.primary : colors.textSecondary} />
+            <Text style={[styles.paymentOptionText, paymentMethod === 'wallet' && styles.paymentOptionTextSelected]}>
+              Wallet
+            </Text>
+          </Pressable>
+        </View>
+
         <View style={styles.actionRow}>
           <Pressable
             style={styles.actionBackBtn}
@@ -385,7 +438,10 @@ export default function ConfirmRideScreen({ navigation, route }) {
             <AppButton
               title={loading ? 'Confirming…' : isRetry ? 'Find Again' : `Confirm ${selectedCategory?.name || 'Ride'}`}
               onPress={handleConfirm}
-              disabled={loading || !destination || !selectedCategory || fare == null}
+              disabled={
+                loading || !destination || !selectedCategory || fare == null ||
+                !paymentMethod || (paymentMethod === 'wallet' && !walletInfo)
+              }
               loading={loading}
               shimmer={true}
               style={styles.confirmBtn}
@@ -446,6 +502,35 @@ const styles = StyleSheet.create({
   },
   tableDivider: { height: 1, backgroundColor: colors.border },
   priceValue: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.primary },
+  paymentRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  paymentOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 12,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.backgroundAlt,
+  },
+  paymentOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(47, 112, 199, 0.08)',
+  },
+  paymentOptionText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: colors.textSecondary,
+  },
+  paymentOptionTextSelected: {
+    color: colors.primary,
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',

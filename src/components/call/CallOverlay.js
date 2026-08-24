@@ -1,13 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import { Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, ChevronDown } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
 import useCallStore from '../../store/callStore';
 import { acceptIncomingCall, declineIncomingCall, endCall, toggleMute, toggleSpeaker } from '../../services/callEngine';
+
+/** Real-phone-call audio mode, shared by both the incoming ringtone and the
+ * outgoing ringback tone: plays through the loud speaker (not the earpiece,
+ * which would make a ring nearly inaudible unless the phone is held up),
+ * ignores the iOS silent switch, takes priority over/doesn't get ducked by
+ * whatever else might be holding audio focus, and keeps playing if the app
+ * is briefly backgrounded. Every field is passed explicitly — expo-av's
+ * setAudioModeAsync replaces the whole mode object rather than merging, so
+ * an omitted field silently falls back to its SDK default, not to whatever
+ * a previous call left behind. */
+async function setPhoneCallAudioMode() {
+  await Audio.setAudioModeAsync({
+    allowsRecordingIOS: false,
+    playsInSilentModeIOS: true,
+    staysActiveInBackground: true,
+    interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+    shouldDuckAndroid: false,
+    interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+    playThroughEarpieceAndroid: false,
+  });
+}
 
 /** Always rings with the app's own bundled call-ring.wav, on both platforms —
  * a consistent, recognizable "Bahiran Ride is calling" sound regardless of
@@ -16,7 +37,13 @@ import { acceptIncomingCall, declineIncomingCall, endCall, toggleMute, toggleSpe
  * (content://settings/system/ringtone) first — dropped in favor of one
  * dedicated, always-the-same sound, including for the fully-killed-app
  * wake path (ringFromBackgroundPush → same 'incoming' status → this same
- * hook fires once CallOverlay mounts). */
+ * hook fires once CallOverlay mounts).
+ *
+ * Retries loading once on failure — a cold app launch (killed-app wake path)
+ * can hit the sound file before the native audio module has fully finished
+ * initializing, a transient timing race rather than a real missing-asset
+ * failure. A short delay before the single retry clears that window without
+ * masking a genuine problem (the retry's own failure is still logged). */
 function useIncomingRingSound(status) {
   const soundRef = useRef(null);
 
@@ -24,13 +51,14 @@ function useIncomingRingSound(status) {
     if (status !== 'incoming') return;
     let cancelled = false;
 
-    (async () => {
+    const loadAndPlay = async (attempt = 1) => {
       try {
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+        await setPhoneCallAudioMode();
+        console.log('[Call] incoming ring: audio mode set, loading ringtone…', { attempt });
 
         const { sound } = await Audio.Sound.createAsync(
           require('../../../audio/call-ring.wav'),
-          { isLooping: true, volume: 1.0 }
+          { isLooping: true, volume: 1.0, shouldPlay: true }
         );
 
         if (cancelled) {
@@ -39,8 +67,16 @@ function useIncomingRingSound(status) {
         }
         soundRef.current = sound;
         await sound.playAsync();
-      } catch (_) {}
-    })();
+        console.log('[Call] incoming ring: playAsync resolved');
+      } catch (err) {
+        console.warn('[Call] incoming ring failed:', err?.message ?? err, { attempt });
+        if (!cancelled && attempt === 1) {
+          setTimeout(() => { if (!cancelled) loadAndPlay(2); }, 400);
+        }
+      }
+    };
+
+    loadAndPlay();
 
     return () => {
       cancelled = true;
@@ -68,7 +104,7 @@ function useOutgoingRingbackSound(status) {
 
     (async () => {
       try {
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+        await setPhoneCallAudioMode();
         console.log('[Call] ringback: audio mode set, loading dial tone…');
         const { sound } = await Audio.Sound.createAsync(
           require('../../../audio/dial-tone_us.mp3'),
@@ -192,17 +228,23 @@ function formatDuration(secs) {
 /** Outgoing / ringing / incoming / connecting / ended — everything before
  * (or after) an established call. */
 function RingingScreen({ status, peerName, peerAvatarUrl, endedReason, insets, isAcceptPending }) {
-  const fade = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.96)).current;
+  const isIncoming = status === 'incoming';
+  // A real incoming call must register as instant — a phone ringing is a
+  // rare, high-urgency alert, not a screen the rider is casually navigating
+  // to. The same soft 240ms fade used for outgoing/ended (where a beat of
+  // polish is fine) would read as lag here, so incoming skips straight to a
+  // near-instant 100ms settle instead.
+  const fade = useRef(new Animated.Value(isIncoming ? 1 : 0)).current;
+  const scale = useRef(new Animated.Value(isIncoming ? 0.98 : 0.96)).current;
 
   useEffect(() => {
+    const duration = isIncoming ? 100 : 240;
     Animated.parallel([
-      Animated.timing(fade,  { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(fade,  { toValue: 1, duration, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1, duration, easing: Easing.out(Easing.quad), useNativeDriver: true }),
     ]).start();
   }, []);
 
-  const isIncoming = status === 'incoming';
   const isEnded = status === 'ended';
   const subtitle = isEnded
     ? (ENDED_LABELS[endedReason] || 'Call ended')
