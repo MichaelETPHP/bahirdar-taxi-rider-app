@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, Pressable, ActivityIndicator, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import ProfessionalRideMap from '../../components/map/ProfessionalRideMap';
 import UberPickupMarker from '../../components/map/UberPickupMarker';
@@ -106,6 +107,25 @@ export default function ConfirmRideScreen({ navigation, route }) {
     })();
     return () => { cancelled = true; };
   }, [token]);
+
+  // Re-fetch on focus (not just mount) — this screen stays mounted
+  // underneath WalletTopUp in the stack, so returning from a top-up needs a
+  // fresh balance, not the stale pre-deposit one that was here on first load.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const res = await getWalletBalance(token);
+          const data = res?.data ?? res;
+          if (!cancelled) setWalletInfo({ balance: parseFloat(data?.balance ?? 0) });
+        } catch (_) {
+          /* keep whatever balance is already shown */
+        }
+      })();
+      return () => { cancelled = true; };
+    }, [token])
+  );
 
   const { coordinates: routeCoords } = useRoute(
     userCoords,
@@ -413,6 +433,13 @@ export default function ConfirmRideScreen({ navigation, route }) {
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setPaymentMethod('wallet');
+              // Balance already known and it's not enough — send them straight
+              // to top up instead of letting them hit the same wall at Confirm.
+              // Many local riders sign up without a card, so this needs to be
+              // an easy, immediate next step, not a dead-end alert.
+              if (walletInfo != null && fare != null && walletInfo.balance < fare) {
+                navigation.navigate('WalletTopUp');
+              }
             }}
             android_ripple={{ color: 'rgba(0,0,0,0.06)' }}
           >
@@ -422,6 +449,26 @@ export default function ConfirmRideScreen({ navigation, route }) {
             </Text>
           </Pressable>
         </View>
+
+        {paymentMethod === 'wallet' && (
+          <View style={styles.walletBalanceRow}>
+            {walletInfo == null ? (
+              <Text style={styles.walletBalanceText}>Checking balance…</Text>
+            ) : (
+              <Text
+                style={[
+                  styles.walletBalanceText,
+                  fare != null && walletInfo.balance < fare
+                    ? styles.walletBalanceInsufficient
+                    : styles.walletBalanceOk,
+                ]}
+              >
+                Wallet balance: ETB {walletInfo.balance.toFixed(2)}
+                {fare != null && walletInfo.balance < fare ? ' — not enough for this fare' : ''}
+              </Text>
+            )}
+          </View>
+        )}
 
         <View style={styles.actionRow}>
           <Pressable
@@ -530,6 +577,23 @@ const styles = StyleSheet.create({
   },
   paymentOptionTextSelected: {
     color: colors.primary,
+  },
+  walletBalanceRow: {
+    marginTop: -4,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  walletBalanceText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.textSecondary,
+  },
+  walletBalanceOk: {
+    color: colors.success,
+  },
+  walletBalanceInsufficient: {
+    color: colors.error,
+    fontWeight: fontWeight.semibold,
   },
   actionRow: {
     flexDirection: 'row',

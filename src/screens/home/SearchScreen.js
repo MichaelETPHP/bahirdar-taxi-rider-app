@@ -11,11 +11,8 @@ import {
   Animated,
   Easing,
   Platform,
-  Modal,
-  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
 import * as Haptics from 'expo-haptics';
 import {
   ArrowLeft,
@@ -24,16 +21,11 @@ import {
   Search,
   X,
   Navigation,
-  AlertCircle,
   ChevronRight,
-  Home,
-  Briefcase,
-  Plus,
-  Check,
 } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight, fontFamilySemiBold, fontFamilyMedium, fontFamilyRegular } from '../../constants/typography';
-import { borderRadius, shadow } from '../../constants/layout';
+import { borderRadius, shadow, inputHeight } from '../../constants/layout';
 import useLocationStore from '../../store/locationStore';
 import { searchPlaces, getPlaceDetails, detectCity } from '../../services/locationServiceV2';
 import { saveSearchPlace, getSearchHistory, removeFromHistory, clearSearchHistory } from '../../services/searchHistoryService';
@@ -49,38 +41,21 @@ const CITY_CENTERS = {
 };
 
 
-function haversineKm(lat1, lng1, lat2, lng2) {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 export default function SearchScreen({ navigation }) {
-  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [searchHistory, setSearchHistory] = useState([]);
   const [detectedCity, setDetectedCity] = useState(null); // 'bahirdar' | 'addis' | null
-  // Save-as sheet state
-  const [saveSheet, setSaveSheet] = useState(null); // { place } | null
-  const [savedFeedback, setSavedFeedback] = useState(null); // 'home' | 'work' | null
   const debounceRef = useRef(null);
   const searchSeqRef = useRef(0);
   const inputRef = useRef(null);
-  const shakeAnim = useRef(new Animated.Value(0)).current;
   const resultAnim = useRef(new Animated.Value(0)).current;
-  const saveSheetAnim = useRef(new Animated.Value(0)).current;
 
   const {
     setDestination, addToRecentDestination,
-    recentDestinations, userCoords, pickup,
-    savedPlaces, setSavedPlace,
+    recentDestinations, userCoords,
   } = useLocationStore();
 
   // Resolve which city center to bias searches towards
@@ -167,19 +142,6 @@ export default function SearchScreen({ navigation }) {
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, getBiasCoords]);
 
-  const shakeWarning = useCallback(() => {
-    shakeAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 8,  duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 6,  duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -6, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0,  duration: 60, useNativeDriver: true }),
-    ]).start();
-  }, [shakeAnim]);
-
-
-
   const resolveCoords = useCallback(async (item) => {
     if (item.lat != null && item.lng != null) return item;
     if (!item.placeId) return null;
@@ -188,8 +150,7 @@ export default function SearchScreen({ navigation }) {
   }, []);
 
   const handleSelect = useCallback(
-    async (item, opts = {}) => {
-      const { skipSavePrompt = false } = opts;
+    async (item) => {
       setSelecting(true);
 
       let finalItem = await resolveCoords(item);
@@ -218,11 +179,7 @@ export default function SearchScreen({ navigation }) {
         setSelecting(false);
       }
     },
-    [
-      resolveCoords, addToRecentDestination, setDestination,
-      navigation, getBiasCoords, shakeWarning,
-    ],
-
+    [resolveCoords, addToRecentDestination, setDestination, navigation],
   );
 
   // Splits `text` around every case-insensitive occurrence of `query` and
@@ -307,9 +264,6 @@ export default function SearchScreen({ navigation }) {
                     : detectedCity === 'addisababa' ? 'Addis Ababa'
                     : 'your city';
 
-  const hasSavedHome = !!savedPlaces?.home;
-  const hasSavedWork = !!savedPlaces?.work;
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
@@ -326,38 +280,25 @@ export default function SearchScreen({ navigation }) {
         </TouchableOpacity>
 
         <View style={styles.searchBox}>
-          {/* Pickup row (read-only) */}
-          <View style={styles.pickupRow}>
-            <View style={styles.dot} />
-            <Text style={styles.pickupText} numberOfLines={1}>
-              {pickup?.name || 'Current location'}
-            </Text>
-          </View>
-
-          <View style={styles.searchDivider} />
-
-          {/* Destination input */}
-          <View style={styles.destRow}>
-            <View style={[styles.dot, styles.dotDest]} />
-            <TextInput
-              ref={inputRef}
-              style={styles.searchInput}
-              placeholder="Where to?"
-              placeholderTextColor={colors.textSecondary}
-              value={query}
-              onChangeText={setQuery}
-              autoFocus
-              returnKeyType="search"
-              selectionColor={colors.primary}
-            />
-            {loading ? (
-              <ActivityIndicator size="small" color={colors.primary} style={styles.inputRight} />
-            ) : query.length > 0 ? (
-              <TouchableOpacity onPress={() => setQuery('')} style={styles.inputRight}>
-                <X size={16} color={colors.textSecondary} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          <View style={styles.destDot} />
+          <TextInput
+            ref={inputRef}
+            style={styles.searchInput}
+            placeholder="Where to?"
+            placeholderTextColor={colors.textSecondary}
+            value={query}
+            onChangeText={setQuery}
+            autoFocus
+            returnKeyType="search"
+            selectionColor={colors.primary}
+          />
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.primary} style={styles.inputRight} />
+          ) : query.length > 0 ? (
+            <TouchableOpacity onPress={() => setQuery('')} style={styles.inputRight} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <X size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -369,9 +310,6 @@ export default function SearchScreen({ navigation }) {
           <Text style={styles.selectingText}>Getting location…</Text>
         </View>
       )}
-
-      {/* Home / Work shortcuts removed as requested */}
-
 
       {/* City tag */}
       {!isSearching && detectedCity && (
@@ -486,52 +424,33 @@ const styles = StyleSheet.create({
   },
 
   // ── Search box ──────────────────────────────────────────────────────────
+  // One sharp, clean pill: destination dot + input only. Pickup used to
+  // show above this as a second read-only row — removed per request, since
+  // the app already knows the pickup point (GPS/Home) and never needed it
+  // repeated here; this screen's only job is picking a destination.
   searchBox: {
     flex: 1,
-    backgroundColor: colors.backgroundAlt,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    overflow: 'hidden',
-  },
-  pickupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    height: inputHeight,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 16,
     gap: 10,
+    ...shadow.sm,
   },
-  dot: {
+  destDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.mapCurrentLocation,
-    flexShrink: 0,
-  },
-  dotDest: {
     backgroundColor: colors.mapDestination,
-  },
-  pickupText: {
-    flex: 1,
-    fontSize: fontSize.sm,
-    fontFamily: fontFamilyMedium,
-    color: colors.textSecondary,
-    fontWeight: fontWeight.medium,
-  },
-  searchDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: 14,
-  },
-  destRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    gap: 10,
+    flexShrink: 0,
   },
   searchInput: {
     flex: 1,
-    height: 44,
+    height: '100%',
     fontSize: fontSize.sm,
     fontFamily: fontFamilyMedium,
     color: colors.textPrimary,
@@ -539,25 +458,6 @@ const styles = StyleSheet.create({
   },
   inputRight: {
     padding: 4,
-  },
-
-  // ── Warning banner ──────────────────────────────────────────────────────
-  warningBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#FEF3C7',
-    borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  warningText: {
-    flex: 1,
-    fontSize: fontSize.xs,
-    color: '#92400E',
-    fontWeight: fontWeight.medium,
-    lineHeight: 18,
   },
 
   // ── Selecting overlay ───────────────────────────────────────────────────
@@ -726,98 +626,5 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
     fontFamily: fontFamilyRegular,
     color: colors.textSecondary,
-  },
-
-  // Saved places row styles removed
-
-
-  // ── Save-as bottom sheet ────────────────────────────────────────────────
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 36,
-    paddingTop: 12,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16 },
-      android: { elevation: 16 },
-    }),
-  },
-  sheetHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-    marginBottom: 18,
-  },
-  sheetTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  sheetSub: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  sheetActions: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  sheetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    backgroundColor: colors.background,
-  },
-  sheetBtnIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: `${colors.primary}12`,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  sheetBtnIconDone: {
-    backgroundColor: colors.primary,
-  },
-  sheetBtnLabel: {
-    fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.textPrimary,
-  },
-  sheetBtnSub: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  sheetDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: 16,
-  },
-  sheetSkip: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  sheetSkipText: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    fontWeight: fontWeight.medium,
   },
 });
