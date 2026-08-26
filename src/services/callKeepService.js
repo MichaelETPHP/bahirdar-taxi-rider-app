@@ -18,6 +18,7 @@ import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import useCallStore from '../store/callStore';
 import { LockScreenCall } from '../../modules/lock-screen-call';
 import { acceptIncomingCall, declineIncomingCall, endCall as engineEndCall, toggleMute } from './callEngine';
+import { preloadRingSound } from './callAudioMode';
 
 const APP_NAME = 'Bahiran Ride';
 
@@ -264,6 +265,12 @@ function subscribeToCallStore() {
  */
 export async function ringFromBackgroundPush({ tripId, peerName, peerRole }) {
   if (Platform.OS !== 'android' || !RNCallKeep) return;
+  // Fire in parallel with CallKeep setup below rather than after — this is
+  // the exact killed-app path where every bit of head start on decoding
+  // call-ring.wav matters most, since there's no chance it was already
+  // warmed by an earlier attachCallSocketListeners() call in this fresh
+  // JS context.
+  preloadRingSound();
   try {
     if (!isSetUp) await setupCallKeep();
   } catch (err) {

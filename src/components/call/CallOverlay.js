@@ -1,34 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import { Audio } from 'expo-av';
 import { Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, ChevronDown } from 'lucide-react-native';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { shadow, borderRadius } from '../../constants/layout';
 import useCallStore from '../../store/callStore';
 import { acceptIncomingCall, declineIncomingCall, endCall, toggleMute, toggleSpeaker } from '../../services/callEngine';
-
-/** Real-phone-call audio mode, shared by both the incoming ringtone and the
- * outgoing ringback tone: plays through the loud speaker (not the earpiece,
- * which would make a ring nearly inaudible unless the phone is held up),
- * ignores the iOS silent switch, takes priority over/doesn't get ducked by
- * whatever else might be holding audio focus, and keeps playing if the app
- * is briefly backgrounded. Every field is passed explicitly — expo-av's
- * setAudioModeAsync replaces the whole mode object rather than merging, so
- * an omitted field silently falls back to its SDK default, not to whatever
- * a previous call left behind. */
-async function setPhoneCallAudioMode() {
-  await Audio.setAudioModeAsync({
-    allowsRecordingIOS: false,
-    playsInSilentModeIOS: true,
-    staysActiveInBackground: true,
-    interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-    shouldDuckAndroid: false,
-    interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-    playThroughEarpieceAndroid: false,
-  });
-}
+import { setPhoneCallAudioMode, preloadRingSound, getCachedRingSound } from '../../services/callAudioMode';
 
 /** Always rings with the app's own bundled call-ring.wav, on both platforms —
  * a consistent, recognizable "Bahiran Ride is calling" sound regardless of
@@ -54,17 +34,23 @@ function useIncomingRingSound(status) {
     const loadAndPlay = async (attempt = 1) => {
       try {
         await setPhoneCallAudioMode();
-        console.log('[Call] incoming ring: audio mode set, loading ringtone…', { attempt });
 
-        const { sound } = await Audio.Sound.createAsync(
-          require('../../../audio/call-ring.wav'),
-          { isLooping: true, volume: 1.0, shouldPlay: true }
-        );
-
-        if (cancelled) {
-          sound.unloadAsync().catch(() => {});
-          return;
+        // Reuse the pre-warmed sound when one's already loaded — that's the
+        // normal case, since attachCallSocketListeners() preloads it well
+        // before any real call ever arrives (see callEngine.js). Falls back
+        // to loading fresh only if that warm-up hasn't finished yet (e.g. a
+        // call arriving in the first instant after the app opens).
+        let sound = getCachedRingSound();
+        if (sound) {
+          console.log('[Call] incoming ring: reusing preloaded ringtone', { attempt });
+          await sound.setPositionAsync(0);
+        } else {
+          console.log('[Call] incoming ring: no preloaded ringtone yet, loading now…', { attempt });
+          sound = await preloadRingSound();
         }
+        if (!sound) throw new Error('ring sound unavailable');
+
+        if (cancelled) return;
         soundRef.current = sound;
         await sound.playAsync();
         console.log('[Call] incoming ring: playAsync resolved');
@@ -82,10 +68,11 @@ function useIncomingRingSound(status) {
       cancelled = true;
       const sound = soundRef.current;
       soundRef.current = null;
-      if (sound) {
-        sound.stopAsync().catch(() => {});
-        sound.unloadAsync().catch(() => {});
-      }
+      // Stop but do NOT unload — this is the shared preloaded instance,
+      // reused by the next incoming call. Unloading here would force every
+      // subsequent call back onto the slow first-load path this exists to
+      // avoid.
+      if (sound) sound.stopAsync().catch(() => {});
     };
   }, [status]);
 }

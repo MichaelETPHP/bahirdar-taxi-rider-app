@@ -17,6 +17,7 @@ import { apiRequest } from '../lib/apiClient';
 import useCallStore from '../store/callStore';
 import useRideStore from '../store/rideStore';
 import { normalizeAvatarUrl } from '../utils/avatarUrl';
+import { preloadRingSound } from './callAudioMode';
 
 const STUN_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -413,6 +414,13 @@ export function attachCallSocketListeners() {
   // there by the time the user actually taps "Call" — this is the earliest
   // reliable signal that the app is in an authenticated, call-capable state.
   fetchTurnCredentials();
+
+  // Same idea for the incoming ringtone: decoding call-ring.wav used to
+  // happen fresh on every single incoming call, right on the critical
+  // "call arrives → ring plays" path — the ring screen would show instantly
+  // but the sound lagged a beat behind it. Preloading it here means a real
+  // call just replays an already-decoded sound instead of loading it cold.
+  preloadRingSound();
 
   // Explicit .off() before every .on(), regardless of the boundSocket
   // fast-path above: Fast Refresh resets this module's `boundSocket` to
