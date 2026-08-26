@@ -162,6 +162,15 @@ export default function RootNavigator() {
       <>
         <SplashScreen onFinish={handleSplashFinish} />
         <SessionExpiredBanner />
+        {/* A ringing call outranks the splash sequence — this is the whole
+            fix for "tap the call notification and sit through Preparing
+            your ride... before the ring screen finally shows." The socket
+            connects and call:invite listeners attach the moment
+            isAuthenticated flips true (the effect above), well before
+            splashFinished/tripRestoreChecked resolve, so the call can
+            already be known here. CallOverlay renders nothing when idle,
+            so this is a no-op on every normal (non-call) launch. */}
+        {isAuthenticated && <CallOverlay />}
       </>
     );
   }
