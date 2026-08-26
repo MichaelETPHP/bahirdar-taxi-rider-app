@@ -23,17 +23,29 @@ const initialState = {
 };
 
 let endedTimer = null;
+// Wall-clock deadline for the same reason callEngine.js's call watchdog has
+// one: plain setTimeout can be throttled/paused while the app is
+// backgrounded (screen locked right after a call ends is the normal case,
+// not an edge case), so 1800ms of wall-clock time isn't guaranteed to
+// actually elapse in JS-timer time. Without this, `status` could stay stuck
+// at 'ended' indefinitely — and every future call:invite bounces off the
+// "status !== idle" guard in callEngine.js as a false "busy", even though
+// the rider is free. clearEndedIfExpired() is the backstop, called from
+// callEngine.js's existing AppState resume listener.
+let endedDeadline = null;
 
-const useCallStore = create((set) => ({
+const useCallStore = create((set, get) => ({
   ...initialState,
 
   setOutgoing: ({ tripId, peerName, peerRole, peerAvatarUrl }) => {
     clearTimeout(endedTimer);
+    endedDeadline = null;
     set({ ...initialState, status: 'outgoing', tripId, peerName, peerRole, peerAvatarUrl: peerAvatarUrl ?? null });
   },
 
   setIncoming: ({ tripId, peerName, peerRole, peerAvatarUrl }) => {
     clearTimeout(endedTimer);
+    endedDeadline = null;
     set({ ...initialState, status: 'incoming', tripId, peerName, peerRole, peerAvatarUrl: peerAvatarUrl ?? null });
   },
 
@@ -51,13 +63,29 @@ const useCallStore = create((set) => ({
   /** Remote/error-triggered end — lingers in 'ended' briefly so the UI can show why, then auto-clears. */
   setEnded: (reason) => {
     clearTimeout(endedTimer);
+    endedDeadline = Date.now() + 1800;
     set({ status: 'ended', endedReason: reason });
-    endedTimer = setTimeout(() => set({ ...initialState }), 1800);
+    endedTimer = setTimeout(() => {
+      endedDeadline = null;
+      set({ ...initialState });
+    }, 1800);
+  },
+
+  /** Backstop for setEnded()'s auto-clear possibly having been throttled
+   * while backgrounded — forces the reset if wall-clock time has actually
+   * passed the deadline even though the timer never fired. */
+  clearEndedIfExpired: () => {
+    if (get().status === 'ended' && endedDeadline && Date.now() > endedDeadline) {
+      clearTimeout(endedTimer);
+      endedDeadline = null;
+      set({ ...initialState });
+    }
   },
 
   /** Local/immediate clear — used when the user hangs up or declines themselves. */
   reset: () => {
     clearTimeout(endedTimer);
+    endedDeadline = null;
     set({ ...initialState });
   },
 }));

@@ -173,6 +173,11 @@ AppState.addEventListener('change', (next) => {
   if (watchdogDeadline && Date.now() > watchdogDeadline) {
     forceIdle('resumed from background past the call deadline');
   }
+  // Same class of bug, different timer: useCallStore's 'ended' auto-clear
+  // (see callStore.js's setEnded) can get stuck the same way — this is what
+  // caused a real call after a killed-app-wake call to bounce as "busy"
+  // even though the rider was free.
+  useCallStore.getState().clearEndedIfExpired();
 });
 
 function cleanupResources() {
@@ -256,7 +261,10 @@ async function createPeerConnection(tripId) {
 export async function startOutgoingCall({ tripId, peerName, peerRole, peerAvatarUrl }) {
   const socket = getSocket();
   if (!socket || !tripId) return;
-  if (useCallStore.getState().status !== 'idle') {
+  // Same 'ended' exception as the call:invite handler above — it means the
+  // last call is over, not that this one can't start.
+  const currentStatus = useCallStore.getState().status;
+  if (currentStatus !== 'idle' && currentStatus !== 'ended') {
     // Was completely silent before — tapping "Call" looked like it did
     // nothing, with zero trace of why. Now logs the stuck status so a
     // repeat of this is immediately diagnosable instead of looking like a
@@ -437,7 +445,18 @@ export function attachCallSocketListeners() {
 
   socket.on('call:invite', ({ trip_id, offer, from_role }) => {
     console.log('[Call] call:invite received', { trip_id, from_role, currentStatus: useCallStore.getState().status });
-    if (useCallStore.getState().status !== 'idle') {
+    // 'ended' means the PREVIOUS call is over, not that a new one can't come
+    // in — it only lingers briefly so the UI can show why the last call
+    // ended (declined/busy/failed) before auto-clearing. Treating it as
+    // "still busy" here was a real bug: setEnded()'s auto-clear is a plain
+    // setTimeout, which can be throttled indefinitely while the app is
+    // backgrounded (very likely right after a call — the phone gets locked),
+    // and even at full speed a rider calling back within that ~1.8s window
+    // would get bounced. A genuinely free rider then falsely reports "busy"
+    // to whoever calls next. setIncoming() below fully clears the ended
+    // state anyway, so there's nothing unsafe about overriding it here.
+    const status = useCallStore.getState().status;
+    if (status !== 'idle' && status !== 'ended') {
       socket.emit('call:busy', { trip_id });
       return;
     }
