@@ -10,6 +10,17 @@ import useCallStore from '../../store/callStore';
 import { acceptIncomingCall, declineIncomingCall, endCall, toggleMute, toggleSpeaker } from '../../services/callEngine';
 import { setPhoneCallAudioMode, preloadRingSound, getCachedRingSound } from '../../services/callAudioMode';
 
+// Confirmed on-device (Samsung, killed-app wake): the very first ring
+// attempt during a cold boot can fail with expo-av's
+// AudioFocusNotAcquiredException — Android denies audio focus because the
+// app's window isn't fully considered foregrounded yet while splash/init
+// work (geocoding, city detection, etc.) is still running on the same JS
+// thread. A single 400ms retry wasn't enough headroom; both attempts failed
+// in that log. Backing off further gives Android the time it actually needs
+// to finish bringing the app forward and grant focus normally, while still
+// finishing well inside the 45s call watchdog.
+const RING_RETRY_DELAYS_MS = [400, 800, 1500, 2500];
+
 /** Always rings with the app's own bundled call-ring.wav, on both platforms —
  * a consistent, recognizable "Bahiran Ride is calling" sound regardless of
  * whatever ringtone the rider happens to have set as their personal phone
@@ -17,13 +28,7 @@ import { setPhoneCallAudioMode, preloadRingSound, getCachedRingSound } from '../
  * (content://settings/system/ringtone) first — dropped in favor of one
  * dedicated, always-the-same sound, including for the fully-killed-app
  * wake path (ringFromBackgroundPush → same 'incoming' status → this same
- * hook fires once CallOverlay mounts).
- *
- * Retries loading once on failure — a cold app launch (killed-app wake path)
- * can hit the sound file before the native audio module has fully finished
- * initializing, a transient timing race rather than a real missing-asset
- * failure. A short delay before the single retry clears that window without
- * masking a genuine problem (the retry's own failure is still logged). */
+ * hook fires once CallOverlay mounts). */
 function useIncomingRingSound(status) {
   const soundRef = useRef(null);
 
@@ -56,8 +61,9 @@ function useIncomingRingSound(status) {
         console.log('[Call] incoming ring: playAsync resolved');
       } catch (err) {
         console.warn('[Call] incoming ring failed:', err?.message ?? err, { attempt });
-        if (!cancelled && attempt === 1) {
-          setTimeout(() => { if (!cancelled) loadAndPlay(2); }, 400);
+        const delay = RING_RETRY_DELAYS_MS[attempt - 1];
+        if (!cancelled && delay != null) {
+          setTimeout(() => { if (!cancelled) loadAndPlay(attempt + 1); }, delay);
         }
       }
     };

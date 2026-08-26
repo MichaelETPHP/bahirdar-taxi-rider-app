@@ -455,8 +455,24 @@ export function attachCallSocketListeners() {
     // would get bounced. A genuinely free rider then falsely reports "busy"
     // to whoever calls next. setIncoming() below fully clears the ended
     // state anyway, so there's nothing unsafe about overriding it here.
-    const status = useCallStore.getState().status;
-    if (status !== 'idle' && status !== 'ended') {
+    const state = useCallStore.getState();
+    // A redelivered invite for the SAME call we're already ringing/handling
+    // is not a second call — it's one call arriving twice. Confirmed
+    // on-device: the rider's socket can blip and reconnect a moment after
+    // the live invite already landed (normal during a cold app boot with a
+    // lot of other init work competing for the JS thread); the server's
+    // "redeliver if you missed it" fallback then fires even though nothing
+    // was actually missed, and this client used to reply call:busy to its
+    // own duplicate — reporting itself busy for a call it was visibly still
+    // ringing for. Just refresh the offer and keep going; only a genuinely
+    // different trip_id counts as "busy with something else."
+    if (state.tripId === trip_id && state.status !== 'idle' && state.status !== 'ended') {
+      console.log('[Call] duplicate call:invite for the same call — ignoring, not busy', { trip_id });
+      pendingOffer = { trip_id, offer };
+      resolvePendingOfferWaiters(trip_id, offer);
+      return;
+    }
+    if (state.status !== 'idle' && state.status !== 'ended') {
       socket.emit('call:busy', { trip_id });
       return;
     }
