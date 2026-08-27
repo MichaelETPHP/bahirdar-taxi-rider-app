@@ -65,6 +65,12 @@ function toTripHistoryItem(raw) {
     time,
     pickup: raw.pickup_address || raw.pickup?.address || 'Pickup location',
     destination: raw.dropoff_address || raw.dropoff?.address || 'Drop-off location',
+    // The backend's /trips list already computes these (ST_Y/ST_X on
+    // dropoff_location) — just weren't being read here. Needed so a past
+    // trip's destination can be set directly on the map (RecentTrips on
+    // Home), instead of only ever being a read-only text row.
+    dropoffLat: raw.dropoff_lat != null ? Number(raw.dropoff_lat) : null,
+    dropoffLng: raw.dropoff_lng != null ? Number(raw.dropoff_lng) : null,
     distanceKm: Number(raw.actual_distance_km ?? raw.estimated_distance_km ?? raw.distance_km ?? 0),
     durationMin: Number(raw.actual_duration_min ?? raw.estimated_duration_min ?? raw.duration_min ?? 0),
     fareETB: Number.isFinite(fare) ? fare.toFixed(0) : '0',

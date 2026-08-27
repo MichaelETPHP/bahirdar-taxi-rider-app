@@ -1105,7 +1105,18 @@ export default function HomeScreen({ navigation }) {
                     setDestination(entry.payload);
                     return;
                   }
-                  navigation.navigate('RideHistory');
+                  // Past trip — the backend has always returned the real
+                  // dropoff coordinates here, tripService.js just wasn't
+                  // reading them. Tapping now sets the destination directly,
+                  // same as a search result, instead of bouncing to the
+                  // full Ride History list. Only falls back to that list if
+                  // an old/incomplete row genuinely has no coordinates.
+                  const { destination: address, dropoffLat, dropoffLng } = entry.payload;
+                  if (dropoffLat != null && dropoffLng != null) {
+                    setDestination({ name: address, address, lat: dropoffLat, lng: dropoffLng });
+                  } else {
+                    navigation.navigate('RideHistory');
+                  }
                 }}
               />
             </View>
