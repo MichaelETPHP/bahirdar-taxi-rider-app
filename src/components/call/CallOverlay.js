@@ -9,6 +9,7 @@ import { shadow, borderRadius } from '../../constants/layout';
 import useCallStore from '../../store/callStore';
 import { acceptIncomingCall, declineIncomingCall, endCall, toggleMute, toggleSpeaker } from '../../services/callEngine';
 import { setPhoneCallAudioMode, preloadRingSound, getCachedRingSound } from '../../services/callAudioMode';
+import { clearCallNotification } from '../../services/callNotification';
 
 // Confirmed on-device (Samsung, killed-app wake): ring attempts during a
 // cold boot fail with expo-av's AudioFocusNotAcquiredException — Android
@@ -36,9 +37,23 @@ function useIncomingRingSound(status) {
     if (status !== 'incoming') return;
     let cancelled = false;
     let playing = false;
+    // Confirmed on-device: the ladder's own scheduled retry and the
+    // AppState-triggered retry could both be mid-flight at once, each
+    // calling playAsync() on the SAME shared cached Sound object — one
+    // "resolved" while the other, landing a beat later, got denied audio
+    // focus AGAIN as if starting fresh. `running` + `pendingTimer` make
+    // this single-flight: only one attempt is ever actually in progress,
+    // and AppState becoming active cancels a scheduled ladder wait instead
+    // of racing it.
+    let running = false;
+    let pendingTimer = null;
+    let attemptCount = 0;
 
-    const loadAndPlay = async (attempt = 1) => {
-      if (cancelled || playing) return;
+    const loadAndPlay = async () => {
+      if (cancelled || playing || running) return;
+      running = true;
+      attemptCount += 1;
+      const attempt = attemptCount;
       try {
         await setPhoneCallAudioMode();
 
@@ -62,23 +77,40 @@ function useIncomingRingSound(status) {
         await sound.playAsync();
         playing = true;
         console.log('[Call] incoming ring: playAsync resolved');
+        // The in-app ring now owns the sound — cancel the killed-wake
+        // notification (whose channel is looping the same ringtone via
+        // FLAG_INSISTENT, see callNotification.js) so the two don't ring
+        // over each other. No-op when no notification was ever posted
+        // (live foreground call) or on binaries without notifee.
+        clearCallNotification(useCallStore.getState().tripId);
       } catch (err) {
         console.warn('[Call] incoming ring failed:', err?.message ?? err, { attempt });
-        const delay = RING_RETRY_DELAYS_MS[attempt - 1];
-        if (!cancelled && delay != null) {
-          setTimeout(() => { if (!cancelled) loadAndPlay(attempt + 1); }, delay);
+        // Past the ladder, keep retrying on a fixed floor instead of giving
+        // up — AudioFocus denial during a cold boot has no fixed number of
+        // attempts, and giving up left the rider with total silence for the
+        // rest of a call that was still actively ringing. Naturally bounded
+        // by the call itself ending (this effect's cleanup clears the
+        // timer) or the caller's 45s watchdog.
+        const delay = RING_RETRY_DELAYS_MS[attempt - 1] ?? 4000;
+        if (!cancelled && !playing) {
+          pendingTimer = setTimeout(() => { pendingTimer = null; loadAndPlay(); }, delay);
         }
+      } finally {
+        running = false;
       }
     };
 
     // The moment the app becomes fully active is the moment audio focus
-    // becomes grantable — retry right then, whatever state the ladder is in.
-    // Idempotent via the `playing` guard, so a ladder retry landing at the
-    // same moment can't double-start the sound.
+    // becomes grantable — jump the queue right then instead of waiting out
+    // whatever's left of the ladder's backoff.
     const appStateSub = AppState.addEventListener('change', (next) => {
       if (next === 'active' && !cancelled && !playing) {
         console.log('[Call] incoming ring: app became active — retrying ring now');
-        loadAndPlay(RING_RETRY_DELAYS_MS.length + 1);
+        if (pendingTimer) {
+          clearTimeout(pendingTimer);
+          pendingTimer = null;
+        }
+        loadAndPlay();
       }
     });
 
@@ -87,6 +119,7 @@ function useIncomingRingSound(status) {
     return () => {
       cancelled = true;
       appStateSub.remove();
+      if (pendingTimer) clearTimeout(pendingTimer);
       const sound = soundRef.current;
       soundRef.current = null;
       // Stop but do NOT unload — this is the shared preloaded instance,

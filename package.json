@@ -80,6 +80,7 @@
   },
   "private": true,
   "devDependencies": {
+    "@types/react": "^19.2.18",
     "cross-env": "^10.1.0",
     "typescript": "~5.9.2"
   },

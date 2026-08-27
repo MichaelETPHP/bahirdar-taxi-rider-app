@@ -8,7 +8,11 @@
  */
 import { Platform } from 'react-native';
 
-const CALL_NOTIFICATION_CHANNEL_ID = 'call-invites-v1';
+// v3, not v1: Android notification channels are immutable once created on a
+// device — the old 'call-invites-v1' channel already exists out there with
+// the default notification sound, and its sound can never be changed
+// programmatically. A new id is the only way to ship the real ringtone.
+const CALL_NOTIFICATION_CHANNEL_ID = 'call-invites-v3';
 
 function callNotificationId(tripId) {
   return `call-${tripId}`;
@@ -42,16 +46,28 @@ export async function showFullScreenCallNotification({ tripId, peerName }) {
   if (!notifeeModule) return;
   try {
     const notifee = notifeeModule.default;
-    const { AndroidCategory, AndroidImportance, AndroidVisibility } = notifeeModule;
+    const { AndroidCategory, AndroidImportance, AndroidVisibility, AndroidFlags } = notifeeModule;
     const channelId = await notifee.createChannel({
       id: CALL_NOTIFICATION_CHANNEL_ID,
       name: 'Incoming Calls',
       importance: AndroidImportance.HIGH,
-      sound: 'default',
+      // The app's own call-ring sound, bundled into res/raw (see
+      // app.config.js's expo-notifications `sounds`). The OS plays this the
+      // instant the notification posts — no JS boot, no audio focus, works
+      // on the lock screen and for a fully killed app. This IS the ringtone
+      // for the killed/background case; the in-app expo-av ringtone only
+      // takes over once the app is foregrounded (CallOverlay cancels this
+      // notification at that point, which also stops this sound).
+      sound: 'call_ring',
       visibility: AndroidVisibility.PUBLIC,
       bypassDnd: true,
       vibration: true,
-      vibrationPattern: [0, 300, 200, 300],
+      // All values must be positive (no leading 0) — notifee's validator
+      // rejects `[0, 300, ...]` outright, which was silently killing
+      // createChannel() and with it the entire notification (confirmed
+      // on-device: "expected an array containing an even number of
+      // positive values").
+      vibrationPattern: [100, 300, 200, 300],
     });
 
     await notifee.displayNotification({
@@ -65,6 +81,21 @@ export async function showFullScreenCallNotification({ tripId, peerName }) {
         visibility: AndroidVisibility.PUBLIC,
         ongoing: true,
         autoCancel: false,
+        sound: 'call_ring',
+        // Ring like a phone, not a message: keep repeating the sound until
+        // the notification is answered/declined/cancelled instead of
+        // playing it once. FLAG_INSISTENT is the OS-level "this is a call,
+        // keep ringing" switch.
+        loopSound: true,
+        flags: [AndroidFlags.FLAG_INSISTENT],
+        // Handled natively by Android (AlarmManager), not by any JS still
+        // running — matters because this notification can outlive the
+        // background task that posted it. Without this, a rider whose app
+        // genuinely can't finish booting (no network, corrupted state, an
+        // unrelated crash) would have a phone ringing FLAG_INSISTENT
+        // forever with nothing to stop it. Slightly past the caller's own
+        // 45s watchdog so a real, in-progress call is never cut short here.
+        timeoutAfter: 50_000,
         fullScreenAction: { id: 'default' },
         pressAction: { id: 'default', launchActivity: 'default' },
       },

@@ -29,7 +29,11 @@ export default {
     name: 'Bahiran Ride',
     slug: 'BahirdarRide',
     scheme: 'bahirdarride',
-    version: '1.1.11',
+    // 1.1.12 = the notifee/full-screen-call native build. runtimeVersion
+    // policy is appVersion, so this bump also cleanly separates OTA
+    // channels: 1.1.11 binaries (no notifee) keep receiving 1.1.11-runtime
+    // updates; this binary and later get their own.
+    version: '1.1.12',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
@@ -185,6 +189,15 @@ export default {
           icon: './assets/icon.png',
           color: '#2F70C7',
           defaultChannel: 'trip-updates',
+          // Bundled into res/raw so the incoming-call notification CHANNEL
+          // itself can ring with the app's own call-ring sound (see
+          // callNotification.js) — the OS plays it the instant the
+          // notification posts, no JS/audio-focus involvement. Underscore
+          // name because res/raw resource names can't contain hyphens.
+          // NOTE: if `expo prebuild --clean` ever runs, this plugin entry
+          // regenerates android/app/src/main/res/raw/call_ring.wav — the
+          // file was also placed there by hand for non-prebuild builds.
+          sounds: ['./audio/call_ring.wav'],
         },
       ],
       [
