@@ -29,11 +29,14 @@ export default {
     name: 'Bahiran Ride',
     slug: 'BahirdarRide',
     scheme: 'bahirdarride',
-    // 1.1.12 = the notifee/full-screen-call native build. runtimeVersion
-    // policy is appVersion, so this bump also cleanly separates OTA
-    // channels: 1.1.11 binaries (no notifee) keep receiving 1.1.11-runtime
-    // updates; this binary and later get their own.
-    version: '1.1.12',
+    // Stays matched to the live Play Store binary (1.1.11) — the notifee/
+    // full-screen-call test builds were all side-loaded via adb directly,
+    // never distributed through an OTA channel, so there's no real 1.1.12
+    // binary this should ever target. Bumping this without a matching Play
+    // Store release would silently stop OTA updates from reaching every
+    // real production user. Only bump this together with an actual new
+    // native store release.
+    version: '1.1.11',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
