@@ -19,6 +19,7 @@ import useCallStore from '../store/callStore';
 import { LockScreenCall } from '../../modules/lock-screen-call';
 import { acceptIncomingCall, declineIncomingCall, endCall as engineEndCall, toggleMute } from './callEngine';
 import { preloadRingSound } from './callAudioMode';
+import { clearCallNotification } from './callNotification';
 
 const APP_NAME = 'Bahiran Ride';
 
@@ -171,7 +172,7 @@ function registerNativeEventHandlers() {
 function subscribeToCallStore() {
   if (!RNCallKeep) return;
   globalScope.__callKeepStoreUnsub?.();
-  globalScope.__callKeepStoreUnsub = useCallStore.subscribe((state) => {
+  globalScope.__callKeepStoreUnsub = useCallStore.subscribe((state, prevState) => {
     // Speaker/mute are independent of `status` — synced here, before the
     // status-transition guard below, since that guard early-returns
     // whenever status hasn't changed and would otherwise skip these on
@@ -203,6 +204,9 @@ function subscribeToCallStore() {
     // be visible over the lock screen too.
     if (prevStatus === 'incoming' && state.status !== 'incoming' && Platform.OS === 'android') {
       LockScreenCall.clear();
+      // prevState, not state — by the time this fires, a reset()/setEnded()
+      // has usually already cleared state.tripId to null.
+      clearCallNotification(prevState.tripId);
     }
 
     if (state.status === 'incoming' && prevStatus === 'idle') {

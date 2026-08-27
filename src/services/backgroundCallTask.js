@@ -8,10 +8,15 @@
  * else touches it — this file is imported at the very top of index.js for
  * exactly that reason. Registering the task itself (`registerBackgroundCallTask`)
  * is a separate, async step done later from App.js's normal init effect.
+ *
+ * Also posts a real full-screen call notification (see callNotification.js)
+ * — this is what actually launches the app straight to the ring screen,
+ * over the lock screen, WITHOUT the rider tapping anything first.
  */
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { ringFromBackgroundPush } from './callKeepService';
+import { showFullScreenCallNotification } from './callNotification';
 
 export const BACKGROUND_CALL_TASK = 'BACKGROUND_CALL_TASK';
 
@@ -39,15 +44,20 @@ TaskManager.defineTask(BACKGROUND_CALL_TASK, async ({ data, error }) => {
   const tripId = payload.trip_id;
   if (!tripId) return;
 
-  try {
-    await ringFromBackgroundPush({
-      tripId,
-      peerName: payload.caller_name || 'Bahiran Ride',
-      peerRole: payload.caller_role || 'admin',
-    });
-  } catch (err) {
-    console.warn('[BackgroundCall] ringFromBackgroundPush failed:', err);
-  }
+  const peerName = payload.caller_name || 'Bahiran Ride';
+  const peerRole = payload.caller_role || 'admin';
+
+  // Both run regardless of order: the full-screen notification is what gets
+  // the phone to actually pop up over the lock screen; ringFromBackgroundPush
+  // updates the live call store directly for the case where this task is
+  // running in the SAME JS context as an already-alive app (Android doesn't
+  // always spin up a fresh headless engine — see callKeepService.js).
+  await Promise.all([
+    showFullScreenCallNotification({ tripId, peerName }),
+    ringFromBackgroundPush({ tripId, peerName, peerRole }).catch((err) => {
+      console.warn('[BackgroundCall] ringFromBackgroundPush failed:', err);
+    }),
+  ]);
 });
 
 export async function registerBackgroundCallTask() {

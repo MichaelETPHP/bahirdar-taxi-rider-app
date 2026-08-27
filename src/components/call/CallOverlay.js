@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image, ActivityIndicator, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import { Phone, PhoneOff, Mic, MicOff, Volume2, Volume1, ChevronDown } from 'lucide-react-native';
@@ -10,16 +10,16 @@ import useCallStore from '../../store/callStore';
 import { acceptIncomingCall, declineIncomingCall, endCall, toggleMute, toggleSpeaker } from '../../services/callEngine';
 import { setPhoneCallAudioMode, preloadRingSound, getCachedRingSound } from '../../services/callAudioMode';
 
-// Confirmed on-device (Samsung, killed-app wake): the very first ring
-// attempt during a cold boot can fail with expo-av's
-// AudioFocusNotAcquiredException — Android denies audio focus because the
-// app's window isn't fully considered foregrounded yet while splash/init
-// work (geocoding, city detection, etc.) is still running on the same JS
-// thread. A single 400ms retry wasn't enough headroom; both attempts failed
-// in that log. Backing off further gives Android the time it actually needs
-// to finish bringing the app forward and grant focus normally, while still
-// finishing well inside the 45s call watchdog.
-const RING_RETRY_DELAYS_MS = [400, 800, 1500, 2500];
+// Confirmed on-device (Samsung, killed-app wake): ring attempts during a
+// cold boot fail with expo-av's AudioFocusNotAcquiredException — Android
+// denies audio focus to an app it doesn't yet consider truly foregrounded,
+// and a fixed retry ladder alone was watched exhausting every attempt
+// (5 of 5 denied over ~12s) while splash/init work was still bringing the
+// app forward. The ladder below handles the common fast cases; the
+// AppState listener inside the hook is the real guarantee — the moment
+// Android reports the app 'active' (the exact point focus becomes
+// grantable), it retries immediately regardless of where the ladder died.
+const RING_RETRY_DELAYS_MS = [400, 800, 1500, 2500, 4000];
 
 /** Always rings with the app's own bundled call-ring.wav, on both platforms —
  * a consistent, recognizable "Bahiran Ride is calling" sound regardless of
@@ -35,8 +35,10 @@ function useIncomingRingSound(status) {
   useEffect(() => {
     if (status !== 'incoming') return;
     let cancelled = false;
+    let playing = false;
 
     const loadAndPlay = async (attempt = 1) => {
+      if (cancelled || playing) return;
       try {
         await setPhoneCallAudioMode();
 
@@ -58,6 +60,7 @@ function useIncomingRingSound(status) {
         if (cancelled) return;
         soundRef.current = sound;
         await sound.playAsync();
+        playing = true;
         console.log('[Call] incoming ring: playAsync resolved');
       } catch (err) {
         console.warn('[Call] incoming ring failed:', err?.message ?? err, { attempt });
@@ -68,10 +71,22 @@ function useIncomingRingSound(status) {
       }
     };
 
+    // The moment the app becomes fully active is the moment audio focus
+    // becomes grantable — retry right then, whatever state the ladder is in.
+    // Idempotent via the `playing` guard, so a ladder retry landing at the
+    // same moment can't double-start the sound.
+    const appStateSub = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && !cancelled && !playing) {
+        console.log('[Call] incoming ring: app became active — retrying ring now');
+        loadAndPlay(RING_RETRY_DELAYS_MS.length + 1);
+      }
+    });
+
     loadAndPlay();
 
     return () => {
       cancelled = true;
+      appStateSub.remove();
       const sound = soundRef.current;
       soundRef.current = null;
       // Stop but do NOT unload — this is the shared preloaded instance,

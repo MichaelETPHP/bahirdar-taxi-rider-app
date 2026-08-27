@@ -89,6 +89,15 @@ export default {
         // nothing on its own, the user must still grant it via the system
         // dialog this launches.
         'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+        // Lets a call notification (posted via notifee from
+        // backgroundCallTask.js) launch straight to the ring screen over the
+        // lock screen without the rider tapping it first — the actual
+        // "WhatsApp-style" incoming call behavior. A "normal" permission
+        // (no runtime prompt needed), but Android 14+ still lets the user
+        // revoke it per-app in Settings, and some OEMs (Samsung included)
+        // may surface their own one-time confirmation the first time it's
+        // used — no code workaround exists for that, it's OS policy.
+        'android.permission.USE_FULL_SCREEN_INTENT',
       ],
       config: {
         googleMaps: {
