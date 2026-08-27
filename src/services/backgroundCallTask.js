@@ -15,6 +15,7 @@
  */
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
+import { AppState } from 'react-native';
 import { ringFromBackgroundPush } from './callKeepService';
 import { showFullScreenCallNotification } from './callNotification';
 
@@ -47,13 +48,20 @@ TaskManager.defineTask(BACKGROUND_CALL_TASK, async ({ data, error }) => {
   const peerName = payload.caller_name || 'Bahiran Ride';
   const peerRole = payload.caller_role || 'admin';
 
-  // Both run regardless of order: the full-screen notification is what gets
-  // the phone to actually pop up over the lock screen; ringFromBackgroundPush
-  // updates the live call store directly for the case where this task is
-  // running in the SAME JS context as an already-alive app (Android doesn't
-  // always spin up a fresh headless engine — see callKeepService.js).
+  // This task fires for EVERY data push, including when the app is already
+  // open in the foreground — in that case the live socket path (callEngine.js)
+  // is already showing the ring screen and playing the in-app ringtone
+  // through expo-av. Posting the notification too, on top of that, meant
+  // its own looping ring_ring sound and the app's own audio-focus request
+  // were fighting over Android's audio system at the same moment — screen
+  // correct, in-app ringtone silenced. The notification (and its
+  // lock-screen auto-launch) is only useful/needed for the genuinely
+  // backgrounded-or-killed case, so skip it whenever the app is already
+  // visible; ringFromBackgroundPush's own status check below still no-ops
+  // safely either way.
+  const isForeground = AppState.currentState === 'active';
   await Promise.all([
-    showFullScreenCallNotification({ tripId, peerName }),
+    isForeground ? Promise.resolve() : showFullScreenCallNotification({ tripId, peerName }),
     ringFromBackgroundPush({ tripId, peerName, peerRole }).catch((err) => {
       console.warn('[BackgroundCall] ringFromBackgroundPush failed:', err);
     }),
