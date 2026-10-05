@@ -452,7 +452,7 @@ export default function PhoneEntryScreen({ navigation }) {
       }
 
       // Step 2: Navigate to OTP screen for verification
-      navigation.navigate('OTP', { isNewUser: !exists });
+      navigation.navigate('OTP', { isNewUser: !exists, phone: intlPhone });
     } catch (err) {
       console.error('[PhoneEntry] Auth error:', err);
       const existingRole = extractExistingRole(err);

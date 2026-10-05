@@ -43,7 +43,15 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 export default function OTPScreen({ navigation, route }) {
   const isNewUser = route.params?.isNewUser ?? true;
   const { t } = useTranslation();
-  const phone = useAuthStore((s) => s.phone);
+  // Route param is the source of truth — it survives the JS process being
+  // reclaimed while the driver/rider briefly backgrounds the app to read the
+  // SMS code (common on Android under memory pressure), unlike the plain
+  // (non-persisted) Zustand field, which resets to '' on a fresh JS start
+  // and would otherwise fail verify with "Invalid Ethiopian phone" even
+  // though the code they typed was correct. Store value is only a fallback
+  // for any older navigation call that doesn't pass phone.
+  const storePhone = useAuthStore((s) => s.phone);
+  const phone = route.params?.phone || storePhone;
   const setTokens = useAuthStore((s) => s.setTokens);
   const setUser = useAuthStore((s) => s.setUser);
   const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
