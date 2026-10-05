@@ -50,6 +50,7 @@ export default function ProfileSetupScreen({ navigation }) {
       const savedName = res?.data?.full_name ?? res?.data?.user?.fullName ?? name.trim();
       updateUser({ fullName: savedName, isVerified: true });
       setGoogleProfile(null);
+      useAuthStore.setState({ needsProfileSetup: false });
       setAuthenticated(true, false);
     } catch (err) {
       Alert.alert('Error', err.message || 'Could not save your name. Try again.');

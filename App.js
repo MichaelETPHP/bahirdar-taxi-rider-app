@@ -324,11 +324,21 @@ export default function App() {
   // safe: no ride and no call in progress. UpdateBanner.js shows a small,
   // non-blocking notice for the unsafe window instead — this is the
   // mandatory, full-screen side of the same feature.
-  const { isUpdatePending } = Updates.useUpdates();
+  const { isUpdateAvailable, isUpdatePending } = Updates.useUpdates();
   const rideStatusForUpdate = useRideStore((s) => s.status);
   const callStatusForUpdate = useCallStore((s) => s.status);
   const forceUpdateNow =
     isUpdatePending && rideStatusForUpdate === 'idle' && callStatusForUpdate === 'idle';
+
+  // isUpdateAvailable only means the server has a newer update — it is never
+  // downloaded automatically. Fetching is safe at any time (it doesn't
+  // affect the running app); only applying it via reloadAsync() waits for
+  // the idle check above.
+  useEffect(() => {
+    if (isUpdateAvailable) {
+      Updates.fetchUpdateAsync().catch(() => {});
+    }
+  }, [isUpdateAvailable]);
 
   useEffect(() => {
     let cancelled = false;

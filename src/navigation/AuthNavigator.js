@@ -6,9 +6,12 @@ import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
 
 const Stack = createStackNavigator();
 
-export default function AuthNavigator() {
+export default function AuthNavigator({ initialRouteName = 'PhoneEntry' }) {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false, lazy: true, animationEnabled: false }}>
+    <Stack.Navigator
+      initialRouteName={initialRouteName}
+      screenOptions={{ headerShown: false, lazy: true, animationEnabled: false }}
+    >
       <Stack.Screen name="PhoneEntry" component={PhoneEntryScreen} />
       <Stack.Screen name="OTP" component={OTPScreen} />
       <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />

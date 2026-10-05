@@ -53,7 +53,7 @@ export default function MovableCircleButton() {
   const handleCallCenter = async () => {
     playBounce();
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Linking.openURL('tel:9040').catch(() => {
+    Linking.openURL('tel:8840').catch(() => {
       Alert.alert('Error', 'Unable to open phone dialer.');
     });
   };
@@ -108,7 +108,7 @@ export default function MovableCircleButton() {
         <Phone size={20} color={colors.white} strokeWidth={3} />
       </Animated.View>
       <View style={styles.pulseContainer}>
-        <Text style={styles.sosText}>9040</Text>
+        <Text style={styles.sosText}>8840</Text>
       </View>
     </Animated.View>
   );

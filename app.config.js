@@ -29,10 +29,16 @@ export default {
     name: 'Bahiran Ride',
     slug: 'BahirdarRide',
     scheme: 'bahirdarride',
-    // 1.1.12 = the notifee/full-screen-call native build, now actually
-    // being submitted to Play Store (versionCode 33) — this bump is safe
-    // now that a real matching native release exists to receive
-    // runtimeVersion-1.1.12 OTA updates going forward.
+    // 1.1.12 = the notifee/full-screen-call native build, already live on
+    // Play (versionCode 33). iOS was still stuck on the last App Store
+    // build (appVersion 1.1.0, build 7, submitted 2026-08-13) — this same
+    // 1.1.12 bump now also ships the first new iOS build since then,
+    // carrying the JWT-key-rotation fix, the call-drop-on-network-blip fix,
+    // and the App Store review fixes (China territory removed, photo
+    // library purpose string). Brings iOS onto the same
+    // runtimeVersion-1.1.12 OTA lane Android and iOS's own JS-only pushes
+    // were already publishing to — no live iOS build could receive them
+    // until this one ships.
     version: '1.1.12',
     orientation: 'portrait',
     icon: './assets/icon.png',
@@ -65,7 +71,7 @@ export default {
       },
 
       package: 'com.bahirdar.rider',
-      googleServicesFile: './google-services.json',
+      googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? './google-services.json',
       // INSA Finding 1 (CWE-538): forbid ADB/cloud backup extraction of the
       // app sandbox — this app stores auth tokens and PII.
       allowBackup: false,
@@ -243,11 +249,30 @@ export default {
       [
         '@config-plugins/react-native-webrtc',
         {
-          // In-app voice call to the driver (diaspora riders only) —
-          // audio-only today; camera string still required by the plugin
-          // schema even though video isn't used yet.
-          cameraPermission: 'Bahiran Ride does not use your camera for voice calls.',
+          // Only one NSCameraUsageDescription can exist in the whole app, so
+          // this has to cover every real camera use, not just voice calls —
+          // previously said "does not use your camera for voice calls",
+          // which was accurate for calls but silently overwrote whatever
+          // string expo-image-picker's autolinked plugin set for the actual
+          // profile-photo camera capture in ProfileScreen.js, leaving the
+          // app with a camera permission string that described a feature
+          // that doesn't use the camera and omitted the one that does.
+          cameraPermission: 'Bahiran Ride uses your camera so you can take a new photo to set as your profile picture, which drivers and support staff will see. Voice calls are audio-only and never use the camera.',
           microphonePermission: 'Allow Bahiran Ride to use your microphone for in-app voice calls with your driver.',
+        },
+      ],
+      [
+        'expo-image-picker',
+        {
+          // Explicit, specific purpose string with a concrete example use —
+          // Apple rejected this app (Guideline 5.1.1(ii)) because without
+          // this plugin entry, expo-image-picker's autolinked default
+          // ("Allow Bahiran Ride to access your photos") doesn't explain
+          // what the photos are used for. Camera permission for this same
+          // picker is covered by the react-native-webrtc plugin entry above
+          // (only one NSCameraUsageDescription can exist app-wide) — not
+          // repeated here to avoid the two plugins fighting over that key.
+          photosPermission: 'Bahiran Ride needs access to your photo library so you can choose a picture from your gallery to use as your profile photo, which drivers and support staff will see when you request a ride.',
         },
       ],
       // Real native call UI (CallKit on iOS, ConnectionService on Android) so

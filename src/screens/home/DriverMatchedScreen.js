@@ -419,10 +419,10 @@ export default function DriverMatchedScreen({ navigation }) {
   const handleSOS = () => {
     Alert.alert(
       'Support Center',
-      'Call 9040 for assistance?',
+      'Call 8840 for assistance?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Call 9040', style: 'default', onPress: () => Linking.openURL('tel:9040') },
+        { text: 'Call 8840', style: 'default', onPress: () => Linking.openURL('tel:8840') },
       ]
     );
   };
@@ -635,7 +635,7 @@ export default function DriverMatchedScreen({ navigation }) {
                 onPressOut={handleSOSPressOut}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel="Emergency SOS — call 9040"
+                accessibilityLabel="Emergency SOS — call 8840"
               >
                 <AlertTriangle size={20} color={colors.white} />
               </TouchableOpacity>
@@ -649,11 +649,11 @@ export default function DriverMatchedScreen({ navigation }) {
         <Text style={styles.supportLabel}>Need help?</Text>
         <TouchableOpacity 
           style={styles.supportBtn} 
-          onPress={() => Linking.openURL('tel:9040')}
+          onPress={() => Linking.openURL('tel:8840')}
           activeOpacity={0.7}
         >
           <Phone size={14} color={colors.white} />
-          <Text style={styles.supportText}>Call Support 9040</Text>
+          <Text style={styles.supportText}>Call Support 8840</Text>
         </TouchableOpacity>
       </View>
 

@@ -69,7 +69,7 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
   };
 
   const handleSOS = () => {
-    Linking.openURL('tel:9040');
+    Linking.openURL('tel:8840');
   };
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -229,7 +229,7 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
                 activeOpacity={0.85}
               >
                 <AlertTriangle size={15} color={colors.white} />
-                <Text style={styles.sosBtnText}>SOS 9040</Text>
+                <Text style={styles.sosBtnText}>SOS 8840</Text>
               </TouchableOpacity>
             </Animated.View>
           )}

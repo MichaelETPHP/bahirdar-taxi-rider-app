@@ -54,5 +54,5 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.textPrimary },
   content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  emptyText: { fontSize: fontSize.md, color: colors.textSecondary },
+  emptyText: { fontSize: fontSize.md, color: colors.error },
 });

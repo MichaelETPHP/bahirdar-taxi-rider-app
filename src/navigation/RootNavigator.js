@@ -22,6 +22,7 @@ export const navigationRef = createNavigationContainerRef();
 
 export default function RootNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const needsProfileSetup = useAuthStore((s) => s.needsProfileSetup);
   const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.token);
   const loadTokens = useAuthStore((s) => s.loadTokens);
@@ -185,7 +186,13 @@ export default function RootNavigator() {
             {() => <AppNavigator initialRouteName={initialRouteName} />}
           </Stack.Screen>
         ) : (
-          <Stack.Screen name="AuthNav" component={AuthNavigator} />
+          <Stack.Screen name="AuthNav">
+            {() => (
+              <AuthNavigator
+                initialRouteName={needsProfileSetup ? 'ProfileSetup' : 'PhoneEntry'}
+              />
+            )}
+          </Stack.Screen>
         )}
       </Stack.Navigator>
       {isAuthenticated && <CallOverlay />}

@@ -133,6 +133,22 @@ const CALL_WATCHDOG_MS = 45000;
 let watchdogTimer = null;
 let watchdogDeadline = null;
 
+// 'disconnected' fires on an ordinary network blip — WiFi/LTE handoff, a
+// cell tower change, a couple seconds of packet loss — and very often
+// recovers back to 'connected' on its own. Only 'failed' means WebRTC has
+// actually given up. Hanging up the instant 'disconnected' fired (previous
+// behaviour) turned every one of those blips into a dropped call — this is
+// the "sometimes stuck" pattern seen calling across different networks.
+const DISCONNECT_GRACE_MS = 8000;
+let disconnectTimer = null;
+
+function clearDisconnectTimer() {
+  if (disconnectTimer) {
+    clearTimeout(disconnectTimer);
+    disconnectTimer = null;
+  }
+}
+
 function forceIdle(reason) {
   console.warn(`[Call] Watchdog: ${reason}, forcing back to idle`);
   // Previously reset local state without telling the server — the backend's
@@ -182,6 +198,7 @@ AppState.addEventListener('change', (next) => {
 
 function cleanupResources() {
   clearWatchdog();
+  clearDisconnectTimer();
   if (pc) {
     try { pc.close(); } catch (_) {}
     pc = null;
@@ -235,8 +252,23 @@ async function createPeerConnection(tripId) {
     console.log('[Call] connectionState →', state);
     if (state === 'connected') {
       clearWatchdog();
+      clearDisconnectTimer();
       useCallStore.getState().setStatus('connected');
-    } else if (state === 'failed' || state === 'disconnected' || state === 'closed') {
+    } else if (state === 'disconnected') {
+      // Give it a window to recover on its own before treating it as a real
+      // failure — re-check the live connectionState (not this stale closure)
+      // when the timer fires, since it may have already bounced back.
+      clearDisconnectTimer();
+      disconnectTimer = setTimeout(() => {
+        disconnectTimer = null;
+        if (connection.connectionState !== 'disconnected') return;
+        if (useCallStore.getState().status !== 'idle') {
+          getSocket()?.emit('call:end', { trip_id: tripId });
+          cleanupResources();
+          useCallStore.getState().setEnded('failed');
+        }
+      }, DISCONNECT_GRACE_MS);
+    } else if (state === 'failed' || state === 'closed') {
       // 'closed' is usually just the echo of our own cleanupResources()
       // already having called pc.close() — the status-!=-idle guard below
       // makes that a harmless no-op. But some platforms can reach 'closed'
@@ -247,6 +279,7 @@ async function createPeerConnection(tripId) {
       // idle-check would silently reject every new call attempt with no
       // visible error — a plausible cause of "sometimes it just doesn't
       // work."
+      clearDisconnectTimer();
       if (useCallStore.getState().status !== 'idle') {
         getSocket()?.emit('call:end', { trip_id: tripId });
         cleanupResources();

@@ -189,11 +189,11 @@ export default function DriverArrivedScreen({ navigation }) {
         <Text style={styles.supportLabel}>Need help?</Text>
         <TouchableOpacity 
           style={styles.supportBtn} 
-          onPress={() => Linking.openURL('tel:9040')}
+          onPress={() => Linking.openURL('tel:8840')}
           activeOpacity={0.7}
         >
           <Phone size={14} color={colors.primary} />
-          <Text style={styles.supportText}>Call Support 9040</Text>
+          <Text style={styles.supportText}>Call Support 8840</Text>
         </TouchableOpacity>
       </View>
     </View>

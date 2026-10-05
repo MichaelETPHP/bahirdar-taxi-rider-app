@@ -15,6 +15,12 @@ const useAuthStore = create((set, get) => ({
   refreshToken: null,
   isAuthenticated: false,
   isNewUser: false,
+  // True when a restored session belongs to a phone-verified user who never
+  // finished ProfileSetup (closed the app right after OTP, before typing
+  // their name) — loadTokens() sets this instead of isAuthenticated so
+  // RootNavigator sends them back to ProfileSetup instead of straight into
+  // the app with an empty full_name forever.
+  needsProfileSetup: false,
   sessionExpiresAt: null,
   // True for one HomeScreen mount right after a successful login (phone OTP,
   // Google, or finishing ProfileSetup) — the welcome banner reads this once,
@@ -90,6 +96,10 @@ const useAuthStore = create((set, get) => ({
       const storedPhone = await getStoredPhone();
       if (storedPhone) set({ phone: storedPhone });
 
+      // Same rule OTPScreen applies right after verification: a user with no
+      // name yet isn't fully authenticated — they still owe us ProfileSetup.
+      const hasName = !!(status.user?.fullName || status.user?.full_name);
+
       if (status.needsRefresh && status.refreshToken) {
         try {
           const refreshed = await refreshTokens(status.refreshToken);
@@ -99,7 +109,8 @@ const useAuthStore = create((set, get) => ({
               token: refreshed.data.accessToken,
               refreshToken: refreshed.data.refreshToken,
               user: status.user,
-              isAuthenticated: true,
+              isAuthenticated: hasName,
+              needsProfileSetup: !hasName,
               sessionExpiresAt: new Date(status.expiresAt),
             });
           }
@@ -117,7 +128,8 @@ const useAuthStore = create((set, get) => ({
             token: status.accessToken,
             refreshToken: status.refreshToken,
             user: status.user,
-            isAuthenticated: true,
+            isAuthenticated: hasName,
+            needsProfileSetup: !hasName,
             sessionExpiresAt: new Date(status.expiresAt),
           });
         }
@@ -126,7 +138,8 @@ const useAuthStore = create((set, get) => ({
           token: status.accessToken,
           refreshToken: status.refreshToken,
           user: status.user,
-          isAuthenticated: true,
+          isAuthenticated: hasName,
+          needsProfileSetup: !hasName,
           sessionExpiresAt: new Date(status.expiresAt),
         });
       }
@@ -150,6 +163,7 @@ const useAuthStore = create((set, get) => ({
       refreshToken: null,
       isAuthenticated: false,
       isNewUser: false,
+      needsProfileSetup: false,
       sessionExpiresAt: null,
       justAuthenticated: false,
       googleProfile: null,
@@ -171,6 +185,7 @@ const useAuthStore = create((set, get) => ({
       refreshToken: null,
       isAuthenticated: false,
       isNewUser: false,
+      needsProfileSetup: false,
       sessionExpiresAt: null,
       justAuthenticated: false,
       googleProfile: null,
