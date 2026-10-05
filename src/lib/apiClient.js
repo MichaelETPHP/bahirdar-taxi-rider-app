@@ -129,7 +129,11 @@ export const initApiClient = ({ getToken, getRefreshToken, onRefreshed, onExpire
 
 export async function apiRequest(method, path, body, options = {}) {
   const url = `${API_BASE_URL}${path}`;
-  const { retryCount = 0, timeout = 10000, customToken = null } = options;
+  // 20s, not 10s — OTP send waits on an external SMS provider (its own
+  // timeout is 10s on our server), so a 10s client timeout could abort
+  // while the server was still about to succeed, showing "Request timeout"
+  // for a login that actually went through a moment later.
+  const { retryCount = 0, timeout = 20000, customToken = null } = options;
 
   const headers = {
     'Content-Type': 'application/json',
