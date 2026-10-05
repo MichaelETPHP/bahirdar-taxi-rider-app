@@ -26,8 +26,7 @@ function ensureSocket() {
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    timeout: 8000,
-    connect_timeout: 5000,
+    timeout: 20000,
   });
 
   if (__DEV__) {
@@ -44,6 +43,31 @@ function ensureSocket() {
       console.warn(`[SOCKET] ✗ Connect error  ${err?.message ?? err}`);
     });
   }
+
+  _socket.on('connect_error', async (err) => {
+    const message = String(err?.message || '');
+    if (!/invalid token|expired|jwt/i.test(message)) return;
+
+    try {
+      const authStore = (await import('../store/authStore')).default;
+      const { refreshToken, setTokens } = authStore.getState();
+      if (!refreshToken) return;
+
+      const { refreshTokens } = await import('./authService');
+      const res = await refreshTokens(refreshToken);
+      const nextAccess = res?.data?.accessToken;
+      const nextRefresh = res?.data?.refreshToken || refreshToken;
+      if (!nextAccess) return;
+
+      await setTokens(nextAccess, nextRefresh);
+      _socket.auth = { token: nextAccess };
+      if (!_socket.connected) _socket.connect();
+    } catch (refreshErr) {
+      if (__DEV__) {
+        console.warn('[SOCKET] Token refresh after connect_error failed', refreshErr?.message ?? refreshErr);
+      }
+    }
+  });
 
   // Single-session enforcement: server fires this when the same account logs in elsewhere.
   _socket.on('auth:force_logout', async () => {
