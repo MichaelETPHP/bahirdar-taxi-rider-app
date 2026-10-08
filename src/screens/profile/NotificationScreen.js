@@ -267,20 +267,24 @@ export default function NotificationScreen({ navigation }) {
             <NotificationRowSkeleton key={i} />
           ))}
         </View>
-      ) : notifications.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <Bell size={40} color={colors.border} />
-          <Text style={styles.emptyTitle}>No notifications yet</Text>
-          <Text style={styles.emptyBody}>Trip updates and announcements will show up here.</Text>
-        </View>
       ) : (
         <FlatList
           data={notifications}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            notifications.length === 0 && styles.listContentEmpty,
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Bell size={40} color={colors.border} />
+              <Text style={styles.emptyTitle}>No notifications yet</Text>
+              <Text style={styles.emptyBody}>Trip updates and announcements will show up here.</Text>
+            </View>
           }
           renderItem={({ item, index }) => (
             <NotificationRow
@@ -335,6 +339,12 @@ const styles = StyleSheet.create({
     padding: spacing[4],
     paddingBottom: spacing[6],
     gap: spacing[3],
+  },
+  // FlatList's contentContainerStyle only sizes to its content by default —
+  // without flexGrow:1 here, emptyWrap's own flex:1 has no parent height to
+  // expand into, so it wouldn't actually center on screen.
+  listContentEmpty: {
+    flexGrow: 1,
   },
   card: {
     flexDirection: 'row',
