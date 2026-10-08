@@ -145,6 +145,16 @@ export default {
             image: './assets/splash.png',
             backgroundColor: '#2F70C7',
           },
+          // iOS-only: without this, the storyboard generator ignores
+          // resizeMode entirely and pins the image to a fixed imageWidth x
+          // imageWidth box (100x100pt default) centered on screen — that's
+          // the tiny cropped splash bug. This flag switches the generated
+          // constraints to pin all 4 edges to the container instead, which
+          // is what actually makes 'cover' fill the full screen on any
+          // device size.
+          ios: {
+            enableFullScreenImage_legacy: true,
+          },
           // Android-only override: the native cold-start icon (Android 12+
           // system SplashScreen, plus the pre-12 fallback) is a separate,
           // OS-controlled small centered icon — always small, never
