@@ -115,11 +115,15 @@ export default {
         },
       },
     },
-    androidStatusBar: {
-      barStyle: 'light-content',
-      backgroundColor: '#2F70C7',
-      translucent: false,
-    },
+    // No androidStatusBar key here — SDK 54 ignores it at this top level,
+    // same as minSdk/targetSdk/cleartextTraffic above. The runtime status
+    // bar is actually controlled by <StatusBar> in App.js (expo-status-bar).
+    // Keeping this key around just triggered an "androidStatusBar.backgroundColor
+    // conflicts with splash.backgroundColor" warning on every Metro start,
+    // since it compared #2F70C7 against the splash plugin's intentional
+    // #FFFFFF for the brief Android icon-splash phase (see app.config.js's
+    // expo-splash-screen plugin config) — a real color difference by design,
+    // not a bug, but a dead no-op key wasn't worth keeping just to trip it.
     web: {
       favicon: './assets/icon.png',
     },
