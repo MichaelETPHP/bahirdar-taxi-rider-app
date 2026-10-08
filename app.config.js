@@ -1,11 +1,11 @@
 // app.config.js — replaces app.json so we can inject env vars at build time.
 // All EXPO_PUBLIC_* vars are available here via process.env.
 
-// Only the "development" eas.json profile points at a plain-http local IP
-// (for `expo start` iteration); preview/production always use the https
-// taxiapi.zmichael.click API. ATS is only disabled for that http case — an
-// App Store production build never carries NSAllowsArbitraryLoads, since
-// Apple review can flag it as an unjustified security downgrade.
+// development/preview currently point at the new VPS's dev deployment via a
+// plain-http sslip.io URL (no permanent dev domain yet); production uses the
+// real https bahirantransport.tech API. ATS is only disabled for the http
+// case — an App Store production build never carries NSAllowsArbitraryLoads,
+// since Apple review can flag it as an unjustified security downgrade.
 const usesInsecureApi = (process.env.EXPO_PUBLIC_API_URL || '').startsWith('http://');
 
 // Expo's Android Google Maps config plugin silently OMITS the

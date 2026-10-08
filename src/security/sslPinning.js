@@ -9,7 +9,13 @@ import {
   isSslPinningAvailable,
 } from 'react-native-ssl-public-key-pinning';
 
-const PINNED_DOMAIN = 'taxiapi.zmichael.click';
+const PINNED_DOMAIN = 'bahirantransport.tech';
+// Verified against the new VPS's live chain: Let's Encrypt YR2 -> ISRG Root
+// YR -> ISRG Root X1. The intermediate-specific hash below (labeled YR1) no
+// longer matches directly, but "ISRG Root YR" does — kept as-is since
+// pinning passes on ANY matching key in the chain, and the two root-level
+// hashes (shared across all Let's Encrypt chains) are unaffected by which
+// short-lived intermediate actually signed this particular cert.
 
 const PUBLIC_KEY_HASHES = [
   'LoMHBotttiDko50Gi13uXW71eIy7LAttI+rYT8wXF4w=', // Let's Encrypt YR1 (intermediate)

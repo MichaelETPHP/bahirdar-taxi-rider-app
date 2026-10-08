@@ -1,9 +1,9 @@
 import Constants from 'expo-constants';
 
-const LIVE_API_URL = 'https://taxiapi.zmichael.click/api/v1';
-const LIVE_SOCKET_URL = 'https://taxiapi.zmichael.click';
-const LIVE_OSRM_ADDIS_URL = 'https://taxiapi.zmichael.click/osrm/addis';
-const LIVE_OSRM_BAHIRDAR_URL = 'https://taxiapi.zmichael.click/osrm/bahirdar';
+const LIVE_API_URL = 'https://bahirantransport.tech/api/v1';
+const LIVE_SOCKET_URL = 'https://bahirantransport.tech';
+const LIVE_OSRM_ADDIS_URL = 'https://bahirantransport.tech/osrm/addis';
+const LIVE_OSRM_BAHIRDAR_URL = 'https://bahirantransport.tech/osrm/bahirdar';
 
 const isLocalUrl = (value = '') =>
   /^(https?:\/\/)?(localhost|127\.0\.0\.1|10\.0\.2\.2|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(value);

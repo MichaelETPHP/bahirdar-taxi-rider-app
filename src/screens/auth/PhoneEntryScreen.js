@@ -18,6 +18,7 @@ import {
   InputAccessoryView,
 } from 'react-native';
 import { secureStorage } from '../../lib/secureStorage';
+import { env } from '../../config/env';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -270,7 +271,10 @@ export default function PhoneEntryScreen({ navigation }) {
   }, [isValid]);
 
   const handleTestAPI = async () => {
-    const testUrl = 'https://taxiapi.zmichael.click/health';
+    // Was hardcoded to the old production domain — tested the wrong server
+    // regardless of which environment this build was actually configured
+    // for. env.socketUrl is the bare API origin (no /api/v1 suffix).
+    const testUrl = `${env.socketUrl}/health`;
     console.log('[TEST API] Starting request to:', testUrl);
     setTestApiLoading(true);
     setTestApiSuccess(null);
