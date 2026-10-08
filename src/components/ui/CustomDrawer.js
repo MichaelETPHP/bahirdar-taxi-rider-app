@@ -26,7 +26,6 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { FacebookIcon, InstagramIcon, TiktokIcon, TelegramIcon } from '../common/BrandIcons';
-import Avatar from '../common/Avatar';
 import { buildAvatarUrl } from '../../utils/avatarUrl';
 
 // Google Play Store icon built from SVG paths (4-colour arrow)
@@ -301,21 +300,24 @@ function CustomDrawer({ visible, onClose, navigation }) {
             <Rect x="0" y="0" width={DRAWER_WIDTH} height={220} fill="url(#profileGradient)" />
           </Svg>
 
-          {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              style={styles.avatar}
-              contentFit="cover"
-              transition={200}
-              cachePolicy="disk"
-            />
-          ) : (
-            <Avatar
-              initials={user?.fullName?.slice(0, 2)?.toUpperCase() || '?'}
-              size={64}
-              style={styles.avatarDefault}
-            />
-          )}
+          <TouchableOpacity
+            onPress={() => handleNavigate('Profile')}
+            activeOpacity={0.8}
+          >
+            {avatarUrl ? (
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatar}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="disk"
+              />
+            ) : (
+              <View style={[styles.avatar, styles.avatarDefault]}>
+                <User size={30} color={colors.primary} />
+              </View>
+            )}
+          </TouchableOpacity>
 
           <View style={styles.userInfo}>
             <View style={styles.userNameRow}>
@@ -483,9 +485,8 @@ const styles = StyleSheet.create({
   },
   avatarDefault: {
     backgroundColor: colors.white,
-    borderWidth: 2,
-    borderColor: colors.white,
-    zIndex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   userInfo: {
     flex: 1,
