@@ -30,16 +30,16 @@ export default {
     slug: 'BahirdarRide',
     scheme: 'bahirdarride',
     // 1.1.12 = the notifee/full-screen-call native build, already live on
-    // Play (versionCode 33). iOS was still stuck on the last App Store
-    // build (appVersion 1.1.0, build 7, submitted 2026-08-13) — this same
-    // 1.1.12 bump now also ships the first new iOS build since then,
-    // carrying the JWT-key-rotation fix, the call-drop-on-network-blip fix,
-    // and the App Store review fixes (China territory removed, photo
-    // library purpose string). Brings iOS onto the same
-    // runtimeVersion-1.1.12 OTA lane Android and iOS's own JS-only pushes
-    // were already publishing to — no live iOS build could receive them
-    // until this one ships.
-    version: '1.1.12',
+    // Play (versionCode 33). App Store Connect rejected a 1.1.12 iOS
+    // upload (errors 90062/90186 — CFBundleShortVersionString must be
+    // higher than a previously-approved version, and that train is
+    // closed to new submissions) even though no 1.1.12 build had
+    // actually gone live on iOS — Apple's own records say otherwise, and
+    // that's authoritative regardless. 1.1.13 carries the new-VPS
+    // migration work (domain/backend wiring, Sign In with Apple
+    // entitlement fix, splash screen fix) as the first real iOS build
+    // since 1.1.0.
+    version: '1.1.13',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'light',
