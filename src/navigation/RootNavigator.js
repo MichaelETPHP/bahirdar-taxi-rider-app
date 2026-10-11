@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
+import * as Updates from 'expo-updates';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import AuthNavigator from './AuthNavigator';
 import AppNavigator from './AppNavigator';
 import useAuthStore from '../store/authStore';
 import useRideStore from '../store/rideStore';
+import useCallStore from '../store/callStore';
 import useSessionManager from '../hooks/useSessionManager';
 import { connectSocket, disconnectSocket, joinRiderRoom, listenForWalletUpdate, removeWalletUpdateListener } from '../services/socketService';
 import { attachCallSocketListeners } from '../services/callEngine';
@@ -15,6 +19,7 @@ import SplashScreen from '../screens/auth/SplashScreen';
 import SessionExpiredBanner from '../components/common/SessionExpiredBanner';
 import UpdateBanner from '../components/common/UpdateBanner';
 import OtaAppliedToast from '../components/common/OtaAppliedToast';
+import UpdatingScreen from '../screens/common/UpdatingScreen';
 import CallOverlay from '../components/call/CallOverlay';
 import { parseTripPollResponse } from '../utils/tripLifecycle';
 
@@ -30,13 +35,27 @@ export default function RootNavigator() {
   const updateUser = useAuthStore((s) => s.updateUser);
   const hydrateActiveTrip = useRideStore((s) => s.hydrateActiveTrip);
   const resetTrip = useRideStore((s) => s.resetTrip);
+  const tripStatus = useRideStore((s) => s.tripStatus);
+  const callStatus = useCallStore((s) => s.status);
+  const { isUpdatePending } = Updates.useUpdates();
   const [bootstrapped, setBootstrapped] = useState(false);
   const [splashFinished, setSplashFinished] = useState(false);
   const [tripRestoreChecked, setTripRestoreChecked] = useState(false);
+  const [tripRestoreSafe, setTripRestoreSafe] = useState(false);
+  const [isForeground, setIsForeground] = useState(AppState.currentState === 'active');
+  const [isNetworkReady, setIsNetworkReady] = useState(true);
   const [initialRouteName, setInitialRouteName] = useState('Home');
 
   // Initialize 30-day session management with app lifecycle tracking
   useSessionManager();
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => setIsForeground(state === 'active'));
+    const unsubscribeNetwork = NetInfo.addEventListener((state) => {
+      setIsNetworkReady(state.isConnected !== false && state.isInternetReachable !== false);
+    });
+    return () => { subscription.remove(); unsubscribeNetwork(); };
+  }, []);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -81,14 +100,21 @@ export default function RootNavigator() {
     let cancelled = false;
 
     const restoreActiveTrip = async () => {
+      if (!isForeground || !isNetworkReady) {
+        setTripRestoreSafe(false);
+        setTripRestoreChecked(true);
+        return;
+      }
       if (!isAuthenticated || !token || !user?.id) {
         resetTrip();
         setInitialRouteName('Home');
+        setTripRestoreSafe(true);
         setTripRestoreChecked(true);
         return;
       }
 
       setTripRestoreChecked(false);
+      setTripRestoreSafe(false);
 
       try {
         const res = await getActiveTrip(token);
@@ -99,6 +125,7 @@ export default function RootNavigator() {
         if (!hasActiveTrip) {
           resetTrip();
           setInitialRouteName('Home');
+          setTripRestoreSafe(true);
           setTripRestoreChecked(true);
           return;
         }
@@ -107,11 +134,13 @@ export default function RootNavigator() {
         if (!trip || !status) {
           resetTrip();
           setInitialRouteName('Home');
+          setTripRestoreSafe(false);
           setTripRestoreChecked(true);
           return;
         }
 
         hydrateActiveTrip({ trip, status, driver });
+        setTripRestoreSafe(true);
         setInitialRouteName(
           ['searching', 'matched', 'driver_arrived', 'in_progress'].includes(status)
             ? 'ActiveTripResume'
@@ -133,7 +162,11 @@ export default function RootNavigator() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, token, user?.id, hydrateActiveTrip, resetTrip]);
+  }, [isAuthenticated, token, user?.id, hydrateActiveTrip, resetTrip, isForeground, isNetworkReady]);
+
+  const safeTripStates = ['idle', 'completed', 'cancelled'];
+  const forceUpdateNow = isForeground && bootstrapped && splashFinished && tripRestoreChecked &&
+    tripRestoreSafe && isUpdatePending && safeTripStates.includes(tripStatus) && callStatus === 'idle';
 
   const handleSplashFinish = async () => {
     // Awaited, not fire-and-forget — CallKeep requests its own Android
@@ -197,8 +230,9 @@ export default function RootNavigator() {
         )}
       </Stack.Navigator>
       {isAuthenticated && <CallOverlay />}
-      <UpdateBanner />
+      <UpdateBanner tripRestoreSafe={tripRestoreSafe} />
       <OtaAppliedToast />
+      {forceUpdateNow && <UpdatingScreen />}
     </NavigationContainer>
   );
 }

@@ -17,12 +17,12 @@ import { fontSize, fontWeight, fontFamilySemiBold } from '../../constants/typogr
  * about the timing themselves. Dismissible, because seeing it once is enough
  * — the eventual apply isn't affected either way.
  */
-export default function UpdateBanner() {
+export default function UpdateBanner({ tripRestoreSafe = true }) {
   const insets = useSafeAreaInsets();
   const { isUpdatePending } = Updates.useUpdates();
   const rideStatus = useRideStore((s) => s.status);
   const callStatus = useCallStore((s) => s.status);
-  const isSafeToRestart = rideStatus === 'idle' && callStatus === 'idle';
+  const isSafeToRestart = tripRestoreSafe && rideStatus === 'idle' && callStatus === 'idle';
 
   const [dismissed, setDismissed] = useState(false);
 
@@ -60,7 +60,7 @@ export default function UpdateBanner() {
       <Animated.View style={styles.pill}>
         <RefreshCw size={18} color={colors.success} strokeWidth={2.25} />
         <Text style={styles.text} numberOfLines={1}>
-          Update ready. Applying when your trip ends.
+          {tripRestoreSafe ? 'Update ready. Applying when safe.' : 'Update ready. Checking active trip before restart.'}
         </Text>
         <Pressable onPress={dismiss} hitSlop={10} style={styles.dismiss}>
           <X size={15} color="#9CA3AF" strokeWidth={2.25} />

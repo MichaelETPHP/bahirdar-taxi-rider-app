@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Animated, Easing, Text } from 'react-native';
+import { View, StyleSheet, Animated, Easing, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import * as Updates from 'expo-updates';
 import { colors } from '../../constants/colors';
+import { clearTransientRuntimeCaches } from '../../services/runtimeCacheRecovery';
 
 const COUNTDOWN_SECONDS = 3;
 
@@ -18,12 +19,24 @@ const COUNTDOWN_SECONDS = 3;
 export default function UpdatingScreen() {
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_SECONDS);
   const [reloading, setReloading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const pulse = useRef(new Animated.Value(1)).current;
+
+  const applyUpdate = async () => {
+    setFailed(false);
+    setReloading(true);
+    clearTransientRuntimeCaches();
+    try {
+      await Updates.reloadAsync();
+    } catch {
+      setReloading(false);
+      setFailed(true);
+    }
+  };
 
   useEffect(() => {
     if (secondsLeft <= 0) {
-      setReloading(true);
-      Updates.reloadAsync().catch(() => {});
+      void applyUpdate();
       return;
     }
     const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
@@ -57,8 +70,13 @@ export default function UpdatingScreen() {
           </Animated.View>
           <Text style={styles.title}>Updating App</Text>
           <Text style={styles.subtitle}>
-            {reloading ? 'Almost there…' : 'Applying the latest improvements'}
+            {failed ? 'Update could not restart. Please retry.' : reloading ? 'Almost there…' : 'Applying the latest improvements'}
           </Text>
+          {failed && (
+            <Pressable accessibilityRole="button" onPress={() => { void applyUpdate(); }} style={styles.retry}>
+              <Text style={styles.retryText}>Retry update</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </View>
@@ -118,4 +136,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.75)',
     textAlign: 'center',
   },
+  retry: { minHeight: 48, marginTop: 18, paddingHorizontal: 18, justifyContent: 'center', borderRadius: 8, backgroundColor: colors.primary },
+  retryText: { color: colors.white, fontSize: 15, fontWeight: '700' },
 });

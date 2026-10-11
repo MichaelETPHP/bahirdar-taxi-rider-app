@@ -29,8 +29,9 @@ import UpdateRequiredScreen from './src/screens/common/UpdateRequiredScreen';
 import { checkAppVersion } from './src/api/appVersion';
 import useUpdateStore from './src/store/updateStore';
 import NoInternetScreen from './src/screens/common/NoInternetScreen';
-import UpdatingScreen from './src/screens/common/UpdatingScreen';
-import * as Updates from 'expo-updates';
+import AppErrorBoundary from './src/components/common/AppErrorBoundary';
+import useOtaUpdateChecker from './src/hooks/useOtaUpdateChecker';
+import { registerTransientCacheClearer } from './src/services/runtimeCacheRecovery';
 import { hasRealInternet } from './src/utils/networkCheck';
 import NetInfo from '@react-native-community/netinfo';
 import { registerBackgroundCallTask } from './src/services/backgroundCallTask';
@@ -76,6 +77,9 @@ configureGoogleSignIn();
 enableScreens();
 
 const queryClient = new QueryClient();
+registerTransientCacheClearer(() => {
+  queryClient.clear();
+});
 
 async function loadCustomFonts() {
   // Fonts are loaded from locally-bundled files — no network required.
@@ -307,7 +311,7 @@ async function registerPushTokenIfConfigured() {
   }
 }
 
-export default function App() {
+function AppContent() {
   const { isMaintenanceMode, maintenanceData, setMaintenance } = useMaintenanceStore();
   const { updateRequired, updateInfo, setUpdateRequired } = useUpdateStore();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -324,22 +328,10 @@ export default function App() {
   // safe: no ride and no call in progress. UpdateBanner.js shows a small,
   // non-blocking notice for the unsafe window instead — this is the
   // mandatory, full-screen side of the same feature.
-  const { isUpdateAvailable, isUpdatePending } = Updates.useUpdates();
-  const rideStatusForUpdate = useRideStore((s) => s.status);
-  const callStatusForUpdate = useCallStore((s) => s.status);
-  const forceUpdateNow =
-    isUpdatePending && rideStatusForUpdate === 'idle' && callStatusForUpdate === 'idle';
-
   // isUpdateAvailable only means the server has a newer update — it is never
   // downloaded automatically. Fetching is safe at any time (it doesn't
   // affect the running app); only applying it via reloadAsync() waits for
   // the idle check above.
-  useEffect(() => {
-    if (isUpdateAvailable) {
-      Updates.fetchUpdateAsync().catch(() => {});
-    }
-  }, [isUpdateAvailable]);
-
   useEffect(() => {
     let cancelled = false;
     let verifyTimer = null;
@@ -450,6 +442,7 @@ export default function App() {
     const cached = getCachedIntegrity();
     return cached ? policyForRisk(cached.riskLevel).appAccess === 'blocked' : false;
   });
+  useOtaUpdateChecker(integrityReady && !integrityBlocked);
   useEffect(() => {
     startIntegrityMonitoring();
     const sync = (r) => {
@@ -643,7 +636,14 @@ export default function App() {
           mounted and dimly visible underneath, so reconnecting drops them
           back exactly where they were instead of a jarring re-mount. */}
       {isOffline && <NoInternetScreen onConnected={() => setIsOffline(false)} />}
-      {forceUpdateNow && <UpdatingScreen />}
     </GestureHandlerRootView>
+  );
+}
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <AppContent />
+    </AppErrorBoundary>
   );
 }
