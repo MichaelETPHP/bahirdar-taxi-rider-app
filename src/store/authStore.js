@@ -10,6 +10,7 @@ import { showSessionExpiredAlert } from '../utils/logoutAlert';
 import useMaintenanceStore from './maintenanceStore';
 import { clearSearchHistory } from '../services/searchHistoryService';
 import { clearEmergencyContact } from '../services/emergencyService';
+import useSessionBannerStore from './sessionBannerStore';
 
 const useAuthStore = create((set, get) => ({
   user: null,
@@ -156,7 +157,7 @@ const useAuthStore = create((set, get) => ({
     }
   },
 
-  logout: async ({ revokeSession = true } = {}) => {
+  logout: async ({ revokeSession = true, notifyUser = false } = {}) => {
     await prepareLogout();
     try {
       const { token, refreshToken } = get();
@@ -179,6 +180,7 @@ const useAuthStore = create((set, get) => ({
         justAuthenticated: false,
         googleProfile: null,
       });
+      if (notifyUser) useSessionBannerStore.getState().show('Logged out');
     } finally { finishLogout(); }
   },
 

@@ -360,7 +360,7 @@ export default function ProfileScreen({ navigation }) {
         style: 'destructive',
         onPress: async () => {
           setLoggingOut(true);
-          try { await logout(); }
+          try { await logout({ notifyUser: true }); }
           catch { setLoggingOut(false); Alert.alert('Logout failed', 'Check your connection and retry. Your session could not be revoked.'); }
         },
       },

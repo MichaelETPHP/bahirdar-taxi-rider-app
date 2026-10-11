@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import useAuthStore from '../store/authStore';
+import { getSessionStatus, updateLastActivity } from '../utils/sessionManager';
 
 /**
  * Hook to manage session lifecycle
@@ -15,15 +16,18 @@ export function useSessionManager() {
     const handleAppStateChange = async (nextAppState) => {
       if (nextAppState === 'active') {
         // App came to foreground - update activity and validate session
-        const isAuthenticated = useAuthStore.getState().isAuthenticated;
+        const auth = useAuthStore.getState();
+        if (!auth.isAuthenticated) return;
 
-        if (isAuthenticated) {
-          await useAuthStore.getState().updateActivity();
-          const isValid = await useAuthStore.getState().validateSession();
-
-          if (!isValid) {
-            console.log('Session expired - user logged out');
+        try {
+          const session = await getSessionStatus();
+          if (session.status === 'no_session') {
+            await useAuthStore.getState().logout({ revokeSession: false });
+            return;
           }
+          if (session.status === 'active') await updateLastActivity();
+        } catch (error) {
+          if (__DEV__) console.warn('[Auth] Session check deferred:', error?.message ?? error);
         }
       }
     };
