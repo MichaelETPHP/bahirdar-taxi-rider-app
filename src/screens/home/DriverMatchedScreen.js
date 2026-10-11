@@ -416,16 +416,7 @@ export default function DriverMatchedScreen({ navigation }) {
 
 
 
-  const handleSOS = () => {
-    Alert.alert(
-      'Support Center',
-      'Call 8840 for assistance?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Call 8840', style: 'default', onPress: () => Linking.openURL('tel:8840') },
-      ]
-    );
-  };
+  const handleSOS = () => { void import('../../services/emergencyService').then(service => service.showSafetyActions()); };
 
   const handleCancel = () => setCancelModalVisible(true);
 
@@ -649,7 +640,7 @@ export default function DriverMatchedScreen({ navigation }) {
         <Text style={styles.supportLabel}>Need help?</Text>
         <TouchableOpacity 
           style={styles.supportBtn} 
-          onPress={() => Linking.openURL('tel:8840')}
+          onPress={handleSOS}
           activeOpacity={0.7}
         >
           <Phone size={14} color={colors.white} />

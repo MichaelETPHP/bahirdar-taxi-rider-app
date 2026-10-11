@@ -36,7 +36,7 @@ export async function getCurrentLocation() {
     });
 
     const { latitude, longitude, accuracy } = location.coords;
-    console.log('✅ [4/5] Got location:', {
+    if (__DEV__) console.log('✅ [4/5] Got location:', {
       latitude: latitude.toFixed(4),
       longitude: longitude.toFixed(4),
       accuracy: accuracy.toFixed(0) + 'm',
@@ -68,11 +68,11 @@ export async function reverseGeocode(lat, lng) {
   }
 
   try {
-    console.log('[Geocod] Requesting backend reverse-geocode:', lat.toFixed(6), lng.toFixed(6));
+    if (__DEV__) console.log('[Geocod] Requesting backend reverse-geocode:', lat.toFixed(6), lng.toFixed(6));
     const result = await apiRequest('POST', '/geo/reverse-geocode', { lat, lng });
     const address = result?.data?.address;
     if (address) {
-      console.log('✅ Address found:', address);
+      if (__DEV__) console.log('✅ Address found:', address);
       return address;
     }
     console.warn('[Geocod] Backend returned no address');
@@ -91,7 +91,7 @@ export async function reverseGeocode(lat, lng) {
     const fallbackAddress = city
       ? `${city} (${lat.toFixed(3)}°, ${lng.toFixed(3)}°)`
       : `${lat.toFixed(4)}°N, ${lng.toFixed(4)}°E`;
-    console.log('✅ Fallback address:', fallbackAddress);
+    if (__DEV__) console.log('✅ Fallback address:', fallbackAddress);
     return fallbackAddress;
   } catch (error) {
     console.error('❌ Even fallback failed:', error.message);
@@ -184,7 +184,7 @@ async function fetchActiveServiceAreas() {
  */
 export async function detectCity(lat, lng) {
   try {
-    console.log('🏙️  Detecting city for:', { lat: lat?.toFixed(4), lng: lng?.toFixed(4) });
+    if (__DEV__) console.log('🏙️  Detecting city for:', { lat: lat?.toFixed(4), lng: lng?.toFixed(4) });
 
     if (!lat || !lng) {
       console.warn('⚠️  Missing coordinates for city detection');
@@ -237,7 +237,7 @@ export async function detectCity(lat, lng) {
 export async function getFullLocation() {
   const location = await getCurrentLocation();
   const address = await reverseGeocode(location.lat, location.lng);
-  console.log('✅ Full location ready:', { lat: location.lat, lng: location.lng, address });
+  if (__DEV__) console.log('✅ Full location ready:', { lat: location.lat, lng: location.lng, address });
   return {
     lat: location.lat,
     lng: location.lng,

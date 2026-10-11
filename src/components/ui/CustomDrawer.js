@@ -237,10 +237,10 @@ function CustomDrawer({ visible, onClose, navigation }) {
       {
         text: 'Yes',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          logout();
-          handleOverlayPress();
+          try { await logout(); handleOverlayPress(); }
+          catch { Alert.alert('Logout failed', 'Check your connection and retry. Your session could not be revoked.'); }
         },
       },
     ]);

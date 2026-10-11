@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import { saveTokens, getTokens, clearTokens, updateTokensOnly, getStoredPhone } from '../utils/tokenStorage';
 import { getSessionStatus, updateLastActivity } from '../utils/sessionManager';
-import { fetchProfile, refreshTokens, deleteAccount as deleteAccountApi } from '../services/authService';
+import { fetchProfile, refreshTokens, logoutRider, deleteAccount as deleteAccountApi } from '../services/authService';
+import { disconnectSocket } from '../services/socketService';
 import useLocationStore from './locationStore';
 import useRideStore from './rideStore';
-import { initApiClient } from '../lib/apiClient';
+import { initApiClient, prepareLogout, finishLogout } from '../lib/apiClient';
 import { showSessionExpiredAlert } from '../utils/logoutAlert';
 import useMaintenanceStore from './maintenanceStore';
+import { clearSearchHistory } from '../services/searchHistoryService';
+import { clearEmergencyContact } from '../services/emergencyService';
 
 const useAuthStore = create((set, get) => ({
   user: null,
@@ -89,7 +92,7 @@ const useAuthStore = create((set, get) => ({
       const status = await getSessionStatus();
 
       if (status.status === 'no_session' || status.status === 'error') {
-        get().logout();
+        await get().logout({ revokeSession: false });
         return false;
       }
 
@@ -101,6 +104,7 @@ const useAuthStore = create((set, get) => ({
       const hasName = !!(status.user?.fullName || status.user?.full_name);
 
       if (status.needsRefresh && status.refreshToken) {
+        set({ token: status.accessToken, refreshToken: status.refreshToken, user: status.user });
         try {
           const refreshed = await refreshTokens(status.refreshToken);
           if (refreshed?.data?.accessToken) {
@@ -119,7 +123,7 @@ const useAuthStore = create((set, get) => ({
           // Force logout so the user sees the login screen immediately.
           const httpStatus = err?.status ?? err?.response?.status;
           if (httpStatus === 401 || httpStatus === 403) {
-            await get().logout();
+            await get().logout({ revokeSession: false });
             return false;
           }
           // Network error / server down — keep the existing token so the user
@@ -147,36 +151,47 @@ const useAuthStore = create((set, get) => ({
       get().loadProfile().catch(() => {});
       return true;
     } catch (err) {
-      get().logout();
+      await get().logout({ revokeSession: false });
       return false;
     }
   },
 
-  logout: async () => {
-    await clearTokens();
-    useLocationStore.getState().clearAll();
-    useRideStore.getState().reset();
-    set({
-      user: null,
-      phone: '',
-      token: null,
-      refreshToken: null,
-      isAuthenticated: false,
-      isNewUser: false,
-      needsProfileSetup: false,
-      sessionExpiresAt: null,
-      justAuthenticated: false,
-      googleProfile: null,
-    });
+  logout: async ({ revokeSession = true } = {}) => {
+    await prepareLogout();
+    try {
+      const { token, refreshToken } = get();
+      if (revokeSession && (token || refreshToken)) await logoutRider(token, refreshToken);
+      disconnectSocket();
+      await clearTokens();
+      useLocationStore.getState().clearPrivateData();
+      await clearSearchHistory();
+      await clearEmergencyContact();
+      useRideStore.getState().reset();
+      set({
+        user: null,
+        phone: '',
+        token: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        isNewUser: false,
+        needsProfileSetup: false,
+        sessionExpiresAt: null,
+        justAuthenticated: false,
+        googleProfile: null,
+      });
+    } finally { finishLogout(); }
   },
 
   deleteAccount: async (reason = '') => {
     const token = get().token;
     // Call the API — 204 means success; anything else throws
     await deleteAccountApi(reason, token);
+    disconnectSocket();
     // Wipe local state and stored tokens exactly like logout
     await clearTokens();
-    useLocationStore.getState().clearAll();
+    useLocationStore.getState().clearPrivateData();
+    await clearSearchHistory();
+    await clearEmergencyContact();
     useRideStore.getState().reset();
     set({
       user: null,
@@ -202,7 +217,7 @@ initApiClient({
   },
   onExpired: async () => {
     await showSessionExpiredAlert(async () => {
-      await useAuthStore.getState().logout();
+      await useAuthStore.getState().logout({ revokeSession: false });
     });
   },
   onMaintenance: async (data) => {

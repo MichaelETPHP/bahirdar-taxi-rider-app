@@ -136,6 +136,7 @@ export default function WalletWithdrawScreen({ navigation }) {
     try {
       const res = await requestWithdrawal(amount, idempotencyKeyRef.current);
       const data = res?.data ?? {};
+      await useAuthStore.getState().loadProfile();
 
       if (data.status === 'processing') {
         // A duplicate of a request that's still running server-side (the

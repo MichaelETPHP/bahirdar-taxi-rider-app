@@ -74,6 +74,7 @@ export async function updateProfile({ fullName, email, gender, dateOfBirth, pref
 }
 
 export async function uploadAvatar(formData, accessToken) {
+  await (await import('../security/sslPinning')).initSslPinning();
   // Manual fetch for multipart/form-data
   const res = await fetch(`${API_BASE_URL}/users/me/avatar`, {
     method: 'POST',
@@ -88,12 +89,30 @@ export async function uploadAvatar(formData, accessToken) {
   return data;
 }
 
-export async function logoutRider(accessToken) {
-  return post('/auth/logout', undefined, accessToken);
+export async function logoutRider(accessToken, refreshToken) {
+  await (await import('../security/sslPinning')).initSslPinning();
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/${refreshToken ? 'logout/refresh' : 'logout'}`, {
+      method: 'POST', signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+      body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
+    });
+    if (!res.ok && res.status !== 401) throw new Error('Could not revoke session. Check your connection and retry logout.');
+  } finally { clearTimeout(deadline); }
 }
 
 export async function refreshTokens(refreshToken) {
-  return post('/auth/rider/refresh', { refreshToken });
+  const { getSharedRefresh } = await import('../lib/apiClient');
+  const accessToken = await getSharedRefresh();
+  if (!accessToken) {
+    const error = new Error('Session expired');
+    error.status = 401;
+    throw error;
+  }
+  const { default: authStore } = await import('../store/authStore');
+  return { data: { accessToken, refreshToken: authStore.getState().refreshToken } };
 }
 
 export async function deleteAccount(reason, accessToken) {

@@ -358,9 +358,10 @@ export default function ProfileScreen({ navigation }) {
       {
         text: t('drawer.logout'),
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
           setLoggingOut(true);
-          logout();
+          try { await logout(); }
+          catch { setLoggingOut(false); Alert.alert('Logout failed', 'Check your connection and retry. Your session could not be revoked.'); }
         },
       },
     ]);

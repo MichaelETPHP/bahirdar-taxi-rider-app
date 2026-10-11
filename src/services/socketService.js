@@ -2,6 +2,18 @@ import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../config/api';
 
 let _socket = null;
+let _retryTimer = null;
+
+function retryConnection() {
+  clearTimeout(_retryTimer);
+  _retryTimer = setTimeout(async () => {
+    const authStore = (await import('../store/authStore')).default;
+    const token = authStore.getState().token;
+    if (token && _socket && !_socket.connected) {
+      _socket.auth = { token }; _socket.connect();
+    }
+  }, 3000);
+}
 
 /**
  * Lazily creates the ONE socket instance for the app's lifetime and attaches
@@ -46,39 +58,46 @@ function ensureSocket() {
 
   _socket.on('connect_error', async (err) => {
     const message = String(err?.message || '');
+    if (/verification unavailable/i.test(message)) { retryConnection(); return; }
     if (!/invalid token|expired|jwt/i.test(message)) return;
 
     try {
       const authStore = (await import('../store/authStore')).default;
-      const { refreshToken, setTokens } = authStore.getState();
+      const { refreshToken } = authStore.getState();
       if (!refreshToken) return;
 
-      const { refreshTokens } = await import('./authService');
-      const res = await refreshTokens(refreshToken);
-      const nextAccess = res?.data?.accessToken;
-      const nextRefresh = res?.data?.refreshToken || refreshToken;
+      const { getSharedRefresh } = await import('../lib/apiClient');
+      const nextAccess = await getSharedRefresh();
       if (!nextAccess) return;
 
-      await setTokens(nextAccess, nextRefresh);
+      if (!authStore.getState().token || authStore.getState().token !== nextAccess) return;
       _socket.auth = { token: nextAccess };
       if (!_socket.connected) _socket.connect();
     } catch (refreshErr) {
+      retryConnection();
       if (__DEV__) {
         console.warn('[SOCKET] Token refresh after connect_error failed', refreshErr?.message ?? refreshErr);
       }
     }
   });
 
+  _socket.on('auth:token_expired', () => {
+    _socket?.disconnect();
+    retryConnection();
+  });
+  _socket.on('auth:session_unavailable', retryConnection);
+
   // Single-session enforcement: server fires this when the same account logs in elsewhere.
-  _socket.on('auth:force_logout', async () => {
+  _socket.on('auth:force_logout', async (data) => {
     if (__DEV__) console.warn('[SOCKET] 🚫 Force logout — account signed in on another device');
     // Disconnect immediately so the socket stops trying to reconnect with the
     // revoked session — the object itself stays alive for the next login.
     _socket?.disconnect();
+    if (data?.reason === 'logged_out') return;
     const { showForcedLogoutAlert } = await import('../utils/logoutAlert');
     const authStore = (await import('../store/authStore')).default;
     await showForcedLogoutAlert(async () => {
-      await authStore.getState().logout();
+      await authStore.getState().logout({ revokeSession: false });
     });
   });
 
@@ -92,7 +111,10 @@ function ensureSocket() {
 export function connectSocket(token) {
   const socket = ensureSocket();
   socket.auth = { token };
-  if (!socket.connected) socket.connect();
+  void import('../security/sslPinning').then(({ initSslPinning }) => initSslPinning()).then(async () => {
+    const { default: authStore } = await import('../store/authStore');
+    if (!socket.connected && authStore.getState().token === token) socket.connect();
+  }).catch(() => {});
   return socket;
 }
 
@@ -101,6 +123,7 @@ export function getSocket() {
 }
 
 export function disconnectSocket() {
+  clearTimeout(_retryTimer);
   _socket?.disconnect();
 }
 

@@ -26,7 +26,7 @@ export async function getCurrentLocation() {
     });
 
     const { latitude, longitude, accuracy } = location.coords;
-    console.log('[Location] Got location:', { latitude, longitude, accuracy });
+    if (__DEV__) console.log('[Location] Got location:', { latitude, longitude, accuracy });
 
     return {
       lat: latitude,
@@ -55,7 +55,7 @@ export async function reverseGeocode(lat, lng) {
   }
 
   try {
-    console.log('[Geocode] Reverse geocoding:', { lat, lng });
+    if (__DEV__) console.log('[Geocode] Reverse geocoding:', { lat, lng });
 
     const response = await axios.get(
       'https://maps.googleapis.com/maps/api/geocode/json',
@@ -71,7 +71,7 @@ export async function reverseGeocode(lat, lng) {
 
     if (response.data.status === 'OK' && response.data.results.length > 0) {
       const address = response.data.results[0].formatted_address;
-      console.log('[Geocode] Success:', address);
+      if (__DEV__) console.log('[Geocode] Success:', address);
       return address;
     }
 
@@ -102,7 +102,7 @@ export async function searchPlaces(query, lat, lng) {
   }
 
   try {
-    console.log('[Search] Searching:', { query, userLat: lat, userLng: lng });
+    if (__DEV__) console.log('[Search] Searching:', { query, userLat: lat, userLng: lng });
 
     const params = {
       input: query.trim(),
@@ -192,7 +192,7 @@ export async function getPlaceDetails(placeId) {
         placeId,
       };
 
-      console.log('[PlaceDetails] Success:', result);
+      if (__DEV__) console.log('[PlaceDetails] Success:', result);
       return result;
     }
 
@@ -218,7 +218,7 @@ export async function detectCity(lat, lng) {
       return { city: 'unknown' };
     }
 
-    console.log('[CityDetect] Detecting city:', { lat, lng });
+    if (__DEV__) console.log('[CityDetect] Detecting city:', { lat, lng });
 
     const response = await axios.get(`${API_BASE_URL}/cities/detect`, {
       params: { lat, lng },

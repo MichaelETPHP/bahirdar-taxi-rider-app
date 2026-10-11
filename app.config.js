@@ -132,6 +132,7 @@ export default {
       color: '#2F70C7',
     },
     plugins: [
+      './plugins/withSecureAndroid',
       [
         // Replaces the legacy top-level `splash` key, which SDK 54 mostly
         // ignores on Android — that gap was the native white cold-start
@@ -199,7 +200,7 @@ export default {
             // http:// category icon silently fails to load and falls back
             // to the generic car icon. Ideally those URLs get migrated to
             // https:// too, but the app must not depend on that happening.
-            usesCleartextTraffic: true,
+            usesCleartextTraffic: false,
           },
         },
       ],

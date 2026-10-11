@@ -2,7 +2,7 @@ import 'react-native-gesture-handler';
 import './src/i18n';
 
 import React, { useEffect, useState } from 'react';
-import { Platform, Text, TextInput } from 'react-native';
+import { Alert, Platform, Text, TextInput } from 'react-native';
 import { env } from './src/config/env';
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
@@ -68,7 +68,7 @@ migrateSecureStorage();
 
 // INSA: pin the API's certificate keys before any network request leaves the
 // app — a MITM proxy can never impersonate the backend after this resolves.
-initSslPinning();
+initSslPinning().catch(() => Alert.alert('Secure connection unavailable', 'Please install the latest app build.'));
 
 // No-op until EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is set — see .env.development.
 configureGoogleSignIn();
