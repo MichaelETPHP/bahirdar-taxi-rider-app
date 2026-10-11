@@ -33,6 +33,9 @@ export const env = {
   apiUrl: productionUrl(rawApiUrl, LIVE_API_URL),
 
   socketUrl: productionUrl(rawSocketUrl, LIVE_SOCKET_URL),
+  socketPath: process.env.EXPO_PUBLIC_SOCKET_PATH || Constants.expoConfig?.extra?.socketPath ||
+    (/^https?:\/\/bahirantransport\.tech(?:[/:]|$)/i.test(productionUrl(rawSocketUrl, LIVE_SOCKET_URL))
+      ? '/api/socket.io/' : '/socket.io/'),
 
   googleMapsKey:
     Constants.expoConfig?.extra?.googleMapsKey ||

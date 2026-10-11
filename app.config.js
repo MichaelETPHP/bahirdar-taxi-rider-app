@@ -312,6 +312,7 @@ export default {
     extra: {
       apiUrl:         process.env.EXPO_PUBLIC_API_URL,
       socketUrl:      process.env.EXPO_PUBLIC_SOCKET_URL,
+      socketPath:     process.env.EXPO_PUBLIC_SOCKET_PATH,
       googleMapsKey:  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
       osrmAddisUrl:   process.env.EXPO_PUBLIC_OSRM_ADDIS_URL,
       osrmBahirdarUrl: process.env.EXPO_PUBLIC_OSRM_BAHIRDAR_URL,

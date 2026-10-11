@@ -1,5 +1,5 @@
 import { io } from 'socket.io-client';
-import { SOCKET_URL } from '../config/api';
+import { SOCKET_URL, SOCKET_PATH } from '../config/api';
 
 let _socket = null;
 let _retryTimer = null;
@@ -32,6 +32,7 @@ function ensureSocket() {
   if (_socket) return _socket;
 
   _socket = io(SOCKET_URL, {
+    path: SOCKET_PATH,
     autoConnect: false,
     transports: ['websocket'],
     reconnection: true,
