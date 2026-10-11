@@ -51,7 +51,9 @@ export function TransactionRow({ item }) {
           : <ArrowUpRight size={16} color={colors.errorLight} strokeWidth={2.25} />}
       </View>
       <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{formatType(item.type)}</Text>
+        <Text style={styles.rowTitle}>
+          {formatType(item.type)}{item.type === 'refund' ? ` - ${item.withdrawal_status || 'Status unavailable'}` : ''}
+        </Text>
         <Text style={styles.rowDate}>{formatDate(item.created_at)}</Text>
       </View>
       <Text style={[styles.rowAmount, isCredit ? styles.rowAmountCredit : styles.rowAmountDebit]}>

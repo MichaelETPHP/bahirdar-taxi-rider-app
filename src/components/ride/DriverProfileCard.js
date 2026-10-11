@@ -41,6 +41,8 @@ function CallRingPulse() {
   );
 }
 
+import { showSafetyActions } from '../../services/emergencyService';
+
 export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, hideCallButton = false, hideSOSButton = false }) {
   const [avatarError, setAvatarError] = React.useState(false);
   React.useEffect(() => { setAvatarError(false); }, [avatarUrl]);
@@ -69,7 +71,7 @@ export default function DriverProfileCard({ driver, avatarUrl, rating, onCall, h
   };
 
   const handleSOS = () => {
-    Linking.openURL('tel:8840');
+    void showSafetyActions();
   };
 
   const pulseAnim = useRef(new Animated.Value(1)).current;

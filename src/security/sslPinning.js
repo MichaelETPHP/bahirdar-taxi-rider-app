@@ -23,18 +23,20 @@ const PUBLIC_KEY_HASHES = [
   'C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=', // ISRG Root X1 (backup)
 ];
 
-export async function initSslPinning() {
-  try {
-    if (!isSslPinningAvailable()) return; // Expo Go / unsupported platform
+let initialization = null;
+export function initSslPinning() {
+  if (initialization) return initialization;
+  initialization = (async () => {
+    if (!isSslPinningAvailable()) {
+      if (__DEV__) { console.warn('[sslPinning] Development build has no pinning module'); return; }
+      throw new Error('Secure connection unavailable. Install the latest app build.');
+    }
     await initializeSslPinning({
       [PINNED_DOMAIN]: {
         includeSubdomains: false,
         publicKeyHashes: PUBLIC_KEY_HASHES,
       },
     });
-  } catch (e) {
-    // Pinning must never crash startup; without init the app simply falls
-    // back to standard TLS validation.
-    if (__DEV__) console.warn('[sslPinning] init failed', e);
-  }
+  })();
+  return initialization;
 }

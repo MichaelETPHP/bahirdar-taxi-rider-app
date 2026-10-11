@@ -5,6 +5,7 @@ import { colors } from '../../constants/colors';
 import { shadow } from '../../constants/layout';
 import { fontSize, fontWeight } from '../../constants/typography';
 import { Phone } from 'lucide-react-native';
+import { showSafetyActions } from '../../services/emergencyService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SIZE = 66;
@@ -53,9 +54,7 @@ export default function MovableCircleButton() {
   const handleCallCenter = async () => {
     playBounce();
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Linking.openURL('tel:8840').catch(() => {
-      Alert.alert('Error', 'Unable to open phone dialer.');
-    });
+    await showSafetyActions();
   };
 
   const panResponder = useRef(

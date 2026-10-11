@@ -66,6 +66,11 @@ const useLocationStore = create(
 
       clearStops: () => set({ stops: [] }),
 
+      clearPrivateData: () => set({
+        userCoords: null, pickup: null, destination: null, stops: [],
+        recentDestinations: [], savedPlaces: { home: null, work: null },
+      }),
+
       clearAll: () =>
         set({
           userCoords: null,

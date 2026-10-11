@@ -13,7 +13,7 @@ import useRideStore from '../../store/rideStore';
 import useAuthStore from '../../store/authStore';
 import useLocationStore from '../../store/locationStore';
 import { getSocket, disconnectSocket } from '../../services/socketService';
-import { cancelTrip, getTrip } from '../../services/tripService';
+import { cancelPendingBooking, getTrip } from '../../services/tripService';
 import { parseTripPollResponse } from '../../utils/tripLifecycle';
 import ProfessionalRideMap from '../../components/map/ProfessionalRideMap';
 import UberPickupMarker from '../../components/map/UberPickupMarker';
@@ -298,13 +298,20 @@ export default function SearchingScreen({ navigation }) {
     navigation.replace(screen);
   }, [navigation]);
 
-  const goBackToConfirm = useCallback(() => {
+  const goBackToConfirm = useCallback(async () => {
+    if (handledRef.current) return;
+    try { await cancelPendingBooking(token, 'Search timed out'); }
+    catch (error) {
+      setCountdown(15);
+      Alert.alert('Trip still active', error?.message || 'Unable to confirm cancellation. Please try again.');
+      return;
+    }
     if (handledRef.current) return;
     handledRef.current = true;
     clearInterval(pollRef.current);
     disconnectSocket();
     navigation.replace('ConfirmRide', { retry: true });
-  }, [navigation]);
+  }, [navigation, token]);
 
   const goBackToHome = useCallback(() => {
     if (handledRef.current) return;
@@ -419,8 +426,13 @@ export default function SearchingScreen({ navigation }) {
       {
         text: 'Yes, Cancel', style: 'destructive',
         onPress: async () => {
-          try { if (tripId) await cancelTrip(tripId, 'Changed my mind', token); } catch (_) {}
-          goBackToHome();
+          try {
+            await cancelPendingBooking(token, 'Changed my mind');
+            goBackToHome();
+          } catch (error) {
+            setCancelling(false);
+            Alert.alert('Cancellation not confirmed', error?.message || 'Please try again. Your trip may still be active.');
+          }
         },
       },
     ]);

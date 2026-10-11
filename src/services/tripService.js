@@ -15,10 +15,30 @@ export function normalizeTripStatus(status) {
   return s;
 }
 
+let pendingBooking = null;
 export function createTrip(body, token) {
   // Trip creation can include service-area checks, route/fare work, and matching kickoff.
   // Keep this longer than the rider-facing search countdown so the UI does not fail early.
-  return post('/trips', body, token, { timeout: 65000 });
+  const request = post('/trips', body, token, { timeout: 65000 });
+  pendingBooking = request;
+  void request.finally(() => { if (pendingBooking === request) pendingBooking = null; }).catch(() => {});
+  return request;
+}
+
+export async function cancelPendingBooking(token, reason) {
+  const request = pendingBooking;
+  let trip;
+  if (request) {
+    try { const result = await request; trip = result?.data ?? result; } catch (_) { /* Reconcile ambiguous creation below. */ }
+  }
+  if (!trip?.id || String(trip.id).startsWith('pending-')) {
+    const result = await getActiveTrip(token);
+    const root = result?.data ?? result;
+    trip = root?.trip ?? (root?.id ? root : null);
+  }
+  if (trip?.id && !['cancelled', 'completed', 'no_drivers_found'].includes(trip.status)) {
+    await cancelTrip(trip.id, reason, token);
+  }
 }
 
 export function getWalletBalance(token) {

@@ -60,6 +60,14 @@ let _onMaintenance = async (data) => {};
 // "logged out randomly" / "banner shows again and again" actually was.
 let _refreshPromise = null;
 let _sessionExpiredNotifying = false;
+let _loggingOut = false;
+
+export async function prepareLogout() {
+  _loggingOut = true;
+  try { if (_refreshPromise) await _refreshPromise; } catch { /* Revoke the stored session even if refresh failed. */ }
+}
+
+export function finishLogout() { _loggingOut = false; }
 
 function decodeJwtExpiryMs(token) {
   try {
@@ -73,27 +81,31 @@ function decodeJwtExpiryMs(token) {
 }
 
 async function performRefresh(refreshToken) {
+  await (await import('../security/sslPinning')).initSslPinning();
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), 10_000);
   try {
     const refreshRes = await fetch(`${API_BASE_URL}/auth/rider/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
+      signal: controller.signal,
     });
-    if (!refreshRes.ok) return null;
+    if (refreshRes.status === 401 || refreshRes.status === 403) return null;
+    if (!refreshRes.ok) throw new Error('Session refresh temporarily unavailable');
     const refreshData = await refreshRes.json();
     const newToken = refreshData?.data?.accessToken;
     const newRefresh = refreshData?.data?.refreshToken;
-    if (!newToken) return null;
+    if (!newToken || !newRefresh) throw new Error('Invalid refresh response');
+    if (_refreshTokenGetter() !== refreshToken) return null;
     await _onTokenRefreshed(newToken, newRefresh || refreshToken);
     return newToken;
-  } catch (err) {
-    console.error('[API] Refresh error:', err);
-    return null;
-  }
+  } finally { clearTimeout(deadline); }
 }
 
 /** Every concurrent caller shares this ONE in-flight refresh instead of each racing their own. */
-function getSharedRefresh() {
+export function getSharedRefresh() {
+  if (_loggingOut) return Promise.resolve(null);
   if (!_refreshPromise) {
     const refreshToken = _refreshTokenGetter();
     if (!refreshToken) return Promise.resolve(null);
@@ -106,7 +118,7 @@ function getSharedRefresh() {
 
 /** Fires _onSessionExpired() at most once per real failure, not once per concurrent request that hit it. */
 async function notifySessionExpiredOnce() {
-  if (_sessionExpiredNotifying) return;
+  if (_sessionExpiredNotifying || _loggingOut) return;
   _sessionExpiredNotifying = true;
   try {
     await _onSessionExpired();
@@ -128,6 +140,7 @@ export const initApiClient = ({ getToken, getRefreshToken, onRefreshed, onExpire
 };
 
 export async function apiRequest(method, path, body, options = {}) {
+  await (await import('../security/sslPinning')).initSslPinning();
   const url = `${API_BASE_URL}${path}`;
   // 20s, not 10s — OTP send waits on an external SMS provider (its own
   // timeout is 10s on our server), so a 10s client timeout could abort
@@ -163,7 +176,7 @@ export async function apiRequest(method, path, body, options = {}) {
   const _t0    = __DEV__ ? Date.now() : 0;
 
   if (__DEV__ && !_quiet) {
-    const bodyPreview = body ? JSON.stringify(body).slice(0, 80) : '';
+    const bodyPreview = '';
     console.log(`[API] →  ${_label}  (${method})${bodyPreview ? '  ' + bodyPreview : ''}`);
   }
 

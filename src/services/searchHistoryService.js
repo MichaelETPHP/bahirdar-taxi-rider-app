@@ -40,7 +40,7 @@ export async function saveSearchPlace(place) {
     const updated = [place, ...filtered].slice(0, MAX_HISTORY);
 
     await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
-    console.log('📍 Search saved to history:', place.name);
+    if (__DEV__) console.log('Search history saved');
   } catch (error) {
     console.error('❌ Failed to save search history:', error.message);
   }

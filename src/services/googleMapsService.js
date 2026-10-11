@@ -161,7 +161,7 @@ export async function reverseGeocode(coords) {
     });
 
     console.log('[Geocod] Calling with key:', GOOGLE_MAPS_KEY.substring(0, 10) + '...');
-    console.log('[Geocod] Coords:', coords.latitude.toFixed(6), coords.longitude.toFixed(6));
+    if (__DEV__) console.log('[Geocod] Coords:', coords.latitude.toFixed(6), coords.longitude.toFixed(6));
 
     const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params}`);
     const data = await res.json();

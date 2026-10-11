@@ -88,13 +88,15 @@ export async function setupCallKeep() {
   // library provides no mechanism that actually does this.
   if (Platform.OS === 'android') {
     try {
-      await PermissionsAndroid.requestMultiple([
+      const permissions = await PermissionsAndroid.requestMultiple([
         'android.permission.READ_PHONE_NUMBERS',
         PermissionsAndroid.PERMISSIONS.CALL_PHONE,
         PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE,
       ]);
+      if (Object.values(permissions).some(value => value !== PermissionsAndroid.RESULTS.GRANTED)) return;
     } catch (err) {
       console.warn('[CallKeep] permission request failed:', err);
+      return;
     }
   }
 
@@ -285,7 +287,7 @@ export async function ringFromBackgroundPush({ tripId, peerName, peerRole }) {
   // app (Android doesn't always spin up a fresh headless engine) — if the
   // live socket path already has this call ringing/connecting, don't stomp
   // on it with a second, redundant setIncoming().
-  if (useCallStore.getState().status !== 'idle') return;
+  if (!isSetUp || useCallStore.getState().status !== 'idle') return;
   useCallStore.getState().setIncoming({ tripId, peerRole, peerName, peerAvatarUrl: null });
 }
 
