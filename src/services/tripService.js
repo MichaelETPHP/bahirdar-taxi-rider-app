@@ -49,8 +49,8 @@ export function getTrip(tripId, token) {
   return get(`/trips/${tripId}`, token);
 }
 
-export function getActiveTrip(token) {
-  return get('/trips/active', token);
+export function getActiveTrip(token, options = {}) {
+  return get('/trips/active', token, options);
 }
 
 function toTripHistoryItem(raw) {

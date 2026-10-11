@@ -1,153 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Animated,
-  Dimensions,
-  TouchableOpacity,
-  Modal,
-  Linking,
-} from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Dimensions, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { WifiOff, RefreshCw } from 'lucide-react-native';
-import * as Network from 'expo-network';
-import * as Location from 'expo-location';
-import { Audio } from 'expo-av';
 import { colors } from '../../constants/colors';
 import { fontSize, fontWeight } from '../../constants/typography';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export default function SplashScreen({ onFinish }) {
-  const [isOffline, setIsOffline] = useState(false);
-  const [isLocationDenied, setIsLocationDenied] = useState(false);
-  const [hasChecked, setHasChecked] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const logoScale = useRef(new Animated.Value(0.6)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const barWidth = useRef(new Animated.Value(0)).current;
-  const animationFinished = useRef(false);
-
-  const checkConnectivity = async () => {
-    try {
-      setChecking(true);
-      setHasChecked(false);
-      setIsLocationDenied(false);
-      const state = await Network.getNetworkStateAsync();
-      console.log('[Network] State:', JSON.stringify(state));
-
-      // Rely on the platform reachability signal. The previous HTTPS probe targeted
-      // 8.8.8.8, which fails TLS validation on real devices and incorrectly blocks startup.
-      const isActuallyConnected =
-        state.isConnected === true && state.isInternetReachable !== false;
-      
-      console.log('[Network] Final decision - isOffline:', !isActuallyConnected);
-      setIsOffline(!isActuallyConnected);
-      if (!isActuallyConnected) {
-        setHasChecked(true);
-        return;
-      }
-
-      const current = await Location.getForegroundPermissionsAsync();
-      let locationGranted = current.status === Location.PermissionStatus.GRANTED;
-      // Try the native prompt whenever it's not granted yet — not just the
-      // very first time (UNDETERMINED). Gating on UNDETERMINED meant any
-      // later re-check (the 3s interval below, or reopening the app) skipped
-      // straight to the "open Settings" fallback instead of re-showing the
-      // native Allow/Deny dialog, even when Android would still show it.
-      // requestForegroundPermissionsAsync() is safe to call either way — if
-      // Android has permanently blocked re-asking, it just resolves to
-      // 'denied' with no dialog, same as before.
-      if (!locationGranted) {
-        const requested = await Location.requestForegroundPermissionsAsync();
-        locationGranted = requested.status === Location.PermissionStatus.GRANTED;
-      }
-
-      if (!locationGranted) {
-        setIsLocationDenied(true);
-        setHasChecked(true);
-        return;
-      }
-
-      // Microphone — for in-app voice calls. Asked upfront here (sequentially,
-      // only after location's own prompt is fully resolved — firing two
-      // native permission dialogs back to back can make Android silently
-      // drop the second one) so riders see it once at launch instead of
-      // being surprised by it mid-call later. Not a hard gate like location:
-      // the app is fully usable without calling, so a decline here doesn't
-      // block startup — just means voice calls won't work until they
-      // enable it (same prompt fires again next time a call starts).
-      const currentMic = await Audio.getPermissionsAsync();
-      if (currentMic.status !== 'granted') {
-        await Audio.requestPermissionsAsync();
-      }
-
-      setHasChecked(true);
-
-      // Crucial: Only exit splash if internet, location, and animation are confirmed
-      if (isActuallyConnected && animationFinished.current) {
-        console.log('[Splash] Internet + location + animation ready. Proceeding...');
-        if (onFinish) onFinish();
-      }
-    } catch (error) {
-      console.error('[Network] Critical check failure:', error);
-      setIsOffline(true);
-      setHasChecked(true);
-    } finally {
-      setChecking(false);
-    }
-  };
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.96)).current;
+  const progress = useRef(new Animated.Value(0)).current;
+  const onFinishRef = useRef(onFinish);
 
   useEffect(() => {
-    checkConnectivity();
-    
-    // Check every 3 seconds while on splash screen to respond to cable changes
-    const interval = setInterval(checkConnectivity, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    onFinishRef.current = onFinish;
+  }, [onFinish]);
 
   useEffect(() => {
-    // Only the logo bounce-in + text fade (~900ms combined) actually gates
-    // navigation — this was previously the FULL sequence including a
-    // decorative 2500ms bar-fill, forcing a ~3.4s minimum splash on every
-    // single launch regardless of how fast the real network/location
-    // checks resolved. The bar is purely cosmetic — let it keep animating
-    // on its own below, unawaited, instead of blocking on it.
-    Animated.sequence([
-      Animated.parallel([
-        Animated.spring(logoScale, {
-          toValue: 1,
-          tension: 60,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.timing(textOpacity, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      animationFinished.current = true;
-      console.log('[Splash] Intro animation finished. checking access...');
+    const intro = Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, tension: 70, friction: 9, useNativeDriver: true }),
+      Animated.timing(progress, { toValue: 1, duration: 900, useNativeDriver: false }),
+    ]);
 
-      // Re-trigger check to be sure, or proceed if already known good
-      checkConnectivity();
+    intro.start(({ finished }) => {
+      if (finished) onFinishRef.current?.();
     });
 
-    Animated.timing(barWidth, {
-      toValue: width * 0.6,
-      duration: 2500,
-      useNativeDriver: false,
-    }).start();
-  }, [onFinish]);
+    return () => intro.stop();
+  }, [opacity, progress, scale]);
 
   return (
     <View style={styles.container}>
@@ -158,204 +39,37 @@ export default function SplashScreen({ onFinish }) {
         priority="high"
         cachePolicy="disk"
       />
-
       <View style={styles.content}>
-        <View style={styles.topHalf} />
-
-        <View style={styles.bottomHalf}>
-          {!isOffline && (
-            <>
-              <View style={styles.barTrack}>
-                <Animated.View style={[styles.barFill, { width: barWidth }]} />
-              </View>
-              <Text style={styles.loadingText}>Preparing your ride...</Text>
-            </>
-          )}
-        </View>
+        <View style={styles.spacer} />
+        <Animated.View style={[styles.footer, { opacity, transform: [{ scale }] }]}>
+          <View style={styles.barTrack}>
+            <Animated.View
+              style={[
+                styles.barFill,
+                { width: progress.interpolate({ inputRange: [0, 1], outputRange: [0, width * 0.6] }) },
+              ]}
+            />
+          </View>
+          <Text style={styles.loadingText}>Preparing your ride...</Text>
+        </Animated.View>
       </View>
-
-      {/* No Internet Overlay (Direct View instead of Modal) */}
-      {hasChecked && isOffline && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.iconCircleLarge}>
-              <WifiOff size={40} color={colors.error} />
-            </View>
-            
-            <Text style={styles.modalTitle}>No Internet Connection</Text>
-            <Text style={styles.modalBody}>
-              Bahir Dar Ride requires an active internet connection to work properly. Please check your settings and try again.
-            </Text>
-
-            <TouchableOpacity 
-              style={styles.retryBtn} 
-              onPress={checkConnectivity}
-              disabled={checking}
-            >
-              {checking ? (
-                <Text style={styles.retryBtnText}>Checking...</Text>
-              ) : (
-                <>
-                  <RefreshCw size={18} color="white" style={{ marginRight: 8 }} />
-                  <Text style={styles.retryBtnText}>Try Again</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {hasChecked && !isOffline && isLocationDenied && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.iconCircleLarge}>
-              <WifiOff size={40} color={colors.error} />
-            </View>
-
-            <Text style={styles.modalTitle}>Location Access Required</Text>
-            <Text style={styles.modalBody}>
-              Bahir Dar Ride needs location access to start. Please allow location in settings and return to the app.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.retryBtn}
-              onPress={checkConnectivity}
-              disabled={checking}
-            >
-              {checking ? (
-                <Text style={styles.retryBtnText}>Checking...</Text>
-              ) : (
-                <>
-                  <RefreshCw size={18} color="white" style={{ marginRight: 8 }} />
-                  <Text style={styles.retryBtnText}>Try Again</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.retryBtn, styles.secondaryBtn]}
-              onPress={() => Linking.openSettings()}
-            >
-              <Text style={[styles.retryBtnText, styles.secondaryBtnText]}>Open Settings</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    // Matches the native splash background — without this, the container
-    // is transparent until the image below finishes decoding, showing the
-    // white Activity background through for a frame or two. This screen
-    // can stay up longer than the others (real network/location checks
-    // run here), making that gap the most visible of the three.
-    backgroundColor: colors.primary,
-  },
-  backgroundImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingVertical: 80,
-  },
-  topHalf: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bottomHalf: {
-    alignItems: 'center',
-    paddingBottom: 20,
-  },
+  container: { flex: 1, backgroundColor: colors.primary },
+  backgroundImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  content: { flex: 1, justifyContent: 'space-between', paddingVertical: 80 },
+  spacer: { flex: 1 },
+  footer: { alignItems: 'center', paddingBottom: 20 },
   barTrack: {
     width: width * 0.6,
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
     borderRadius: 2,
     overflow: 'hidden',
   },
-  barFill: {
-    height: 4,
-    backgroundColor: colors.white,
-    borderRadius: 2,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: fontSize.sm,
-    color: colors.white,
-    fontWeight: fontWeight.medium,
-  },
-  // Modal Styles
-  modalOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 30,
-    zIndex: 9999,
-  },
-  modalCard: {
-    width: '100%',
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    padding: 30,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  iconCircleLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: fontWeight.bold,
-    color: colors.textPrimary,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  modalBody: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  retryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: 30,
-    paddingVertical: 14,
-    borderRadius: 30,
-  },
-  retryBtnText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: fontWeight.bold,
-  },
-  secondaryBtn: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: 10,
-  },
-  secondaryBtnText: {
-    color: colors.textPrimary,
-  },
+  barFill: { height: 4, backgroundColor: colors.white, borderRadius: 2 },
+  loadingText: { marginTop: 12, fontSize: fontSize.sm, color: colors.white, fontWeight: fontWeight.medium },
 });

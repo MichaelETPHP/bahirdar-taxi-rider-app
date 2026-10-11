@@ -174,7 +174,9 @@ export default function SearchingScreen({ navigation }) {
 
   const pollRef = useRef(null);
   const handledRef = useRef(false);
-  const [countdown, setCountdown] = useState(60);
+  // Keep searching longer than the trip-create request timeout (65s), so a
+  // slow but valid booking is not cancelled while the server is still matching.
+  const [countdown, setCountdown] = useState(75);
   const [lockedFare, setLockedFare] = useState(null);
   const [lockedCategory, setLockedCategory] = useState(null);
   const [pingIndex, setPingIndex] = useState(0);
@@ -353,22 +355,24 @@ export default function SearchingScreen({ navigation }) {
       ]);
     };
 
-    // Primary: listen for explicit match event
-    socket.on('trip:matched', onMatched);
-    // Fallback: some server versions emit trip:status with status='matched'
-    socket.on('trip:status', (payload) => {
+    const onTripStatus = (payload) => {
       if (payload?.status === 'matched' && payload?.driver) {
         onMatched({ driver: payload.driver });
       } else if (payload?.status === 'cancelled' || payload?.status?.startsWith('cancelled')) {
         onCancelled({ reason: payload?.reason });
       }
-    });
+    };
+
+    // Primary: listen for explicit match event
+    socket.on('trip:matched', onMatched);
+    // Fallback: some server versions emit trip:status with status='matched'
+    socket.on('trip:status', onTripStatus);
     socket.on('trip:no_drivers', onNoDrivers);
     socket.on('trip:cancelled', onCancelled);
 
     return () => {
       socket.off('trip:matched', onMatched);
-      socket.off('trip:status');
+      socket.off('trip:status', onTripStatus);
       socket.off('trip:no_drivers', onNoDrivers);
       socket.off('trip:cancelled', onCancelled);
     };

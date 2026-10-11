@@ -105,7 +105,14 @@ const useAuthStore = create((set, get) => ({
       const hasName = !!(status.user?.fullName || status.user?.full_name);
 
       if (status.needsRefresh && status.refreshToken) {
-        set({ token: status.accessToken, refreshToken: status.refreshToken, user: status.user });
+        set({
+          token: status.accessToken,
+          refreshToken: status.refreshToken,
+          user: status.user,
+          isAuthenticated: hasName,
+          needsProfileSetup: !hasName,
+          sessionExpiresAt: new Date(status.expiresAt),
+        });
         try {
           const refreshed = await refreshTokens(status.refreshToken);
           if (refreshed?.data?.accessToken) {

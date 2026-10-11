@@ -38,6 +38,8 @@ function getResumeRoute(status) {
   }
 }
 
+const ACTIVE_TRIP_STATUSES = ['searching', 'matched', 'driver_arrived', 'in_progress'];
+
 function getStatusMeta(status) {
   switch (status) {
     case 'searching':
@@ -91,8 +93,15 @@ export default function ActiveTripResumeScreen({ navigation }) {
   const { token } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const tripStatusRef = useRef(tripStatus);
+  tripStatusRef.current = tripStatus;
 
   const syncTrip = useCallback(async (showSpinner = false) => {
+    if (tripStatusRef.current === 'completed') return false;
+    if (!tripId || !ACTIVE_TRIP_STATUSES.includes(tripStatusRef.current)) {
+      navigation.replace('Home');
+      return false;
+    }
     if (!token) return false;
     if (showSpinner) setRefreshing(true);
     try {
@@ -171,6 +180,12 @@ export default function ActiveTripResumeScreen({ navigation }) {
     driver?.vehicle?.plateNumber || driver?.vehicle?.plate_number,
   ].filter(Boolean).join(' · ');
   const phone = formatEthiopianPhone(driver?.phone);
+  const hasConfirmedActiveTrip = !!tripId && ACTIVE_TRIP_STATUSES.includes(tripStatus);
+  const hasCompletedTrip = !!tripId && tripStatus === 'completed';
+
+  useEffect(() => {
+    if (!hasConfirmedActiveTrip && !hasCompletedTrip) navigation.replace('Home');
+  }, [hasConfirmedActiveTrip, hasCompletedTrip, navigation]);
 
   const handleContinue = () => {
     navigation.replace(getResumeRoute(tripStatus));
@@ -181,6 +196,8 @@ export default function ActiveTripResumeScreen({ navigation }) {
       Linking.openURL(`tel:${driver.phone}`);
     }
   };
+
+  if (hasCompletedTrip || !hasConfirmedActiveTrip) return null;
 
   if (loading) {
     return (

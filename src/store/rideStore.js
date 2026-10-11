@@ -142,6 +142,10 @@ const useRideStore = create(
       fareEstimates: [],
       routeInfo: null,
       liveFare: null,
+      status: 'idle',
+      assignedDriver: null,
+      estimatedFare: null,
+      estimatedETA: null,
     }),
 
   // ── Legacy helpers (kept for backwards compat) ───────

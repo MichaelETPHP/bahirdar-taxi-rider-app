@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import * as Updates from 'expo-updates';
@@ -24,6 +24,7 @@ import CallOverlay from '../components/call/CallOverlay';
 import { parseTripPollResponse } from '../utils/tripLifecycle';
 
 const Stack = createStackNavigator();
+const ACTIVE_TRIP_STATUSES = ['searching', 'matched', 'driver_arrived', 'in_progress'];
 export const navigationRef = createNavigationContainerRef();
 
 export default function RootNavigator() {
@@ -45,6 +46,9 @@ export default function RootNavigator() {
   const [isForeground, setIsForeground] = useState(AppState.currentState === 'active');
   const [isNetworkReady, setIsNetworkReady] = useState(true);
   const [initialRouteName, setInitialRouteName] = useState('Home');
+  const tripRestoreResolved = useRef(false);
+  const callKeepSetupStarted = useRef(false);
+  const restoreIdentity = isAuthenticated ? `${user?.id ?? ''}:${token ?? ''}` : 'anonymous';
 
   // Initialize 30-day session management with app lifecycle tracking
   useSessionManager();
@@ -60,7 +64,6 @@ export default function RootNavigator() {
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        // Load existing session (30-day persistent login)
         await loadTokens();
       } catch (err) {
         console.error('[Auth] Failed to load tokens:', err);
@@ -71,6 +74,10 @@ export default function RootNavigator() {
 
     bootstrap();
   }, [loadTokens]);
+
+  useEffect(() => {
+    tripRestoreResolved.current = false;
+  }, [restoreIdentity]);
 
   // Keep the socket open whenever the rider is authenticated.
   // This ensures auth:force_logout is received even when the user is idle
@@ -100,7 +107,10 @@ export default function RootNavigator() {
     let cancelled = false;
 
     const restoreActiveTrip = async () => {
-      if (!isForeground || !isNetworkReady) {
+      if (!isForeground || tripRestoreResolved.current) return;
+      if (!bootstrapped) return;
+
+      if (!isNetworkReady) {
         setTripRestoreSafe(false);
         setTripRestoreChecked(true);
         return;
@@ -110,42 +120,46 @@ export default function RootNavigator() {
         setInitialRouteName('Home');
         setTripRestoreSafe(true);
         setTripRestoreChecked(true);
+        tripRestoreResolved.current = true;
         return;
       }
 
       setTripRestoreChecked(false);
       setTripRestoreSafe(false);
 
+      const rideAtRequest = useRideStore.getState();
       try {
-        const res = await getActiveTrip(token);
+        const res = await getActiveTrip(token, { timeout: 6500 });
         if (cancelled) return;
+        const rideNow = useRideStore.getState();
+        if (rideNow.tripId !== rideAtRequest.tripId || rideNow.tripStatus !== rideAtRequest.tripStatus) return;
 
         const root = res?.data ?? res;
-        const hasActiveTrip = !!(root?.trip || root?.id || root?.status);
-        if (!hasActiveTrip) {
-          resetTrip();
-          setInitialRouteName('Home');
-          setTripRestoreSafe(true);
-          setTripRestoreChecked(true);
-          return;
-        }
-
+        const tripCandidate = root?.trip ?? ((root?.id || root?.trip_id) ? root : null);
         const { status, trip, driver } = parseTripPollResponse(root);
-        if (!trip || !status) {
+        const activeTrip = trip && (trip.id || trip.trip_id)
+          ? { ...trip, id: trip.id ?? trip.trip_id }
+          : null;
+        const hasValidActiveTrip = !!(tripCandidate?.id || tripCandidate?.trip_id) &&
+          !!activeTrip?.id && ACTIVE_TRIP_STATUSES.includes(status);
+
+        if (!hasValidActiveTrip) {
+          const confirmedInactive = !!root && typeof root === 'object' && !ACTIVE_TRIP_STATUSES.includes(status);
           resetTrip();
           setInitialRouteName('Home');
-          setTripRestoreSafe(false);
+          setTripRestoreSafe(confirmedInactive);
           setTripRestoreChecked(true);
+          tripRestoreResolved.current = confirmedInactive;
           return;
         }
 
-        hydrateActiveTrip({ trip, status, driver });
+        hydrateActiveTrip({ trip: activeTrip, status, driver });
         setTripRestoreSafe(true);
-        setInitialRouteName(
-          ['searching', 'matched', 'driver_arrived', 'in_progress'].includes(status)
-            ? 'ActiveTripResume'
-            : 'Home'
-        );
+        setInitialRouteName('ActiveTripResume');
+        tripRestoreResolved.current = true;
+        if (navigationRef.isReady()) {
+          navigationRef.navigate('AppNav', { screen: 'ActiveTripResume' });
+        }
       } catch (_) {
         if (!cancelled) {
           setInitialRouteName('Home');
@@ -162,49 +176,36 @@ export default function RootNavigator() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, token, user?.id, hydrateActiveTrip, resetTrip, isForeground, isNetworkReady]);
+  }, [bootstrapped, isAuthenticated, token, user?.id, hydrateActiveTrip, resetTrip, isForeground, isNetworkReady]);
 
   const safeTripStates = ['idle', 'completed', 'cancelled'];
   const forceUpdateNow = isForeground && bootstrapped && splashFinished && tripRestoreChecked &&
     tripRestoreSafe && isUpdatePending && safeTripStates.includes(tripStatus) && callStatus === 'idle';
 
-  const handleSplashFinish = async () => {
-    // Awaited, not fire-and-forget — CallKeep requests its own Android
-    // permissions (CALL_PHONE etc.), and the Home screen mounting before
-    // this finishes lets its own location check land at the same moment,
-    // which can make Android's permission system hang one of the two calls
-    // indefinitely (the "stuck on Detecting Location forever" bug). Waiting
-    // here means nothing else can ever start mid-request again, regardless
-    // of what future screens do on mount.
-    try {
-      await setupCallKeep();
-    } catch (err) {
-      console.warn('[RootNavigator] CallKeep setup failed:', err);
-    }
+  const handleSplashFinish = useCallback(() => {
     setSplashFinished(true);
-  };
+  }, []);
 
-  // ── Scenario 1: tokens loading, splash animation running, or trip-restore
-  // check still in flight ── One continuous splash instead of two separate
-  // screens. The trip-restore check (see the effect above) already starts
-  // in parallel with the splash's own network/permission checks — this just
-  // keeps the same brand splash up until every check is truly done, instead
-  // of swapping to a second, differently-captioned screen for whatever's
-  // left. Nothing here waits any longer than before; it just stops
-  // rendering a visible hand-off between two screens for it.
-  if (!bootstrapped || !splashFinished || (isAuthenticated && !tripRestoreChecked)) {
+  useEffect(() => {
+    if (!bootstrapped || !isAuthenticated || !splashFinished || callKeepSetupStarted.current) return undefined;
+    // Call integration is optional for app startup and asks for unrelated
+    // phone permissions on Android. Defer it until the home screen has had
+    // time to finish its location prompt; never hold navigation on it.
+    const timer = setTimeout(() => {
+      callKeepSetupStarted.current = true;
+      setupCallKeep().catch((err) => console.warn('[RootNavigator] CallKeep setup failed:', err));
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [bootstrapped, isAuthenticated, splashFinished]);
+
+  // Auth state can hydrate from secure storage before a slow token refresh
+  // completes; render the app shell as soon as that saved identity is known.
+  if ((!bootstrapped && !isAuthenticated && !needsProfileSetup) || !splashFinished) {
     return (
       <>
         <SplashScreen onFinish={handleSplashFinish} />
         <SessionExpiredBanner />
-        {/* A ringing call outranks the splash sequence — this is the whole
-            fix for "tap the call notification and sit through Preparing
-            your ride... before the ring screen finally shows." The socket
-            connects and call:invite listeners attach the moment
-            isAuthenticated flips true (the effect above), well before
-            splashFinished/tripRestoreChecked resolve, so the call can
-            already be known here. CallOverlay renders nothing when idle,
-            so this is a no-op on every normal (non-call) launch. */}
+        {/* Keep a ringing call visible while auth and the intro finish. */}
         {isAuthenticated && <CallOverlay />}
       </>
     );

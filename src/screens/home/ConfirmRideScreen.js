@@ -288,7 +288,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
         } catch (_) {}
       }
 
-      if (status === 408 || code === 'TIMEOUT') {
+      if (status === 408 || status >= 500 || code === 'TIMEOUT') {
         for (let attempt = 0; attempt < 5; attempt += 1) {
           try {
             await sleep(1500);
@@ -297,6 +297,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
             const { status: activeStatus, trip: activeTrip, driver: activeDriver } = parseTripPollResponse(root);
             if (activeTrip && activeStatus) {
               hydrateActiveTrip({ trip: activeTrip, status: activeStatus, driver: activeDriver });
+              navigation.replace('ActiveTripResume');
               return;
             }
           } catch (_) {}
