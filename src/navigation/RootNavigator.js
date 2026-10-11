@@ -14,6 +14,7 @@ import { getActiveTrip } from '../services/tripService';
 import SplashScreen from '../screens/auth/SplashScreen';
 import SessionExpiredBanner from '../components/common/SessionExpiredBanner';
 import UpdateBanner from '../components/common/UpdateBanner';
+import OtaAppliedToast from '../components/common/OtaAppliedToast';
 import CallOverlay from '../components/call/CallOverlay';
 import { parseTripPollResponse } from '../utils/tripLifecycle';
 
@@ -197,6 +198,7 @@ export default function RootNavigator() {
       </Stack.Navigator>
       {isAuthenticated && <CallOverlay />}
       <UpdateBanner />
+      <OtaAppliedToast />
     </NavigationContainer>
   );
 }

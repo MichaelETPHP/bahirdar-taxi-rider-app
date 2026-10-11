@@ -60,7 +60,7 @@ export default function UpdateBanner() {
       <Animated.View style={styles.pill}>
         <RefreshCw size={18} color={colors.success} strokeWidth={2.25} />
         <Text style={styles.text} numberOfLines={1}>
-          App updated ✓ — will apply when your trip ends
+          Update ready. Applying when your trip ends.
         </Text>
         <Pressable onPress={dismiss} hitSlop={10} style={styles.dismiss}>
           <X size={15} color="#9CA3AF" strokeWidth={2.25} />
