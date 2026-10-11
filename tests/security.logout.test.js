@@ -45,6 +45,16 @@ test('manual logout revokes the backend session before clearing credentials', as
   expect(cleared).toHaveBeenCalledTimes(1); expect(disconnected).toHaveBeenCalledTimes(1);
   expect(auth.getState().isAuthenticated).toBe(false);
 });
+
+test('logout preserves the server rejection reason without removing credentials', async () => {
+  globalThis.fetch = mock(async () => ({ ok: false, status: 503,
+    json: async () => ({ error: { code: 'SESSION_VERIFICATION_UNAVAILABLE', message: 'Session verification temporarily unavailable' } }) }));
+  await expect(auth.getState().logout()).rejects.toMatchObject({
+    message: 'Session verification temporarily unavailable', status: 503, code: 'SESSION_VERIFICATION_UNAVAILABLE',
+  });
+  expect(cleared).not.toHaveBeenCalled();
+  expect(auth.getState().isAuthenticated).toBe(true);
+});
 test('failed remote revocation preserves credentials so logout can be retried', async () => {
   globalThis.fetch = mock(async () => ({ ok: false, status: 503 }));
   await expect(auth.getState().logout()).rejects.toThrow();

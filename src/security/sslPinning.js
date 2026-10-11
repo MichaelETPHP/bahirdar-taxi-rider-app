@@ -8,6 +8,7 @@ import {
   initializeSslPinning,
   isSslPinningAvailable,
 } from 'react-native-ssl-public-key-pinning';
+import { createPinningInitializer } from './pinningInitialization';
 
 const PINNED_DOMAIN = 'bahirantransport.tech';
 // Verified against the new VPS's live chain: Let's Encrypt YR2 -> ISRG Root
@@ -23,20 +24,17 @@ const PUBLIC_KEY_HASHES = [
   'C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=', // ISRG Root X1 (backup)
 ];
 
-let initialization = null;
-export function initSslPinning() {
-  if (initialization) return initialization;
-  initialization = (async () => {
-    if (!isSslPinningAvailable()) {
-      if (__DEV__) { console.warn('[sslPinning] Development build has no pinning module'); return; }
-      throw new Error('Secure connection unavailable. Install the latest app build.');
-    }
-    await initializeSslPinning({
-      [PINNED_DOMAIN]: {
-        includeSubdomains: false,
-        publicKeyHashes: PUBLIC_KEY_HASHES,
-      },
-    });
-  })();
-  return initialization;
-}
+export const initSslPinning = createPinningInitializer(async () => {
+  if (!isSslPinningAvailable()) {
+    if (__DEV__) { console.warn('[sslPinning] Development build has no pinning module'); return; }
+    const error = new Error('Secure connection unavailable. Install the latest app build.');
+    error.code = 'NATIVE_BUILD_REQUIRED';
+    throw error;
+  }
+  await initializeSslPinning({
+    [PINNED_DOMAIN]: {
+      includeSubdomains: false,
+      publicKeyHashes: PUBLIC_KEY_HASHES,
+    },
+  });
+});

@@ -24,6 +24,7 @@ import { createTrip, getActiveTrip, getWalletBalance } from '../../services/trip
 import { connectSocket, joinRiderRoom } from '../../services/socketService';
 import { getFareEstimateForCategory } from '../../utils/fareEstimates';
 import { parseTripPollResponse } from '../../utils/tripLifecycle';
+import { initSslPinning } from '../../security/sslPinning';
 
 const ADDIS_ABABA_COORDS = { latitude: 9.0192, longitude: 38.7525 };
 const formatDistance = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
@@ -165,6 +166,7 @@ export default function ConfirmRideScreen({ navigation, route }) {
   }, [userCoords?.latitude, destination?.lat, handleRecenter]);
 
   const handleConfirm = async () => {
+    if (loading) return;
     if (!destination || !selectedCategory || !requestedVehicleCategory) return;
     // Every rider must actively pick Cash or Wallet — no silent default.
     // Cash needs nothing further; Wallet additionally needs the balance
@@ -189,6 +191,14 @@ export default function ConfirmRideScreen({ navigation, route }) {
     }
 
     setLoading(true);
+
+    try {
+      await initSslPinning();
+    } catch (error) {
+      setLoading(false);
+      Alert.alert('Unable to request trip', error?.message || 'Secure connection unavailable. Please retry.');
+      return;
+    }
 
     // ⚡ 1. Set OPTIMISTIC state immediately (no wait)
     const optimisticTripData = {
@@ -216,8 +226,12 @@ export default function ConfirmRideScreen({ navigation, route }) {
     // ⚡ 3. Create trip in BACKGROUND (user already on SearchingScreen)
     try {
       // Connect socket in parallel with trip creation
-      connectSocket(token);
-      joinRiderRoom(user?.id);
+      try {
+        connectSocket(token);
+        joinRiderRoom(user?.id);
+      } catch (_) {
+        // HTTP booking and polling remain usable if socket setup fails.
+      }
 
       // POST /trips request (now in background)
       const res = await createTrip(

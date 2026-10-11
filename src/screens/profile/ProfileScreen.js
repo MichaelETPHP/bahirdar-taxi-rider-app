@@ -361,7 +361,7 @@ export default function ProfileScreen({ navigation }) {
         onPress: async () => {
           setLoggingOut(true);
           try { await logout({ notifyUser: true }); }
-          catch { setLoggingOut(false); Alert.alert('Logout failed', 'Check your connection and retry. Your session could not be revoked.'); }
+          catch (error) { setLoggingOut(false); Alert.alert('Logout failed', error?.message || 'Check your connection and retry. Your session could not be revoked.'); }
         },
       },
     ]);

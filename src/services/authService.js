@@ -99,7 +99,13 @@ export async function logoutRider(accessToken, refreshToken) {
       headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
       body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
     });
-    if (!res.ok && res.status !== 401) throw new Error('Could not revoke session. Check your connection and retry logout.');
+    if (!res.ok && res.status !== 401) {
+      const payload = await res.json().catch(() => null);
+      const error = new Error(payload?.error?.message || `Session revocation failed (HTTP ${res.status}). Please retry.`);
+      error.status = res.status;
+      error.code = payload?.error?.code || 'LOGOUT_FAILED';
+      throw error;
+    }
   } finally { clearTimeout(deadline); }
 }
 
