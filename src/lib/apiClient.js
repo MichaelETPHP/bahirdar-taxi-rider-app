@@ -3,6 +3,8 @@ import { API_BASE_URL } from '../config/api';
 // ── Dev logging helpers ────────────────────────────────────────────────────
 const _QUIET = ['/riders/me/location', '/drivers/location/'];
 const _isQuiet = (path) => _QUIET.some((p) => path.includes(p));
+const _isUnauthenticatedAuthRoute = (path) =>
+  /^\/auth\/(?:check-phone|rider\/(?:register|otp\/(?:send|verify)|google|apple))(?=$|\?)/.test(path);
 
 const _LABELS = [
   [/trips\/[^/]+\/fare-estimate/, 'fare-estimate   '],
@@ -147,6 +149,7 @@ export async function apiRequest(method, path, body, options = {}) {
   // while the server was still about to succeed, showing "Request timeout"
   // for a login that actually went through a moment later.
   const { retryCount = 0, timeout = 20000, customToken = null } = options;
+  const isPublicAuthRoute = _isUnauthenticatedAuthRoute(path);
 
   const headers = {
     'Content-Type': 'application/json',
@@ -154,7 +157,7 @@ export async function apiRequest(method, path, body, options = {}) {
     ...options.headers
   };
 
-  let activeToken = customToken || _tokenGetter();
+  let activeToken = isPublicAuthRoute ? null : (customToken || _tokenGetter());
 
   // Proactive refresh — if the token is about to expire (<60s left), refresh
   // BEFORE sending rather than waiting to be told via a 401. Cuts down how
@@ -196,17 +199,21 @@ export async function apiRequest(method, path, body, options = {}) {
     // ── Token Refresh Interceptor ──────────────────────────────────────
     // Don't attempt refresh if there's no refresh token, or the token that
     // just got rejected wasn't even a real JWT (a local placeholder token).
-    if (res.status === 401 && retryCount === 0 && activeToken?.startsWith('eyJ') && _refreshTokenGetter()) {
+    if (res.status === 401 && !isPublicAuthRoute && retryCount === 0 && activeToken?.startsWith('eyJ') && _refreshTokenGetter()) {
       const newToken = await getSharedRefresh();
       if (newToken) {
         return apiRequest(method, path, body, { ...options, retryCount: 1, customToken: newToken });
+      }
+      const currentToken = _tokenGetter();
+      if (currentToken && currentToken !== activeToken) {
+        return apiRequest(method, path, body, { ...options, retryCount: 1, customToken: currentToken });
       }
       // Refresh genuinely failed — every concurrent request that hit this
       // same failure shares the one notification instead of each firing it.
       await notifySessionExpiredOnce();
       throw { status: 401, message: 'Session expired', code: 'UNAUTHORIZED', response: { status: 401, data: null } };
     }
-    if (res.status === 401 && retryCount === 0) {
+    if (res.status === 401 && !isPublicAuthRoute && retryCount === 0) {
       // No refresh token / not a real JWT to begin with — genuinely nothing to recover.
       await notifySessionExpiredOnce();
       throw { status: 401, message: 'Session expired', code: 'UNAUTHORIZED', response: { status: 401, data: null } };

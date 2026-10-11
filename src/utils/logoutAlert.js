@@ -1,5 +1,4 @@
 import { Alert } from 'react-native';
-import useSessionBannerStore from '../store/sessionBannerStore';
 
 /**
  * Decoupled Logout Alert.
@@ -34,7 +33,6 @@ export async function showSessionExpiredAlert(onLogout) {
 
   _activeSessionAlert = (async () => {
     if (onLogout) await onLogout();
-    useSessionBannerStore.getState().show('Logged out');
     _activeSessionAlert = null;
     return true;
   })();
@@ -46,7 +44,6 @@ export async function showForcedLogoutAlert(onLogout) {
 
   _activeSessionAlert = (async () => {
     if (onLogout) await onLogout();
-    useSessionBannerStore.getState().show('Logged out — signed in on another device');
     _activeSessionAlert = null;
     return true;
   })();
