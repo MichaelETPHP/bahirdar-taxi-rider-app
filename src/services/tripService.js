@@ -1,4 +1,5 @@
 import { apiRequest } from '../lib/apiClient';
+import { randomUUID } from 'expo-crypto';
 
 /**
  * Trip Service — Refactored to use decoupled apiClient.
@@ -17,9 +18,12 @@ export function normalizeTripStatus(status) {
 
 let pendingBooking = null;
 export function createTrip(body, token) {
+  if (pendingBooking) return pendingBooking;
   // Trip creation can include service-area checks, route/fare work, and matching kickoff.
   // Keep this longer than the rider-facing search countdown so the UI does not fail early.
-  const request = post('/trips', body, token, { timeout: 65000 });
+  const request = post('/trips', body, token, {
+    timeout: 65000, headers: { 'X-Idempotency-Key': randomUUID() },
+  });
   pendingBooking = request;
   void request.finally(() => { if (pendingBooking === request) pendingBooking = null; }).catch(() => {});
   return request;

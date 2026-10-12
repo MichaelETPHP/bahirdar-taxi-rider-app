@@ -323,7 +323,10 @@ export default function ConfirmRideScreen({ navigation, route }) {
       Alert.alert(title, msg, [
         {
           text: 'Go Back',
-          onPress: () => navigation.goBack(),
+          onPress: () => {
+            useRideStore.setState({ tripId: null, tripData: null, tripStatus: 'idle', driver: null });
+            navigation.replace('ConfirmRide', { retry: true });
+          },
         },
       ]);
     }

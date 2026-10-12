@@ -486,9 +486,7 @@ export default function SearchingScreen({ navigation }) {
         </View>
         <View>
           <Text style={styles.badgeTitle}>
-            {drivers.length > 0 
-              ? `Checking driver ${pingIndex || 1} of ${Math.min(drivers.length, 5)}...`
-              : 'Finding your driver...'}
+            {String(tripId || '').startsWith('pending-') ? 'Sending your request...' : 'Finding your driver...'}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <SearchDots />
@@ -536,7 +534,7 @@ export default function SearchingScreen({ navigation }) {
           </View>
           <View style={styles.metaChip}>
             <DollarSign size={11} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.metaText}>Cash</Text>
+            <Text style={styles.metaText}>{tripData?.payment_method === 'wallet' ? 'Wallet' : 'Cash'}</Text>
           </View>
         </View>
 
